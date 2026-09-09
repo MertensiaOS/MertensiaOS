@@ -1,0 +1,25 @@
+## for development/testing (scripts/vm-image.sh) only!!
+## username: testing, password: mertensia
+## user is in `wheel` group
+
+ARG BASE_IMAGE=localhost/mertensiaos:base
+FROM ${BASE_IMAGE}
+
+RUN dnf -y install qemu-guest-agent && \
+    dnf clean all
+
+RUN useradd \
+      -m \
+      -G wheel \
+      testing && \
+    HASH="$(openssl passwd -6 'mertensia')" && \
+    usermod --password "$HASH" testing
+
+RUN dnf clean all && \
+    rm -rf /run/dnf /run/tuned /var/lib/dnf/repos && \
+    rm -f /var/cache/ldconfig/aux-cache \
+          /var/cache/ibus/bus/registry \
+          /var/cache/swcatalog/cache/*.xb && \
+    find /var/log -type f -delete
+
+RUN bootc container lint --no-truncate
