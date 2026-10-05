@@ -17,7 +17,7 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - name: Install test dependencies
-        run: dnf -y install python3 python3-gobject python3-dbus python3-pyyaml gtk4 libadwaita openssl libxcrypt bash iso-codes xkeyboard-config kbd tzdata
+        run: dnf -y install python3 python3-gobject python3-dbus python3-pyyaml gtk4 libadwaita openssl libxcrypt bash systemd iso-codes xkeyboard-config kbd tzdata
       - run: python3 scripts/check-source.py
       - run: python3 tests/run_tests.py
         env:

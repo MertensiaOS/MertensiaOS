@@ -9,16 +9,21 @@ import json
 import os
 import pwd
 import subprocess
+import sys
 import tempfile
 import time
 from pathlib import Path
 
 
-PORT = Path("/dev/virtio-ports/org.mertensia.integration")
-GUARD = Path("/sys/firmware/qemu_fw_cfg/by_name/opt/org.mertensia/integration/raw")
-TOKEN = b"mertensia-disposable-integration-v1"
+CONTRACT_PATH = Path("/usr/share/mertensia-integration/contract.json")
+if not CONTRACT_PATH.exists():
+    CONTRACT_PATH = Path(__file__).with_name("contract.json")
+CONTRACT = json.loads(CONTRACT_PATH.read_text())
+PORT = Path("/dev/virtio-ports") / CONTRACT["channel"]
+GUARD = Path("/sys/firmware/qemu_fw_cfg/by_name") / CONTRACT["fw_cfg_name"] / "raw"
+TOKEN = CONTRACT["token"].encode()
 DISK = "/dev/vda"
-SERIAL = "MERTENSIA-INTEGRATION"
+SERIAL = CONTRACT["disk_serial"]
 ROLE = Path("/usr/share/mertensia-integration/role")
 ACCOUNT = "integration_admin"
 SECOND_ACCOUNT = "integration_user"
@@ -45,7 +50,9 @@ def guard_guest():
     require(os.geteuid() == 0, "the integration agent requires guest root")
     require(GUARD.read_bytes() in {TOKEN, TOKEN + b"\0"}, "dedicated QEMU integration opt-in is absent")
     require(run(["systemd-detect-virt", "--vm"]) in {"qemu", "kvm"}, "guest is not QEMU")
-    require(run(["lsblk", "-dnro", "SERIAL", DISK]) == SERIAL, "test disk serial does not match")
+    observed_serial = run(["lsblk", "-dnro", "SERIAL", DISK])
+    require(observed_serial == SERIAL,
+            f"test disk serial does not match (expected {SERIAL}, received {observed_serial})")
     disks = json.loads(run(["lsblk", "--json", "-d", "-o", "PATH,TYPE,RO"]))["blockdevices"]
     require(
         {disk["path"] for disk in disks if disk["type"] == "disk" and not disk["ro"]} == {DISK},
@@ -57,6 +64,17 @@ def role():
     value = ROLE.read_text().strip()
     require(value in {"live", "payload"}, "invalid integration image role")
     return value
+
+
+def wait_for_gdm(timeout=180):
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        result = subprocess.run(["systemctl", "is-active", "gdm.service"],
+                                text=True, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+        if result.returncode == 0:
+            return
+        time.sleep(1)
+    raise RuntimeError("GDM did not become active within the installed-system readiness timeout")
 
 
 def status():
@@ -158,7 +176,7 @@ def root_checks(recovery_key, *, expect_tpm=True):
         key.write(recovery_key)
         key.flush()
         run(["cryptsetup", "open", "--test-passphrase", "--disable-external-tokens", "--key-file", key.name, ROOT_PARTITION])
-    run(["systemctl", "is-active", "gdm.service"])
+    wait_for_gdm()
     return {"secure_boot": True, "selinux_enforcing": True, "tpm_unlock": expect_tpm,
             "recovery_key_unlock": True, "gdm_active": True, **boot_identity()}
 
@@ -353,7 +371,6 @@ def reject_wrong_signer(image):
 
 
 def main():
-    guard_guest()
     deadline = time.monotonic() + 120
     while not PORT.exists() and time.monotonic() < deadline:
         time.sleep(1)
@@ -363,7 +380,16 @@ def main():
             outgoing.write(json.dumps(message, separators=(",", ":")) + "\n")
             outgoing.flush()
 
-        send({"type": "hello", "protocol": 1, "role": role()})
+        try:
+            guard_guest()
+            guest_role = role()
+        except Exception as error:
+            # No request or secret has been read at startup. Publish only the
+            # failed prerequisite, rather than waiting for a host-side timeout.
+            send({"type": "startup-error", "protocol": CONTRACT["protocol"], "error": str(error)})
+            print(f"Integration agent startup failed: {error}", file=sys.stderr, flush=True)
+            return 1
+        send({"type": "hello", "protocol": CONTRACT["protocol"], "role": guest_role})
         for line in incoming:
             request = json.loads(line)
             identifier = request["id"]
@@ -399,4 +425,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

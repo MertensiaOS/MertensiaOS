@@ -1,0 +1,7 @@
+{
+  "protocol": 1,
+  "channel": "org.mertensia.integration",
+  "fw_cfg_name": "opt/org.mertensia/integration",
+  "token": "mertensia-disposable-integration-v1",
+  "disk_serial": "MERTENSIA-TEST-DISK"
+}

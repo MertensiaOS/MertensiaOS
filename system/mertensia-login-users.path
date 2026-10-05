@@ -1,6 +1,7 @@
 [Unit]
 Description=Watch for changes to encrypted home accounts
-After=systemd-homed.service
+# Path units start before paths.target/basic.target; the triggered service
+# waits for homed. Ordering this watcher after homed would create a boot cycle.
 
 [Path]
 PathChanged=/var/lib/systemd/home

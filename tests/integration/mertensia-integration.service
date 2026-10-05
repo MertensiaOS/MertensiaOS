@@ -1,8 +1,8 @@
 [Unit]
 Description=Disposable MertensiaOS integration-test agent
 ConditionVirtualization=vm
-Wants=systemd-homed.service accounts-daemon.service gdm.service
-After=systemd-homed.service accounts-daemon.service gdm.service
+Wants=systemd-homed.service accounts-daemon.service
+After=systemd-homed.service accounts-daemon.service
 
 [Service]
 Type=simple
@@ -10,8 +10,8 @@ ExecStartPre=-/usr/sbin/modprobe qemu_fw_cfg
 ExecStart=/usr/bin/python3 /usr/libexec/mertensia-integration-agent
 Restart=on-failure
 RestartSec=5s
-StandardOutput=journal
-StandardError=journal
+StandardOutput=journal+console
+StandardError=journal+console
 
 [Install]
 WantedBy=multi-user.target

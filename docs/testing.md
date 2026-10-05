@@ -44,7 +44,7 @@ sudo scripts/test-iso.sh --build \
   --work-dir /tmp/mertensia-iso-run --junit /tmp/mertensia-iso-run/junit.xml
 
 # Reuse a production payload already in rootful Podman storage.
-sudo scripts/test-iso.sh --build --base-image localhost/mertensiaos:base \
+sudo scripts/test-iso.sh --build --accel kvm --base-image localhost/mertensiaos:base \
   --work-dir /tmp/mertensia-iso-next
 
 # Building an ISO alone requires root; booting a prebuilt integration ISO does not.
@@ -57,6 +57,10 @@ scripts/test-iso.sh --iso /tmp/mertensia-iso-build/iso/mertensiaos-integration.i
 disk, build/QEMU/serial logs and `result.json` remain there for diagnosis. The
 harness never deletes or reuses an existing disk. Remove disposable work
 directories and the image tags listed in `images.json` after reviewing results.
+When launched through `sudo`, the harness gives the invoking user ownership of
+the work directory and known diagnostic reports/logs after all VM processes and
+report writes finish. Private TPM state retains its original ownership; cleanup
+of root-built artifacts may still require `sudo`.
 `--junit` must be a regular report file inside the new work directory; report
 paths cannot traverse symlinks or target host devices.
 Recovery keys and account passwords stay in process memory and are redacted
@@ -69,6 +73,13 @@ descriptor explicitly. On systems without a suitable descriptor, pass both
 A blank variables template will fail the guest's actual Secure Boot check.
 `--accel tcg` forces software emulation, while `--accel kvm` requires accessible
 `/dev/kvm`. Increase `--boot-timeout` and `--operation-timeout` for slow hosts.
+Use explicit `--accel kvm` for a repeat on hosts with KVM access: it fails early
+instead of falling back to CPU-intensive software emulation. Auto mode retains
+the fallback for hosts without KVM and announces it before a run starts.
+The integration-only live ISO uses the serial console with boot messages enabled.
+Agent prerequisite failures appear in the virtio handshake and serial log;
+timeouts identify the boot stage and the diagnostic files to inspect. The normal
+production ISO keeps its regular graphical boot configuration.
 
 The core run asserts:
 

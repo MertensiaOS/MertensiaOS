@@ -4,6 +4,9 @@ import importlib.util
 import io
 import json
 import os
+import re
+import shlex
+import socket
 import subprocess
 import sys
 import tempfile
@@ -127,6 +130,87 @@ class HarnessTests(unittest.TestCase):
         self.assertIn(images["payload"], commands[-1])
         self.assertTrue(all("push" not in command for command in commands))
         self.assertTrue(all("Containerfile.dev" not in value for command in commands for value in command))
+        installer = next(command for command in commands if str(harness.ROOT / "Containerfile.installer") in command)
+        self.assertIn(f"BASE_IMAGE={images['base']}", installer)
+        self.assertIn(f"SOURCE_IMAGE={images['payload']}", installer)
+
+    def test_live_test_boot_retains_install_requirements_and_exposes_serial_diagnostics(self):
+        def kernel_arguments(path):
+            text = path.read_text()
+            line = re.search(r'^\s*linux:\s*"([^"]+)"', text, re.MULTILINE)
+            self.assertIsNotNone(line)
+            return shlex.split(line.group(1))
+
+        production = kernel_arguments(harness.ROOT / "installer/iso.yaml")
+        integration = kernel_arguments(Path(__file__).with_name("iso.yaml"))
+        for argument in production:
+            if argument not in {"quiet", "rhgb"}:
+                self.assertIn(argument, integration)
+        self.assertNotIn("quiet", integration)
+        self.assertNotIn("rhgb", integration)
+        self.assertIn("console=ttyS0,115200n8", integration)
+        self.assertIn("rd.plymouth=0", integration)
+
+    def test_startup_failure_is_reported_without_waiting_for_boot_timeout(self):
+        with tempfile.TemporaryDirectory() as directory:
+            work = Path(directory)
+            process = mock.Mock()
+            process.poll.return_value = 0
+            firmware = harness.Firmware(Path("/tmp/CODE.fd"), Path("/tmp/VARS.fd"))
+            with mock.patch.object(harness.subprocess, "Popen", return_value=process), \
+                 mock.patch.object(harness, "wait_path"), mock.patch.object(harness.socket, "socket"), \
+                 mock.patch.object(harness.Guest, "receive", return_value={"type": "startup-error", "protocol": 1,
+                                                                         "error": "test disk serial does not match"}):
+                with self.assertRaisesRegex(harness.HarnessError, "integration guest startup failed: test disk serial"):
+                    harness.Guest(self.args("--iso", "/tmp/integration.iso"), work, firmware, True)
+
+    def test_boot_timeout_identifies_stage_process_state_and_logs(self):
+        with tempfile.TemporaryDirectory() as directory:
+            work = Path(directory)
+            process = mock.Mock()
+            process.poll.return_value = None
+            firmware = harness.Firmware(Path("/tmp/CODE.fd"), Path("/tmp/VARS.fd"))
+            with mock.patch.object(harness.subprocess, "Popen", return_value=process), \
+                 mock.patch.object(harness, "wait_path"), mock.patch.object(harness.socket, "socket"), \
+                 mock.patch.object(harness.Guest, "receive", side_effect=socket.timeout()):
+                with self.assertRaises(harness.HarnessError) as raised:
+                    harness.Guest(self.args("--iso", "/tmp/integration.iso", "--boot-timeout", "2"), work, firmware, True)
+            message = str(raised.exception)
+            self.assertIn("after 2s", message)
+            self.assertIn("live ISO", message)
+            self.assertIn("QEMU is still running", message)
+            self.assertIn("live.serial.log", message)
+            self.assertIn("qemu-live.log", message)
+
+    def test_sudo_handoff_changes_reports_and_directory_but_not_private_tpm_state(self):
+        with tempfile.TemporaryDirectory() as directory:
+            work = Path(directory)
+            report, log = work / "result.json", work / "build.log"
+            report.write_text("{}")
+            log.write_text("build log")
+            state = work / "tpm"
+            state.mkdir()
+            private = state / "private-state"
+            private.write_text("private")
+            changed = []
+
+            def record(descriptor, uid, gid):
+                changed.append((os.fstat(descriptor).st_ino, uid, gid))
+
+            with mock.patch.object(harness.os, "geteuid", return_value=0), \
+                 mock.patch.dict(harness.os.environ, {"SUDO_UID": "1001", "SUDO_GID": "1002"}), \
+                 mock.patch.object(harness.os, "fchown", side_effect=record), mock.patch.object(harness.os, "fchmod"):
+                harness.handoff_diagnostics(work)
+            self.assertEqual({inode for inode, _uid, _gid in changed}, {work.stat().st_ino, report.stat().st_ino, log.stat().st_ino})
+            self.assertTrue(all((uid, gid) == (1001, 1002) for _inode, uid, gid in changed))
+            self.assertNotIn(private.stat().st_ino, {inode for inode, _uid, _gid in changed})
+
+    def test_nonroot_caller_cannot_trigger_handoff_using_forged_sudo_environment(self):
+        with mock.patch.object(harness.os, "geteuid", return_value=1000), \
+             mock.patch.dict(harness.os.environ, {"SUDO_UID": "1001", "SUDO_GID": "1002"}), \
+             mock.patch.object(harness.os, "fchown") as changed:
+            harness.handoff_diagnostics(Path("/tmp/not-opened"))
+        changed.assert_not_called()
 
     def test_reports_record_failures_and_explicitly_skip_unrun_coverage(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -268,6 +352,48 @@ class TestSigningPolicyTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.policy.add_scope({"default": [{"type": "reject"}], "transports": {"docker": {"ghcr.io/example/integration": []}}},
                                   "ghcr.io/example/integration:next")
+
+
+class GuestGuardContractTests(unittest.TestCase):
+    def setUp(self):
+        spec = importlib.util.spec_from_file_location("integration_guest", Path(__file__).with_name("guest.py"))
+        self.guest = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(self.guest)
+
+    def hardware_serial(self):
+        args = harness.parser().parse_args(["--accel", "tcg"])
+        command = harness.qemu_command(args, Path("/tmp/new-run"), harness.Firmware(Path("/tmp/CODE.fd"), Path("/tmp/VARS.fd")), live=False)
+        device = next(value for value in command if value.startswith("virtio-blk-pci,"))
+        serial = device.split("serial=", 1)[1]
+        # The Linux virtio block ABI exposes VIRTIO_BLK_ID_BYTES=20; model the
+        # actual device truncation, not a comparison of two local constants.
+        self.assertLessEqual(len(serial.encode()), 20)
+        return serial.encode()[:20].decode()
+
+    def test_guest_guard_accepts_the_serial_exposed_by_the_host_transport(self):
+        disk = json.dumps({"blockdevices": [{"path": "/dev/vda", "type": "disk", "ro": False}]})
+        with mock.patch.object(self.guest.os, "geteuid", return_value=0), \
+             mock.patch.object(self.guest, "GUARD") as guard, \
+             mock.patch.object(self.guest, "run", side_effect=["qemu", self.hardware_serial(), disk]):
+            guard.read_bytes.return_value = self.guest.TOKEN
+            self.guest.guard_guest()
+
+    def test_guest_guard_rejects_a_mismatched_disk_serial(self):
+        with mock.patch.object(self.guest.os, "geteuid", return_value=0), \
+             mock.patch.object(self.guest, "GUARD") as guard, \
+             mock.patch.object(self.guest, "run", side_effect=["qemu", "UNRELATED-DISK"]):
+            guard.read_bytes.return_value = self.guest.TOKEN
+            with self.assertRaisesRegex(RuntimeError, "test disk serial does not match"):
+                self.guest.guard_guest()
+
+    def test_guest_guard_rejects_an_additional_writable_disk(self):
+        disks = json.dumps({"blockdevices": [{"path": path, "type": "disk", "ro": False} for path in ("/dev/vda", "/dev/vdb")]})
+        with mock.patch.object(self.guest.os, "geteuid", return_value=0), \
+             mock.patch.object(self.guest, "GUARD") as guard, \
+             mock.patch.object(self.guest, "run", side_effect=["qemu", self.hardware_serial(), disks]):
+            guard.read_bytes.return_value = self.guest.TOKEN
+            with self.assertRaisesRegex(RuntimeError, "exactly one writable disk"):
+                self.guest.guard_guest()
 
 
 if __name__ == "__main__":

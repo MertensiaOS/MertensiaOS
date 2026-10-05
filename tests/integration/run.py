@@ -29,8 +29,9 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[2]
-TOKEN = "mertensia-disposable-integration-v1"
-SERIAL = "MERTENSIA-INTEGRATION"
+CONTRACT = json.loads(Path(__file__).with_name("contract.json").read_text())
+TOKEN = CONTRACT["token"]
+SERIAL = CONTRACT["disk_serial"]
 BUILDER = "ghcr.io/osbuild/image-builder@sha256:bb4bb67be80131bf149722b2e7dacc039434ee2b68abeb70c86c8221c8281f45"
 
 
@@ -130,8 +131,8 @@ def qemu_command(args, work, firmware, *, live, recovery_console=False):
         "-chardev", f"socket,id=tpm,path={tpm}", "-tpmdev", "emulator,id=tpm0,chardev=tpm",
         "-device", "tpm-tis,tpmdev=tpm0",
         "-device", "virtio-serial-pci", "-chardev", f"socket,id=agent,path={channel},server=on,wait=off",
-        "-device", "virtserialport,chardev=agent,name=org.mertensia.integration",
-        "-fw_cfg", f"name=opt/org.mertensia/integration,string={TOKEN}",
+        "-device", f"virtserialport,chardev=agent,name={CONTRACT['channel']}",
+        "-fw_cfg", f"name={CONTRACT['fw_cfg_name']},string={TOKEN}",
         "-nic", "user,model=virtio-net-pci", "-display", args.display,
         "-monitor", "none", "-no-reboot",
     ]
@@ -165,7 +166,7 @@ def build_commands(args, work):
             raise HarnessError("--upgrade-public-key must contain a PEM public signing key")
         commands[-1][2:2] = ["--build-arg", f"INTEGRATION_UPGRADE_IMAGE={args.upgrade_image}",
                              "--build-arg", "INTEGRATION_PUBLIC_KEY_B64=" + base64.b64encode(public).decode()]
-    commands.append(["podman", "build", "--build-arg", f"BASE_IMAGE={payload}", "--build-arg", f"SOURCE_IMAGE={payload}",
+    commands.append(["podman", "build", "--build-arg", f"BASE_IMAGE={base}", "--build-arg", f"SOURCE_IMAGE={payload}",
                      "--build-arg", f"TARGET_IMAGE={target}", "--build-arg", "BUILD_MODE=development",
                      "-f", str(ROOT / "Containerfile.installer"), "-t", installer_base, str(ROOT)])
     commands.append(["podman", "build", "--build-arg", f"BASE_IMAGE={installer_base}", "--build-arg", "INTEGRATION_ROLE=live",
@@ -219,10 +220,21 @@ class Guest:
             self.stream = self.socket.makefile("rwb", buffering=0)
             hello = self.receive()
             expected_role = "live" if live else "payload"
-            if hello != {"type": "hello", "protocol": 1, "role": expected_role}:
+            if hello.get("type") == "startup-error":
+                raise HarnessError(f"integration guest startup failed: {hello.get('error', 'unknown prerequisite failure')}")
+            if hello != {"type": "hello", "protocol": CONTRACT["protocol"], "role": expected_role}:
                 raise HarnessError(f"guest handshake failed: {hello}")
             if recovery_key is not None and not self.serial.prompt_answered:
                 raise HarnessError("guest booted without answering the expected initramfs recovery prompt")
+        except socket.timeout as error:
+            stage = "live ISO" if live else "installed disk"
+            state = "still running" if self.process and self.process.poll() is None else "exited"
+            message = (f"timed out after {args.boot_timeout}s waiting for the integration agent on the {stage}; "
+                       f"QEMU is {state}. Inspect {work / ('live.serial.log' if live else 'installed.serial.log')} "
+                       f"and {work / ('qemu-live.log' if live else 'qemu-installed.log')}. "
+                       "A guest that reached Linux should log integration-agent startup errors on its serial console.")
+            self.close()
+            raise HarnessError(message) from error
         except Exception:
             self.close()
             raise
@@ -427,6 +439,41 @@ def make_work_dir(requested):
     return work
 
 
+def handoff_diagnostics(work, results=None):
+    """Give the sudo caller reports/logs only, after every root write is done."""
+    if os.geteuid() != 0:
+        return
+    uid_text, gid_text = os.environ.get("SUDO_UID", ""), os.environ.get("SUDO_GID", "")
+    if not uid_text.isascii() or not uid_text.isdigit() or not gid_text.isascii() or not gid_text.isdigit():
+        return
+    uid, gid = int(uid_text), int(gid_text)
+    if uid <= 0:
+        return
+    files = [work / name for name in ("result.json", "images.json", "build.log", "qemu-live.log", "qemu-installed.log",
+                                     "live.serial.log", "installed.serial.log", "recovery.serial.log", "swtpm.log")]
+    if results and results.junit:
+        files.append(results.junit)
+    for path in files:
+        if not path.exists() and not path.is_symlink():
+            continue
+        descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
+        try:
+            if not stat.S_ISREG(os.fstat(descriptor).st_mode):
+                raise HarnessError("diagnostic artifact is not a regular file")
+            os.fchown(descriptor, uid, gid)
+            os.fchmod(descriptor, 0o600)
+        finally:
+            os.close(descriptor)
+    # Change the directory last: the caller cannot alter paths while root is
+    # handing files over. TPM state, disk data and other private files keep
+    # their original ownership and permissions.
+    descriptor = os.open(work, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    try:
+        os.fchown(descriptor, uid, gid)
+    finally:
+        os.close(descriptor)
+
+
 def execute_build(args, work):
     commands, images = build_commands(args, work)
     (work / "iso").mkdir()
@@ -609,6 +656,7 @@ def main(argv=None):
         print(json.dumps(available, indent=2))
         return 0 if available["ok"] else 1
     results = None
+    work = None
     try:
         firmware = find_firmware(args.firmware_json, code=args.ovmf_code, variables=args.ovmf_vars)
         if args.dry_run:
@@ -621,6 +669,9 @@ def main(argv=None):
             return 0
         if not available["ok"]:
             raise HarnessError("; ".join(available["failures"]))
+        if available.get("acceleration") == "tcg":
+            print("Using software emulation (TCG); this can keep host CPUs busy for a long time. "
+                  "Use --accel kvm when /dev/kvm is accessible.", file=sys.stderr, flush=True)
         if not args.build and (not args.iso or not args.iso.is_file() or args.iso.is_symlink()):
             raise HarnessError("provide a regular prebuilt integration ISO with --iso, or use --build as root")
         work = make_work_dir(args.work_dir)
@@ -641,6 +692,13 @@ def main(argv=None):
         message = results.redact(str(error)) if results else str(error)
         print(f"Integration failed: {message}", file=sys.stderr)
         return 1
+    finally:
+        if work is not None:
+            try:
+                handoff_diagnostics(work, results)
+            except (HarnessError, OSError) as error:
+                message = results.redact(str(error)) if results else str(error)
+                print(f"Could not hand diagnostic artifacts to the sudo caller: {message}", file=sys.stderr)
 
 
 if __name__ == "__main__":

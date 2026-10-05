@@ -35,7 +35,7 @@ On Fedora, install the desktop libraries used by the UI and tests:
 
 ```sh
 sudo dnf install python3 python3-gobject python3-dbus gtk4 libadwaita openssl \
-  libxcrypt iso-codes xkeyboard-config kbd tzdata
+  libxcrypt systemd iso-codes xkeyboard-config kbd tzdata
 python3 scripts/check-source.py
 python3 tests/run_tests.py
 ```
