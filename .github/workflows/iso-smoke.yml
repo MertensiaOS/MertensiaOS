@@ -2,7 +2,17 @@ name: ISO installation smoke test
 on:
   workflow_dispatch:
   pull_request:
-    paths: ['Containerfile*', 'installer/**', 'system/**', 'tests/integration/**', 'scripts/test-iso.sh', '.github/workflows/iso-smoke.yml']
+    paths:
+      - 'Containerfile*'
+      - '.containerignore'
+      - 'src/**'
+      - 'branding/**'
+      - 'installer/**'
+      - 'system/**'
+      - 'cosign.pub'
+      - 'tests/**'
+      - 'scripts/**'
+      - '.github/workflows/iso-smoke.yml'
   push:
     branches: [main]
 permissions:

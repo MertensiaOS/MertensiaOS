@@ -7,8 +7,8 @@ for command in podman openssl sha256sum python3; do
 done
 EXPECTED_KEY_SHA256="$(openssl pkey -pubin -in "$ROOT_DIR/cosign.pub" -outform DER | sha256sum)"
 EXPECTED_KEY_SHA256="${EXPECTED_KEY_SHA256%% *}"
-EXPECTED_POLICY="$(<"$ROOT_DIR/system/containers-policy.json")"
-EXPECTED_REGISTRIES_SHA256="$(sha256sum "$ROOT_DIR/system/mertensia-registries.yaml")"
+EXPECTED_POLICY="$(<"$ROOT_DIR/system/config/containers/policy.json")"
+EXPECTED_REGISTRIES_SHA256="$(sha256sum "$ROOT_DIR/system/config/containers/registries.yaml")"
 EXPECTED_REGISTRIES_SHA256="${EXPECTED_REGISTRIES_SHA256%% *}"
 # Pass only public trust data as arguments, without binding host paths into the
 # image. This also works on SELinux hosts and keeps the expected trust external.

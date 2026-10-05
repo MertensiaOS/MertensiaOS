@@ -20,11 +20,11 @@ import json
 import pathlib
 import sys
 root, work = map(pathlib.Path, sys.argv[1:])
-policy = json.loads((root / "system/containers-policy.json").read_text())
+policy = json.loads((root / "system/config/containers/policy.json").read_text())
 policy["transports"]["docker"]["ghcr.io/mertensiaos/mertensiaos"][0]["keyPath"] = str(root / "cosign.pub")
 (work / "policy.json").write_text(json.dumps(policy))
 (work / "registries.d").mkdir()
-(work / "registries.d/mertensia.yaml").write_text((root / "system/mertensia-registries.yaml").read_text())
+(work / "registries.d/mertensia.yaml").write_text((root / "system/config/containers/registries.yaml").read_text())
 PY
 skopeo --policy "$WORK/policy.json" --registries.d "$WORK/registries.d" copy \
   --preserve-digests "docker://$IMAGE" "$DESTINATION" >/dev/null

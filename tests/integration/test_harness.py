@@ -1,6 +1,5 @@
 """Host-only checks for isolation, firmware selection and honest reporting."""
 
-import importlib.util
 import io
 import json
 import os
@@ -8,7 +7,6 @@ import re
 import shlex
 import socket
 import subprocess
-import sys
 import tempfile
 import unittest
 import xml.etree.ElementTree as ET
@@ -16,10 +14,8 @@ from pathlib import Path
 from unittest import mock
 
 
-SPEC = importlib.util.spec_from_file_location("iso_harness", Path(__file__).with_name("run.py"))
-harness = importlib.util.module_from_spec(SPEC)
-sys.modules[SPEC.name] = harness
-SPEC.loader.exec_module(harness)
+from integration import add_test_policy, guest, run as harness
+
 
 
 class HarnessTests(unittest.TestCase):
@@ -141,7 +137,7 @@ class HarnessTests(unittest.TestCase):
             self.assertIsNotNone(line)
             return shlex.split(line.group(1))
 
-        production = kernel_arguments(harness.ROOT / "installer/iso.yaml")
+        production = kernel_arguments(harness.ROOT / "installer/config/iso.yaml")
         integration = kernel_arguments(Path(__file__).with_name("iso.yaml"))
         for argument in production:
             if argument not in {"quiet", "rhgb"}:
@@ -332,9 +328,7 @@ class HarnessTests(unittest.TestCase):
 
 class TestSigningPolicyTests(unittest.TestCase):
     def setUp(self):
-        spec = importlib.util.spec_from_file_location("integration_policy", Path(__file__).with_name("add_test_policy.py"))
-        self.policy = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(self.policy)
+        self.policy = add_test_policy
 
     def test_narrow_test_scope_keeps_production_trust_and_default_reject(self):
         original = {"default": [{"type": "reject"}], "transports": {"docker": {
@@ -356,9 +350,7 @@ class TestSigningPolicyTests(unittest.TestCase):
 
 class GuestGuardContractTests(unittest.TestCase):
     def setUp(self):
-        spec = importlib.util.spec_from_file_location("integration_guest", Path(__file__).with_name("guest.py"))
-        self.guest = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(self.guest)
+        self.guest = guest
 
     def hardware_serial(self):
         args = harness.parser().parse_args(["--accel", "tcg"])

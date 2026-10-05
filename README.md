@@ -9,6 +9,9 @@ UEFI, Secure Boot enabled, a usable TPM 2.0, and a disk of at least 24 GiB.
 The project is under development; a passing unit suite does not establish that
 a particular image boots on your hardware.
 
+See [codebase architecture](docs/architecture.md) for the source layout, image
+roles and application boundaries.
+
 ## Build a development image
 
 Use a Linux x86_64 build host with rootful Podman, Bash, and enough disk space
@@ -43,7 +46,7 @@ python3 tests/run_tests.py
 The test runner fails if required tests are skipped. The CI workflow also builds
 and lints the payload. [VM integration tests](docs/testing.md) build and boot
 the actual installer with Secure Boot and a software TPM, using disposable
-virtual disks. UI previews are documented in [branding](installer/branding/README.md).
+virtual disks. UI previews are documented in [branding](branding/README.md).
 
 ## Install, update and recover
 
@@ -59,4 +62,4 @@ for signing credentials, signature verification, upgrades and rollback.
 
 MertensiaOS's own source code is [MIT licensed](LICENSE). Fedora packages and
 other bundled components retain their own licenses; the Figtree font is
-covered by its [SIL Open Font License](installer/branding/fonts/OFL.txt).
+covered by its [SIL Open Font License](branding/fonts/OFL.txt).

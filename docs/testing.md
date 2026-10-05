@@ -7,7 +7,7 @@ PyGObject and D-Bus:
 python3 tests/run_tests.py
 ```
 
-The GTK preview instructions in `installer/branding/README.md` exercise layouts
+The GTK preview instructions in `branding/README.md` exercise layouts
 without creating users, changing settings or installing to disks. Unit tests and
 previews do not prove that an ISO boots or an installed encrypted system unlocks.
 

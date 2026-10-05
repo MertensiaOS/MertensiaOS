@@ -36,21 +36,21 @@ RUN dnf -y install \
     && test -r /usr/lib64/cryptsetup/libcryptsetup-token-systemd-tpm2.so
 
 ## installer setup
-COPY installer/mertensia-installer-sysusers.conf /usr/lib/sysusers.d/mertensia-installer.conf
-COPY installer/mertensia-installer-tmpfiles.conf /usr/lib/tmpfiles.d/mertensia-installer.conf
+COPY installer/config/sysusers.d/mertensia-installer-sysusers.conf /usr/lib/sysusers.d/mertensia-installer.conf
+COPY installer/config/tmpfiles.d/mertensia-installer-tmpfiles.conf /usr/lib/tmpfiles.d/mertensia-installer.conf
 RUN systemd-sysusers /usr/lib/sysusers.d/mertensia-installer.conf
-COPY installer/gdm-custom.conf /etc/gdm/custom.conf
-COPY installer/mertensia-installer.desktop /etc/xdg/autostart/mertensia-installer.desktop
-COPY installer/mertensia_installer.py /usr/bin/mertensia-installer
-COPY installer/branding /usr/share/mertensia-installer/branding
-COPY installer/branding/fonts /usr/share/fonts/mertensia
+COPY installer/config/gdm/custom.conf /etc/gdm/custom.conf
+COPY installer/config/desktop/mertensia-installer.desktop /etc/xdg/autostart/mertensia-installer.desktop
+COPY src/mertensia/installer /usr/lib/mertensia/python/mertensia/installer
+COPY installer/bin/mertensia-installer /usr/bin/mertensia-installer
+COPY branding/fonts /usr/share/fonts/mertensia
 RUN fc-cache -f /usr/share/fonts/mertensia
-COPY installer/mertensia_installer_backend.py /usr/libexec/mertensia-installer-helper
-COPY installer/org.mertensia.Installer.policy /usr/share/polkit-1/actions/org.mertensia.Installer.policy
-COPY installer/49-mertensia-installer.rules /usr/share/polkit-1/rules.d/49-mertensia-installer.rules
-COPY installer/var-tmp.mount /etc/systemd/system/var-tmp.mount
-COPY installer/iso.yaml /usr/lib/image-builder/bootc/iso.yaml
-COPY installer/install.conf.in /tmp/install.conf.in
+COPY installer/bin/mertensia-installer-helper /usr/libexec/mertensia-installer-helper
+COPY installer/config/polkit/org.mertensia.Installer.policy /usr/share/polkit-1/actions/org.mertensia.Installer.policy
+COPY installer/config/polkit/49-mertensia-installer.rules /usr/share/polkit-1/rules.d/49-mertensia-installer.rules
+COPY installer/config/systemd/var-tmp.mount /etc/systemd/system/var-tmp.mount
+COPY installer/config/iso.yaml /usr/lib/image-builder/bootc/iso.yaml
+COPY installer/config/install.conf.in /tmp/install.conf.in
 RUN mkdir -p \
       /usr/lib/mertensia-installer \
       /usr/lib/bootc-image-builder && \

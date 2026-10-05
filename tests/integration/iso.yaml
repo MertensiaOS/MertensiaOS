@@ -1,4 +1,4 @@
-# Test-only live boot diagnostics. Production installer/iso.yaml remains normal.
+# Test-only live boot diagnostics. Production installer/config/iso.yaml remains normal.
 label: "MertensiaOS-Installer"
 grub2:
   entries:
