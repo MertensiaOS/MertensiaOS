@@ -283,13 +283,31 @@ def login_checks(password, *, check_wrong_password=False):
     require(Path("/var/lib/mertensia/firstboot-complete").exists(), "first-boot marker is absent")
     require(Path("/var/lib/mertensia/setup-account-disabled").exists(), "setup account retirement did not finish")
     require("AutomaticLoginEnable=False" in Path("/etc/gdm/custom.conf").read_text(), "setup autologin remains enabled")
+    # AccountsService used to count all shadow entries (including system
+    # accounts) toward its 50-user homed enumeration limit. Exercise the real
+    # daemon above that boundary, even if the base image has fewer entries.
+    for index in range(64):
+        if len(Path("/etc/shadow").read_text().splitlines()) >= 64:
+            break
+        name = f"integration_svc_{index}"
+        try:
+            pwd.getpwnam(name)
+        except KeyError:
+            run(["useradd", "--system", "--no-create-home", "--shell", "/usr/sbin/nologin", name])
+    require(len(Path("/etc/shadow").read_text().splitlines()) >= 64, "shadow enumeration fixture is incomplete")
+    run(["systemctl", "restart", "accounts-daemon.service"])
     run(["systemctl", "start", "mertensia-login-users.service"])
     bus = dbus.SystemBus()
     manager = dbus.Interface(bus.get_object("org.freedesktop.Accounts", "/org/freedesktop/Accounts"), "org.freedesktop.Accounts")
     cached = set()
     for path in manager.ListCachedUsers():
         props = dbus.Interface(bus.get_object("org.freedesktop.Accounts", path), "org.freedesktop.DBus.Properties")
-        cached.add(str(props.Get("org.freedesktop.Accounts.User", "UserName")))
+        values = props.GetAll("org.freedesktop.Accounts.User")
+        name = str(values["UserName"])
+        if name in (ACCOUNT, SECOND_ACCOUNT):
+            require(not values["SystemAccount"] and not values["Locked"], f"{name} is filtered out by GDM")
+            require(values["LocalAccount"], f"{name} was not enumerated as a local home")
+        cached.add(name)
     for user in (ACCOUNT, SECOND_ACCOUNT):
         require(user in cached, f"{user} is absent from GDM's AccountsService cache")
         public = json.loads(run(["homectl", "inspect", "--json=short", user]))

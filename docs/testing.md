@@ -94,6 +94,9 @@ The core run asserts:
    non-administrator with LUKS/ext4 homes. Both authenticate through the actual
    `gdm-password` PAM stack, reject incorrect passwords and appear in
    AccountsService's login cache.
+   Enumeration is also checked after restarting AccountsService with at least
+   64 shadow entries, including system accounts, to cover the homed user-limit
+   regression and GDM's system-account/locked-account filters.
 5. Setup retirement disables autologin and revokes the setup caller's access.
    Root unlock, account records and authentication continue working after reboot.
 6. A second boot uses fresh TPM state so the original sealed token cannot unlock

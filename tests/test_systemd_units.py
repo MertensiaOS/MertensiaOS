@@ -66,7 +66,9 @@ class LoginWatcherOrderingTests(unittest.TestCase):
         # verify can return success after resolving a cycle by deleting a
         # wanted job. That was the live ISO's skipped paths.target failure.
         self.assertIn("ordering cycle", (result.stdout + result.stderr).lower())
-        self.assertIn("Job paths.target/start deleted", result.stdout + result.stderr)
+        # The job selected to break the cycle varies with systemd versions;
+        # both paths.target and homed have been chosen on Fedora hosts.
+        self.assertRegex(result.stdout + result.stderr, r"Job \S+/start deleted to break ordering cycle")
 
 
 if __name__ == "__main__":

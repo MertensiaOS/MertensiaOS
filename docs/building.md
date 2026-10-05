@@ -24,6 +24,14 @@ The direct VM disk has user `testing`, password `mertensia`, and wheel membershi
 It exists only for development. A normal installer target must be at least
 24 GiB and receives TPM-backed LUKS root encryption.
 
+The payload rebuilds Fedora's AccountsService source RPM in a separate build
+stage with `system/accountsservice-homed-enumeration.patch`. Upstream 26.27.3
+counts system accounts in `/etc/shadow` toward the 50-user homed enumeration
+limit, hiding all encrypted-home users on this image. The patch counts the
+enumerated users instead. Both daemon and client RPMs retain Fedora's packaging
+with a `.mertensia1` release suffix; build tools stay in the build stage. Review
+and remove this patch once Fedora ships the corrected enumeration check.
+
 | Variable | Default / meaning |
 | --- | --- |
 | `MERTENSIA_BUILD_MODE` | `development`; set `production` for a signed release |

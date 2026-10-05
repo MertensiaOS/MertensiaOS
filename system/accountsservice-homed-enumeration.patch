@@ -1,0 +1,15 @@
+Subject: [PATCH] Count enumerated users, not shadow entries, when loading homed
+
+local_users includes every /etc/shadow entry, including system accounts.
+On a GNOME bootc image these already reach MAX_LOCAL_USERS (50), so no
+homed users are enumerated. CacheUser intentionally skips homed users and
+cannot repair the missing login list. Use the same users limit as the
+passwd and requested-user generators.
+
+--- a/src/daemon.c
++++ b/src/daemon.c
+@@ -711,3 +711,3 @@ entry_generator_homed (Daemon         *daemon,
+         s = *state;
+-        if (g_hash_table_size (local_users) < MAX_LOCAL_USERS) {
++        if (g_hash_table_size (users) < MAX_LOCAL_USERS) {
+                 g_autofree char *status = NULL;

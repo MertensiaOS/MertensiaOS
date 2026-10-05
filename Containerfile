@@ -1,3 +1,9 @@
+FROM quay.io/fedora/fedora-bootc:45 AS accountsservice-build
+RUN dnf -y install dnf-plugins-core rpm-build
+COPY system/accountsservice-homed-enumeration.patch /build/accountsservice-homed-enumeration.patch
+COPY scripts/build-accountsservice.sh /build/build-accountsservice.sh
+RUN bash /build/build-accountsservice.sh
+
 FROM quay.io/fedora/fedora-bootc:45
 
 ## Core / misc packages
@@ -24,9 +30,10 @@ RUN dnf -y install \
     && dnf clean all
 
 ## GNOME
+COPY --from=accountsservice-build /out/ /tmp/mertensia-accountsservice/
 RUN dnf -y install \
     gdm \
-    accountsservice \
+    /tmp/mertensia-accountsservice/*.rpm \
     gnome-shell \
     gnome-session \
     gnome-control-center \
@@ -34,7 +41,7 @@ RUN dnf -y install \
     NetworkManager \
     xdg-desktop-portal \
     xdg-desktop-portal-gnome \
-    && dnf clean all
+    && rm -rf /tmp/mertensia-accountsservice && dnf clean all
 
 ## set up systemd-homed
 RUN authselect select local with-systemd-homed --force --nobackup && \

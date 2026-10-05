@@ -20,6 +20,8 @@ for path in [*root.glob("Containerfile*"), *(root / "tests/integration").glob("C
         if not line.startswith("COPY "):
             continue
         fields = shlex.split(line)
+        if any(field.startswith("--from=") for field in fields):
+            continue  # Inputs from another build stage are not workspace files.
         sources = [field for field in fields[1:-1] if not field.startswith("--")]
         for source in sources:
             if not (root / source).exists():
