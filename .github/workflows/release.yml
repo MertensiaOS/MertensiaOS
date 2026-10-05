@@ -1,0 +1,133 @@
+name: Publish signed release
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'New immutable version, e.g. 45.20261005.1'
+        required: true
+        type: string
+      channel:
+        description: 'Update channel to promote after verification'
+        default: latest
+        required: true
+        type: choice
+        options: [latest, testing]
+permissions:
+  contents: read
+  packages: write
+concurrency:
+  group: mertensia-release
+  cancel-in-progress: false
+jobs:
+  checks:
+    uses: ./.github/workflows/ci.yml
+    permissions:
+      contents: read
+  release:
+    if: github.ref == 'refs/heads/main'
+    needs: checks
+    runs-on: ubuntu-24.04
+    environment: release
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Require release signing credentials
+        env:
+          COSIGN_PRIVATE_KEY: ${{ secrets.COSIGN_PRIVATE_KEY }}
+        run: test -n "$COSIGN_PRIVATE_KEY"
+      - uses: sigstore/cosign-installer@f713795cb21599bc4e5c4b58cbad1da852d7eeb9 # v3
+        with:
+          cosign-release: v3.0.6
+          install-dir: /usr/local/bin
+          use-sudo: 'true'
+      - name: Install build and test tools
+        run: sudo apt-get update && sudo apt-get install -y podman skopeo qemu-system-x86 qemu-utils ovmf swtpm xorriso python3
+      - name: Build clean release payload
+        run: sudo podman build --pull -f Containerfile -t localhost/mertensiaos:release .
+      - name: Authenticate registry
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GHCR_USER: ${{ github.actor }}
+        run: |
+          sudo install -d -m 0700 /root/.docker
+          printf '%s' "$GHCR_TOKEN" | sudo podman login --authfile /root/.docker/config.json ghcr.io --username "$GHCR_USER" --password-stdin
+      - name: Publish separate signed update-test fixture
+        id: fixture
+        env:
+          COSIGN_PRIVATE_KEY: ${{ secrets.COSIGN_PRIVATE_KEY }}
+          COSIGN_PASSWORD: ${{ secrets.COSIGN_PASSWORD }}
+          REGISTRY_AUTH_FILE: /root/.docker/config.json
+        run: |
+          cosign public-key --key env://COSIGN_PRIVATE_KEY > "$RUNNER_TEMP/signing.pub"
+          openssl pkey -pubin -in "$RUNNER_TEMP/signing.pub" -outform DER -out "$RUNNER_TEMP/signing.der"
+          openssl pkey -pubin -in cosign.pub -outform DER -out "$RUNNER_TEMP/trusted.der"
+          cmp "$RUNNER_TEMP/signing.der" "$RUNNER_TEMP/trusted.der"
+          fixture_repo=ghcr.io/mertensiaos/mertensiaos-integration
+          fixture_tag="run-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          public_key_b64="$(base64 -w0 cosign.pub)"
+          sudo podman build --build-arg BASE_IMAGE=localhost/mertensiaos:release \
+            --build-arg INTEGRATION_ROLE=payload --build-arg "INTEGRATION_REVISION=$fixture_tag" \
+            --build-arg "INTEGRATION_UPGRADE_IMAGE=$fixture_repo:$fixture_tag" \
+            --build-arg "INTEGRATION_PUBLIC_KEY_B64=$public_key_b64" \
+            -f tests/integration/Containerfile -t localhost/mertensiaos:upgrade-fixture .
+          sudo env "REGISTRY_AUTH_FILE=$REGISTRY_AUTH_FILE" podman push --digestfile "$RUNNER_TEMP/fixture-digest" \
+            localhost/mertensiaos:upgrade-fixture "docker://$fixture_repo:$fixture_tag"
+          fixture_digest="$(cat "$RUNNER_TEMP/fixture-digest")"
+          [[ "$fixture_digest" =~ ^sha256:[a-f0-9]{64}$ ]]
+          fixture_image="$fixture_repo@$fixture_digest"
+          sudo --preserve-env=COSIGN_PRIVATE_KEY,COSIGN_PASSWORD cosign sign --yes \
+            --new-bundle-format=false --use-signing-config=false --key env://COSIGN_PRIVATE_KEY "$fixture_image"
+          cosign verify --new-bundle-format=false --key cosign.pub "$fixture_image" >/dev/null
+          printf 'image=%s\n' "$fixture_image" >> "$GITHUB_OUTPUT"
+      - name: Gate release on installation, signed upgrade and rollback
+        env:
+          UPGRADE_IMAGE: ${{ steps.fixture.outputs.image }}
+        run: |
+          sudo bash scripts/test-iso.sh --build --base-image localhost/mertensiaos:release \
+            --upgrade-image "$UPGRADE_IMAGE" --upgrade-public-key cosign.pub --require-upgrade \
+            --work-dir "$RUNNER_TEMP/mertensia-release-test" --junit "$RUNNER_TEMP/mertensia-release-test/junit.xml"
+      - name: Publish, sign, verify and promote
+        id: publish
+        env:
+          COSIGN_PRIVATE_KEY: ${{ secrets.COSIGN_PRIVATE_KEY }}
+          COSIGN_PASSWORD: ${{ secrets.COSIGN_PASSWORD }}
+          RELEASE_VERSION: ${{ inputs.version }}
+          RELEASE_CHANNEL: ${{ inputs.channel }}
+          REGISTRY_AUTH_FILE: /root/.docker/config.json
+        run: sudo --preserve-env=COSIGN_PRIVATE_KEY,COSIGN_PASSWORD,GITHUB_OUTPUT,REGISTRY_AUTH_FILE bash scripts/publish-image.sh localhost/mertensiaos:release "$RELEASE_VERSION" "$RELEASE_CHANNEL"
+      - name: Build installer from verified release digest
+        env:
+          RELEASE_IMAGE: ${{ steps.publish.outputs.image }}
+          RELEASE_CHANNEL: ${{ inputs.channel }}
+        run: |
+          sudo env "MERTENSIA_BUILD_MODE=production" "MERTENSIA_PAYLOAD_IMAGE=$RELEASE_IMAGE" "MERTENSIA_TARGET_IMAGE=ghcr.io/mertensiaos/mertensiaos:$RELEASE_CHANNEL" bash scripts/iso-image.sh
+          sudo bash -c 'cd output/installer && sha256sum mertensiaos-installer.iso > SHA256SUMS'
+          sudo chown -R "$(id -u):$(id -g)" output/installer
+      - name: Sign installer checksums
+        env:
+          COSIGN_PRIVATE_KEY: ${{ secrets.COSIGN_PRIVATE_KEY }}
+          COSIGN_PASSWORD: ${{ secrets.COSIGN_PASSWORD }}
+        run: cosign sign-blob --yes --key env://COSIGN_PRIVATE_KEY --bundle output/installer/SHA256SUMS.sigstore.json output/installer/SHA256SUMS
+      - name: Save installer and signed checksums
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: mertensiaos-${{ inputs.version }}
+          path: |
+            output/installer/mertensiaos-installer.iso
+            output/installer/SHA256SUMS
+            output/installer/SHA256SUMS.sigstore.json
+            cosign.pub
+          retention-days: 30
+      - name: Collect test diagnostics
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: release-test-diagnostics
+          path: |
+            ${{ runner.temp }}/mertensia-release-test/result.json
+            ${{ runner.temp }}/mertensia-release-test/junit.xml
+            ${{ runner.temp }}/mertensia-release-test/*.log
+          if-no-files-found: warn
+      - name: Remove registry credentials
+        if: always()
+        run: sudo rm -f /root/.docker/config.json

@@ -1,0 +1,16 @@
+# Local build state and generated artifacts are never image inputs.
+.git/
+.build/
+output/
+dist/
+logs/
+.venv/
+**/__pycache__/
+**/*.py[cod]
+.DS_Store
+.agents/
+.codex/
+.aws/
+# Private signing material is not part of the container context.
+**/*.key
+**/*.pem

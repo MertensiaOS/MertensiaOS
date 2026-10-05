@@ -1,0 +1,10 @@
+[Unit]
+Description=Retire the MertensiaOS initial setup account
+ConditionPathExists=/var/lib/mertensia/firstboot-complete
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/libexec/mertensia-accounts-helper --retire-setup-account
+Restart=on-failure
+RestartSec=5s

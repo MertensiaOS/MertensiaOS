@@ -1,0 +1,23 @@
+.firstboot .page-description, .firstboot .secondary-text { opacity: 0.8; }
+.firstboot preferencesgroup > box > box > label { font-size: 14px; }
+.firstboot list.boxed-list { border: none; border-radius: 8px; }
+.firstboot .boxed-list row { margin: 0; border-radius: 0; }
+.firstboot .boxed-list row:first-child { border-top-left-radius: 8px; border-top-right-radius: 8px; }
+.firstboot .boxed-list row:last-child { border-bottom-left-radius: 8px; border-bottom-right-radius: 8px; }
+.firstboot entry { min-height: 0; padding: 0; border: none; background: none; }
+.firstboot entry:focus-within { outline: none; }
+.firstboot row.error { box-shadow: inset 3px 0 @error_color; }
+.firstboot .boxed-list row:focus-visible { outline-offset: -3px; }
+.regional-picker { font-family: "Figtree", sans-serif; font-size: 16px; }
+.regional-picker .boxed-list row { min-height: 64px; }
+.regional-picker .boxed-list row:focus-visible { outline-offset: -3px; }
+.regional-picker .boxed-list row .subtitle { opacity: 0.75; }
+.regional-picker .boxed-list row image.accent { min-width: 24px; }
+.regional-picker .regional-search {
+  min-height: 44px;
+  border-radius: 8px;
+  background: @view_bg_color;
+  padding: 0 12px;
+}
+.regional-picker .regional-search:focus-within { outline: 2px solid @accent_color; outline-offset: -2px; }
+.firstboot row image.accent { -gtk-icon-style: symbolic; }

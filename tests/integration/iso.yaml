@@ -1,0 +1,7 @@
+# Test-only live boot diagnostics. Production installer/config/iso.yaml remains normal.
+label: "MertensiaOS-Installer"
+grub2:
+  entries:
+    - name: "Install MertensiaOS"
+      linux: "/images/pxeboot/vmlinuz root=live:CDLABEL=MertensiaOS-Installer rd.live.image enforcing=0 console=tty0 console=ttyS0,115200n8 rd.plymouth=0 plymouth.enable=0"
+      initrd: "/images/pxeboot/initrd.img"

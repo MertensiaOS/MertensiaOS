@@ -1,0 +1,10 @@
+#!/bin/sh
+
+# This check only narrows polkit authorization. The privileged helper repeats
+# the lifecycle checks while holding its setup lock.
+if test ! -e /var/lib/mertensia/firstboot-complete && \
+   test ! -e /var/lib/mertensia/setup-account-disabled; then
+    printf '%s\n' authorized
+else
+    printf '%s\n' denied
+fi

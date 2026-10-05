@@ -1,0 +1,7 @@
+label: "MertensiaOS-Installer"
+grub2:
+  entries:
+    - name: "Install MertensiaOS"
+      # SELinux enforced=0 in the installer
+      linux: "/images/pxeboot/vmlinuz root=live:CDLABEL=MertensiaOS-Installer rd.live.image enforcing=0 quiet rhgb"
+      initrd: "/images/pxeboot/initrd.img"

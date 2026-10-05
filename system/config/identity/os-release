@@ -1,0 +1,8 @@
+NAME="MertensiaOS"
+VERSION="45"
+ID=mertensiaos
+ID_LIKE=fedora
+VERSION_ID=45
+PRETTY_NAME="MertensiaOS 45"
+ANSI_COLOR="0;38;2;109;76;181"
+DEFAULT_HOSTNAME=mertensiaos

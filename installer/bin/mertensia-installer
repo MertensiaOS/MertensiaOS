@@ -1,0 +1,9 @@
+#!/usr/bin/python3 -I
+"""Launch the installed mertensia.installer.ui application."""
+import sys
+
+sys.path.insert(0, "/usr/lib/mertensia/python")
+from mertensia.installer.ui import main
+
+if __name__ == "__main__":
+    raise SystemExit(main())

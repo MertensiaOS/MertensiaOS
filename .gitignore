@@ -2,3 +2,9 @@
 logs/
 output/
 dist/
+__pycache__/
+*.py[cod]
+.build/
+.venv/
+*.key
+*.pem

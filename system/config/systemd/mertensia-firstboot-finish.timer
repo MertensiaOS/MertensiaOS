@@ -1,0 +1,7 @@
+[Unit]
+Description=Delay termination of the MertensiaOS setup session
+
+[Timer]
+OnActiveSec=2s
+AccuracySec=250ms
+Unit=mertensia-firstboot-finish.service

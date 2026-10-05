@@ -1,0 +1,11 @@
+[Unit]
+Description=Watch for changes to encrypted home accounts
+# Path units start before paths.target/basic.target; the triggered service
+# waits for homed. Ordering this watcher after homed would create a boot cycle.
+
+[Path]
+PathChanged=/var/lib/systemd/home
+Unit=mertensia-login-users.service
+
+[Install]
+WantedBy=multi-user.target

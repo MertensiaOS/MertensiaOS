@@ -1,0 +1,4 @@
+# edited and placed into installer image
+SOURCE_IMAGE=@SOURCE_IMAGE@
+TARGET_IMAGE=@TARGET_IMAGE@
+BUILD_MODE=@BUILD_MODE@

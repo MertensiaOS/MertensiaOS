@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=MertensiaOS Setup
+Exec=/usr/bin/mertensia-firstboot
+OnlyShowIn=GNOME;
+X-GNOME-Autostart-enabled=true
+X-GNOME-Autostart-Phase=Application

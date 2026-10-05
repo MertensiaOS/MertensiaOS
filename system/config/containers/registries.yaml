@@ -1,0 +1,3 @@
+docker:
+  ghcr.io/mertensiaos/mertensiaos:
+    use-sigstore-attachments: true

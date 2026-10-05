@@ -1,0 +1,16 @@
+[Unit]
+Description=Expose encrypted home accounts in the login user list
+Wants=systemd-homed.service accounts-daemon.service
+After=systemd-homed.service accounts-daemon.service
+Before=gdm.service
+StartLimitIntervalSec=0
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /usr/libexec/mertensia-sync-login-users
+Restart=on-failure
+RestartSec=5s
+TimeoutStartSec=30s
+
+[Install]
+WantedBy=graphical.target

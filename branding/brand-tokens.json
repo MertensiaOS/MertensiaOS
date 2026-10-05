@@ -1,0 +1,89 @@
+{
+  "meta": {
+    "brand": "MertensiaOS",
+    "direction": "Quiet Bloom",
+    "version": "1.0",
+    "date": "2026-09-23",
+    "status": "Working brand standard; Soft Bloom B is a working master"
+  },
+  "palette": {
+    "purple": "#6941B5",
+    "tint": "#E7DDF7",
+    "ink": "#21152F",
+    "sage": "#B8CFBA",
+    "canvas": "#F8F5EF",
+    "white": "#FFFFFF",
+    "darkSurface": "#30233F"
+  },
+  "themes": {
+    "light": {
+      "background": "#F8F5EF",
+      "surface": "#FFFFFF",
+      "text": "#21152F",
+      "link": "#6941B5",
+      "action": "#6941B5",
+      "onAction": "#FFFFFF",
+      "focus": "#6941B5",
+      "decorative": "#E7DDF7"
+    },
+    "dark": {
+      "background": "#21152F",
+      "surface": "#30233F",
+      "text": "#F8F5EF",
+      "link": "#E7DDF7",
+      "action": "#E7DDF7",
+      "onAction": "#21152F",
+      "focus": "#E7DDF7",
+      "decorative": "#6941B5"
+    }
+  },
+  "typography": {
+    "family": "Figtree",
+    "fallback": [
+      "system-ui",
+      "sans-serif"
+    ],
+    "weights": {
+      "body": 400,
+      "label": 500,
+      "heading": 600,
+      "emphasis": 700
+    },
+    "bodyPx": 18,
+    "bodyLineHeight": 1.6,
+    "maxMeasure": "65ch",
+    "smallPx": 14,
+    "metadataMinimumPx": 12,
+    "display": "clamp(2.5rem, 6vw, 5rem)"
+  },
+  "spacingPx": [
+    4,
+    8,
+    12,
+    16,
+    24,
+    32,
+    48,
+    64,
+    96
+  ],
+  "radiiPx": {
+    "button": 8,
+    "card": 16
+  },
+  "interaction": {
+    "targetMinimumPx": 44,
+    "focusWidthPx": 3,
+    "focusOffsetPx": 3,
+    "transitionMs": 180
+  },
+  "logo": {
+    "master": "assets/soft-bloom-purple.svg",
+    "lockup": "assets/lockup-purple.svg",
+    "symbolFieldUnits": 100,
+    "clearSpaceUnits": 25,
+    "symbolMinimumPx": 24,
+    "lockupMinimumPx": 140,
+    "minimumsStatus": "Starting targets; inspect at final size"
+  }
+}
