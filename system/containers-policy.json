@@ -1,0 +1,15 @@
+{
+  "default": [{"type": "reject"}],
+  "transports": {
+    "docker": {
+      "ghcr.io/mertensiaos/mertensiaos": [{
+        "type": "sigstoreSigned",
+        "keyPath": "/etc/pki/containers/mertensia.pub",
+        "signedIdentity": {"type": "matchRepository"}
+      }]
+    },
+    "containers-storage": {
+      "": [{"type": "insecureAcceptAnything"}]
+    }
+  }
+}

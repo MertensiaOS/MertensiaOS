@@ -1,0 +1,32 @@
+name: ISO installation smoke test
+on:
+  workflow_dispatch:
+  pull_request:
+    paths: ['Containerfile*', 'installer/**', 'system/**', 'tests/integration/**', 'scripts/test-iso.sh', '.github/workflows/iso-smoke.yml']
+  push:
+    branches: [main]
+permissions:
+  contents: read
+concurrency:
+  group: iso-smoke-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  install:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Install VM and container tools
+        run: sudo apt-get update && sudo apt-get install -y podman qemu-system-x86 qemu-utils ovmf swtpm xorriso python3
+      - name: Build and test the actual ISO
+        run: sudo bash scripts/test-iso.sh --build --work-dir "$RUNNER_TEMP/mertensia-iso-test" --junit "$RUNNER_TEMP/mertensia-iso-test/junit.xml"
+      - name: Collect diagnostics
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: iso-test-diagnostics
+          path: |
+            ${{ runner.temp }}/mertensia-iso-test/result.json
+            ${{ runner.temp }}/mertensia-iso-test/junit.xml
+            ${{ runner.temp }}/mertensia-iso-test/*.log
+          if-no-files-found: warn

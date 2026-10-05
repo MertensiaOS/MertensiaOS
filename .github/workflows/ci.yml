@@ -1,0 +1,35 @@
+name: Check source and build payload
+on:
+  push:
+    branches: [main, 'codex/**']
+  pull_request:
+  workflow_dispatch:
+  workflow_call:
+permissions:
+  contents: read
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  tests:
+    runs-on: ubuntu-24.04
+    container: registry.fedoraproject.org/fedora:45
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Install test dependencies
+        run: dnf -y install python3 python3-gobject python3-dbus python3-pyyaml gtk4 libadwaita openssl libxcrypt bash iso-codes xkeyboard-config kbd tzdata
+      - run: python3 scripts/check-source.py
+      - run: python3 tests/run_tests.py
+        env:
+          PYTHONDONTWRITEBYTECODE: '1'
+  payload:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Install container tools
+        run: sudo apt-get update && sudo apt-get install -y podman
+      - name: Build and lint production payload
+        run: |
+          sudo podman build --pull -f Containerfile -t localhost/mertensiaos:ci .
+          sudo bash scripts/validate-image.sh localhost/mertensiaos:ci

@@ -1,0 +1,12 @@
+[Unit]
+Description=Large temporary filesystem for the MertensiaOS live installer
+Before=graphical.target
+
+[Mount]
+What=tmpfs
+Where=/var/tmp
+Type=tmpfs
+Options=mode=1777,size=50%,nr_inodes=1m
+
+[Install]
+WantedBy=local-fs.target

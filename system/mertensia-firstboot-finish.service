@@ -1,0 +1,8 @@
+[Unit]
+Description=Terminate the completed MertensiaOS setup session
+After=systemd-logind.service
+
+[Service]
+Type=oneshot
+ExecStart=-/usr/bin/loginctl terminate-user mertensia-setup
+ExecStartPost=/usr/bin/systemctl try-restart gdm.service

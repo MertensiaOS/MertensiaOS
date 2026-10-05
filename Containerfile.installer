@@ -1,0 +1,81 @@
+## MertensiaOS generic live installer (not part of the installed payload).
+
+ARG BASE_IMAGE=localhost/mertensiaos:base
+FROM ${BASE_IMAGE}
+
+ARG SOURCE_IMAGE=localhost/mertensiaos:base
+ARG TARGET_IMAGE=localhost/mertensiaos:base
+ARG BUILD_MODE=development
+
+## These payload entry points must not run in the disposable live session.
+RUN rm -f \
+    /etc/xdg/autostart/mertensia-firstboot.desktop \
+    /usr/share/applications/org.mertensia.Accounts.desktop \
+    /usr/share/applications/org.gnome.Tour.desktop \
+    /usr/share/dbus-1/services/org.gnome.Tour.service
+
+## Runtime dependencies plus the bootc-generic-iso container contract.
+RUN dnf -y install \
+    dracut-live \
+    dracut-config-generic \
+    dracut-network \
+    squashfs-tools \
+    grub2-efi-x64-cdboot \
+    grub2-tools-extra \
+    shim-x64 \
+    xorriso \
+    isomd5sum \
+    gdisk \
+    dosfstools \
+    e2fsprogs \
+    util-linux \
+    systemd-udev \
+    podman \
+    skopeo \
+    && dnf clean all \
+    && test -r /usr/lib64/cryptsetup/libcryptsetup-token-systemd-tpm2.so
+
+## installer setup
+COPY installer/mertensia-installer-sysusers.conf /usr/lib/sysusers.d/mertensia-installer.conf
+COPY installer/mertensia-installer-tmpfiles.conf /usr/lib/tmpfiles.d/mertensia-installer.conf
+RUN systemd-sysusers /usr/lib/sysusers.d/mertensia-installer.conf
+COPY installer/gdm-custom.conf /etc/gdm/custom.conf
+COPY installer/mertensia-installer.desktop /etc/xdg/autostart/mertensia-installer.desktop
+COPY installer/mertensia_installer.py /usr/bin/mertensia-installer
+COPY installer/branding /usr/share/mertensia-installer/branding
+COPY installer/branding/fonts /usr/share/fonts/mertensia
+RUN fc-cache -f /usr/share/fonts/mertensia
+COPY installer/mertensia_installer_backend.py /usr/libexec/mertensia-installer-helper
+COPY installer/org.mertensia.Installer.policy /usr/share/polkit-1/actions/org.mertensia.Installer.policy
+COPY installer/49-mertensia-installer.rules /usr/share/polkit-1/rules.d/49-mertensia-installer.rules
+COPY installer/var-tmp.mount /etc/systemd/system/var-tmp.mount
+COPY installer/iso.yaml /usr/lib/image-builder/bootc/iso.yaml
+COPY installer/install.conf.in /tmp/install.conf.in
+RUN mkdir -p \
+      /usr/lib/mertensia-installer \
+      /usr/lib/bootc-image-builder && \
+    sed -e "s|@SOURCE_IMAGE@|${SOURCE_IMAGE}|g" \
+        -e "s|@TARGET_IMAGE@|${TARGET_IMAGE}|g" \
+        -e "s|@BUILD_MODE@|${BUILD_MODE}|g" \
+        /tmp/install.conf.in > /usr/lib/mertensia-installer/install.conf && \
+    rm -f /tmp/install.conf.in && \
+    ln -sfn ../image-builder/bootc/iso.yaml /usr/lib/bootc-image-builder/iso.yaml && \
+    chmod 0755 /usr/bin/mertensia-installer /usr/libexec/mertensia-installer-helper && \
+    systemctl enable var-tmp.mount && \
+    dnf clean all && \
+    rm -rf /run/dnf /var/lib/dnf/repos && \
+    rm -f /var/cache/ldconfig/aux-cache && \
+    find /var/log -type f -delete
+
+## initramfs for ISO with dmsquash
+RUN kernel="$(find /usr/lib/modules -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | sort -V | tail -n1)" && \
+    test -n "$kernel" && \
+    DRACUT_NO_XATTR=1 dracut --force --no-hostonly --zstd \
+      --add "dmsquash-live dmsquash-live-autooverlay crypt systemd systemd-cryptsetup tpm2-tss" \
+      "/usr/lib/modules/${kernel}/initramfs.img" "$kernel" && \
+    test -s "/usr/lib/modules/${kernel}/initramfs.img"
+
+RUN mkdir -p /boot/efi && \
+    cp -a /usr/lib/efi/*/*/EFI /boot/efi/ && \
+    test -e /boot/efi/EFI/fedora/shimx64.efi && \
+    test -e /boot/efi/EFI/fedora/gcdx64.efi

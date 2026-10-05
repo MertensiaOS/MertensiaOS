@@ -1,0 +1,23 @@
+# Disposable test overlays only. Never publish these as production images.
+ARG BASE_IMAGE
+FROM ${BASE_IMAGE}
+
+ARG INTEGRATION_ROLE=payload
+ARG INTEGRATION_REVISION=initial
+ARG INTEGRATION_UPGRADE_IMAGE=
+ARG INTEGRATION_PUBLIC_KEY_B64=
+COPY tests/integration/guest.py /usr/libexec/mertensia-integration-agent
+COPY tests/integration/mertensia-integration.service /usr/lib/systemd/system/mertensia-integration.service
+COPY tests/integration/90-mertensia-integration.toml /usr/lib/bootc/install/90-mertensia-integration.toml
+COPY tests/integration/add_test_policy.py /usr/share/mertensia-integration/add_test_policy.py
+RUN test "${INTEGRATION_ROLE}" = payload -o "${INTEGRATION_ROLE}" = live && \
+    mkdir -p /usr/share/mertensia-integration && \
+    printf '%s\n' "${INTEGRATION_ROLE}" > /usr/share/mertensia-integration/role && \
+    printf '%s\n' "${INTEGRATION_REVISION}" > /usr/share/mertensia-integration/revision && \
+    chmod 0755 /usr/libexec/mertensia-integration-agent && \
+    systemctl enable mertensia-integration.service
+RUN if test -n "${INTEGRATION_UPGRADE_IMAGE}"; then \
+      test "${INTEGRATION_ROLE}" = payload && \
+      python3 /usr/share/mertensia-integration/add_test_policy.py \
+        --image "${INTEGRATION_UPGRADE_IMAGE}" --public-key-base64 "${INTEGRATION_PUBLIC_KEY_B64}"; \
+    fi

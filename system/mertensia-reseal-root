@@ -1,0 +1,77 @@
+#!/usr/bin/bash
+set -euo pipefail
+
+if [[ $EUID -ne 0 ]]; then
+    exec pkexec "$0" "$@"
+fi
+
+# With composefs, / is an overlay while /sysroot is the encrypted physical
+# root. Require an actual mountpoint and omit OSTree's [/ostree/...] suffix.
+root_source="$(findmnt --mountpoint /sysroot --nofsroot -nro SOURCE 2>/dev/null || true)"
+if [[ ! "$root_source" =~ ^/dev/mapper/[^/]+$ && ! "$root_source" =~ ^/dev/dm-[0-9]+$ ]]; then
+    root_source="$(findmnt --mountpoint / --nofsroot -nro SOURCE)"
+fi
+if [[ ! "$root_source" =~ ^/dev/mapper/[^/]+$ && ! "$root_source" =~ ^/dev/dm-[0-9]+$ ]]; then
+    echo "The root filesystem is not on an encrypted mapper device." >&2
+    exit 1
+fi
+canonical_source="$(readlink -f "$root_source")"
+if [[ ! "$canonical_source" =~ ^/dev/dm-[0-9]+$ ]]; then
+    echo "Could not identify the root device mapping." >&2
+    exit 1
+fi
+mapper_name_file="/sys/class/block/${canonical_source##*/}/dm/name"
+if [[ ! -r "$mapper_name_file" ]]; then
+    echo "Could not identify the encrypted root mapping." >&2
+    exit 1
+fi
+mapper_name="$(<"$mapper_name_file")"
+if [[ -z "$mapper_name" || "$mapper_name" == -* || "$mapper_name" == */* || "$mapper_name" == *$'\n'* ]]; then
+    echo "The root device mapping has an invalid name." >&2
+    exit 1
+fi
+if ! mapper_status="$(LC_ALL=C cryptsetup status "$mapper_name")"; then
+    echo "The root device mapping is not an active encrypted volume." >&2
+    exit 1
+fi
+if ! grep -Eq '^[[:space:]]*type:[[:space:]]*LUKS2[[:space:]]*$' <<<"$mapper_status"; then
+    echo "The encrypted root must use LUKS2 for TPM enrollment." >&2
+    exit 1
+fi
+backing_device="$(sed -n 's/^[[:space:]]*device:[[:space:]]*//p' <<<"$mapper_status")"
+if [[ ! "$backing_device" =~ ^/dev/[^[:space:]]+$ ]]; then
+    echo "Could not find the encrypted root device." >&2
+    exit 1
+fi
+
+if ! LC_ALL=C bootctl status 2>/dev/null | grep -q 'Secure Boot: enabled'; then
+    echo "Secure Boot must be enabled before resealing the root volume." >&2
+    exit 1
+fi
+
+if [[ ! -e /dev/tpmrm0 && ! -e /dev/tpm0 ]]; then
+    echo "No TPM 2.0 device is available." >&2
+    exit 1
+fi
+
+key_file="$(mktemp --tmpdir=/run mertensia-recovery.XXXXXX)"
+trap 'shred -u "$key_file" 2>/dev/null || rm -f "$key_file"' EXIT
+chmod 600 "$key_file"
+recovery_key="$(systemd-ask-password "Enter the MertensiaOS root recovery key:")"
+printf '%s' "$recovery_key" >"$key_file"
+unset recovery_key
+
+cryptsetup open --test-passphrase --disable-external-tokens --key-file "$key_file" "$backing_device"
+systemd-cryptenroll \
+    --wipe-slot=tpm2 \
+    --unlock-key-file="$key_file" \
+    --tpm2-device=auto \
+    --tpm2-pcrs=7 \
+    "$backing_device"
+
+if ! cryptsetup open --test-passphrase --token-only --token-type systemd-tpm2 "$backing_device"; then
+    echo "Root TPM enrollment could not be verified. Keep your recovery key and retry resealing." >&2
+    exit 1
+fi
+
+echo "Root TPM enrollment now matches the current Secure Boot state."

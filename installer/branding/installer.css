@@ -1,0 +1,68 @@
+/* Quiet Bloom v1.0: native GTK controls, semantic colors, restrained decoration. */
+.installer {
+  font-family: "Figtree", sans-serif;
+  font-size: 16px;
+  background-color: @window_bg_color;
+  color: @window_fg_color;
+}
+.installer .brand-name { font-size: 16px; font-weight: 600; }
+.installer headerbar { padding: 8px 16px; box-shadow: none; }
+.installer .page-icon {
+  color: @accent_color;
+  background: alpha(@accent_color, 0.10);
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 4px;
+}
+.installer .step-label { color: @accent_color; font-size: 14px; font-weight: 600; }
+.installer .page-title { font-size: 30px; font-weight: 600; }
+.installer .page-description, .installer .secondary-text { color: @brand_muted; }
+.installer .page-description { font-size: 16px; }
+.installer .overview-card, .installer .boxed-list {
+  border-radius: 8px;
+  background: @card_bg_color;
+  color: @card_fg_color;
+  border: 1px solid alpha(@brand_border, 0.65);
+  box-shadow: none;
+}
+.installer .info-row { padding: 12px 16px; }
+.installer .overview-card .info-row + .info-row { border-top: 1px solid alpha(@brand_border, 0.45); }
+.installer .info-icon { color: @accent_color; min-width: 24px; }
+.installer .heading { font-weight: 600; }
+.installer .secondary-text { font-size: 14px; }
+.installer .boxed-list row { border-radius: 6px; margin: 4px; }
+.installer .boxed-list row:selected { background: alpha(@accent_color, 0.12); outline: 2px solid @accent_color; outline-offset: -2px; }
+.installer .actions > flowboxchild { padding: 4px 0; }
+.installer .action-button { min-height: 44px; padding: 0 16px; border-radius: 8px; font-weight: 600; }
+.installer entry { min-height: 44px; border: 1px solid @brand_border; border-radius: 8px; padding: 0 12px; }
+.installer button:focus-visible, .installer entry:focus-within, .installer checkbutton:focus-visible,
+.installer row:focus-visible { outline: 3px solid @accent_color; outline-offset: 3px; }
+.installer .page-title:focus { outline: none; }
+.installer .disk-summary, .installer .recovery-key, .installer .error-details {
+  padding: 24px;
+  border-radius: 8px;
+  background: @card_bg_color;
+  border: 1px solid @brand_border;
+}
+.installer .disk-summary { font-weight: 600; }
+.installer .recovery-key {
+  font-family: monospace;
+  font-size: 16px;
+  line-height: 1.5;
+}
+.installer .error-details { font-size: 14px; }
+.installer checkbutton { padding: 8px 0; min-height: 44px; }
+.installer checkbutton label { margin-left: 8px; }
+.installer .install-progress trough, .installer .install-progress progress { min-height: 8px; border-radius: 8px; }
+.installer .install-progress text { margin-bottom: 12px; color: @brand_muted; }
+.installer .brand-mark { margin-bottom: 8px; }
+
+/* Ship a small symbolic set so desktop icon themes cannot substitute bitmaps. */
+.installer .page-icon, .installer .info-icon { -gtk-icon-style: symbolic; }
+.installer .info-icon { margin-top: 2px; }
+.installer .info-icon.success-icon, .installer .page-icon.success-icon { color: @success_color; }
+.installer .page-icon.success-icon { background: alpha(@success_color, 0.10); }
+.installer .info-icon.warning-icon, .installer .page-icon.warning-icon { color: @warning_color; }
+.installer .page-icon.warning-icon { background: alpha(@warning_color, 0.10); }
+.installer .page-description { line-height: 1.25; }
+.installer .secondary-text { line-height: 1.2; }

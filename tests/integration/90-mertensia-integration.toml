@@ -1,0 +1,3 @@
+# Test overlays only: make the real initramfs recovery prompt accessible to QEMU.
+[install]
+kargs = ["console=tty0", "console=ttyS0,115200n8", "rd.plymouth=0", "plymouth.enable=0"]

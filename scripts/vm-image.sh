@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# for creating testing/development images for VMs
 # requires root
 set -euo pipefail
 
@@ -14,7 +15,7 @@ OUTPUT_DIR="$ROOT_DIR/output"
 DISK="$OUTPUT_DIR/mertensiaos.raw"
 
 echo "> Building base image"
-podman build -f "$ROOT_DIR/Containerfile" -t "$BASE_IMAGE" "$ROOT_DIR"
+podman build --pull -f "$ROOT_DIR/Containerfile" -t "$BASE_IMAGE" "$ROOT_DIR"
 
 echo "> Building dev image"
 podman build -f "$ROOT_DIR/Containerfile.dev" -t "$DEV_IMAGE" "$ROOT_DIR"

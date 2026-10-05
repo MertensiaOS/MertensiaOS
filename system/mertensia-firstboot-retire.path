@@ -1,0 +1,9 @@
+[Unit]
+Description=Watch for completion of MertensiaOS initial setup
+
+[Path]
+PathExists=/var/lib/mertensia/firstboot-complete
+Unit=mertensia-firstboot-retire.service
+
+[Install]
+WantedBy=multi-user.target

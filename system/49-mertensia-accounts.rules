@@ -1,0 +1,18 @@
+polkit.addRule(function(action, subject) {
+    if (action.id == "org.mertensia.accounts.manage" &&
+        subject.user == "mertensia-setup") {
+        if (!subject.active || !subject.local) {
+            return polkit.Result.NO;
+        }
+        try {
+            var status = polkit.spawn(["/usr/libexec/mertensia-setup-authorized"]);
+            return status.indexOf("authorized") === 0 ?
+                polkit.Result.YES : polkit.Result.NO;
+        } catch (error) {
+            return polkit.Result.NO;
+        }
+    }
+    if (action.id == "org.freedesktop.accounts.user-administration") {
+        return polkit.Result.NO;
+    }
+});
