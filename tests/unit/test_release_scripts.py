@@ -50,6 +50,9 @@ with open(os.environ["FAKE_TOOL_LOG"], "a") as log:
 
 if command == "cosign":
     if args[0] == "public-key":
+        if os.environ.get("FAKE_PUBLIC_KEY_FAIL") == "1":
+            print("cannot decrypt " + os.environ.get("COSIGN_PRIVATE_KEY", ""), file=sys.stderr)
+            sys.exit(1)
         sys.stdout.write(Path(os.environ["FAKE_PUBLIC_KEY"]).read_text())
     elif args[0] == "verify":
         if os.environ.get("FAKE_COSIGN_VERIFY_FAIL") == "1":
@@ -211,6 +214,34 @@ class ReleaseScriptTests(unittest.TestCase):
         self.assertIn("does not match", result.stderr)
         self.assert_no_push_or_promotion()
         self.assertEqual(self.calls("podman", "run"), [])
+
+    def test_signing_preflight_accepts_matching_key_without_registry_access(self):
+        result = self.run_script("check-signing-key.sh", COSIGN_PRIVATE_KEY="test-private-key")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("matches cosign.pub", result.stdout)
+        self.assertEqual(self.commands(), [{"command": "cosign", "args": [
+            "public-key", "--key", "env://COSIGN_PRIVATE_KEY"]}])
+
+    def test_signing_preflight_rejects_missing_key_without_running_tools(self):
+        result = self.run_script("check-signing-key.sh", COSIGN_PRIVATE_KEY="")
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("SIGNING_SECRET is missing", result.stderr)
+        self.assertEqual(self.commands(), [])
+
+    def test_signing_preflight_hides_errors_that_might_contain_key_material(self):
+        secret = "private-key-material-for-redaction-test"
+        result = self.run_script("check-signing-key.sh", COSIGN_PRIVATE_KEY=secret,
+                                 FAKE_PUBLIC_KEY_FAIL="1")
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("COSIGN_PASSWORD", result.stderr)
+        self.assertNotIn(secret, result.stdout + result.stderr)
+
+    def test_signing_preflight_rejects_mismatched_key_without_registry_access(self):
+        result = self.run_script("check-signing-key.sh", COSIGN_PRIVATE_KEY="test-private-key",
+                                 FAKE_PUBLIC_KEY=str(self.mismatched_public_key()))
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("does not match cosign.pub", result.stderr)
+        self.assertEqual(len(self.commands()), 1)
 
     def test_existing_version_is_rejected_before_push(self):
         result = self.publish(FAKE_INSPECT="exists")

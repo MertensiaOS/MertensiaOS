@@ -3,9 +3,14 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'New immutable version, e.g. 45.20261005.1'
-        required: true
+        description: 'New immutable version, e.g. 45.20261005.1 (required when publishing)'
+        required: false
         type: string
+      signing_check_only:
+        description: 'Check signing credentials without building or publishing a release'
+        default: false
+        required: true
+        type: boolean
       channel:
         description: 'Update channel to promote after verification'
         default: latest
@@ -20,21 +25,41 @@ concurrency:
   cancel-in-progress: false
 jobs:
   checks:
+    if: ${{ !inputs.signing_check_only }}
     uses: ./.github/workflows/ci.yml
     permissions:
       contents: read
+  signing:
+    if: github.ref == 'refs/heads/main' || inputs.signing_check_only
+    runs-on: ubuntu-24.04
+    environment: release
+    permissions:
+      contents: read
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: sigstore/cosign-installer@f713795cb21599bc4e5c4b58cbad1da852d7eeb9 # v3
+        with:
+          cosign-release: v3.0.6
+          install-dir: /usr/local/bin
+          use-sudo: 'true'
+      - name: Validate release signing credentials
+        env:
+          COSIGN_PRIVATE_KEY: ${{ secrets.SIGNING_SECRET }}
+          COSIGN_PASSWORD: ${{ secrets.COSIGN_PASSWORD }}
+        run: bash scripts/check-signing-key.sh
   release:
-    if: github.ref == 'refs/heads/main'
-    needs: checks
+    if: github.ref == 'refs/heads/main' && !inputs.signing_check_only
+    needs: [checks, signing]
     runs-on: ubuntu-24.04
     environment: release
     timeout-minutes: 120
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-      - name: Require release signing credentials
+      - name: Require release version
         env:
-          COSIGN_PRIVATE_KEY: ${{ secrets.COSIGN_PRIVATE_KEY }}
-        run: test -n "$COSIGN_PRIVATE_KEY"
+          RELEASE_VERSION: ${{ inputs.version }}
+        run: test -n "$RELEASE_VERSION" || { echo 'A version is required when publishing a release.' >&2; exit 1; }
       - uses: sigstore/cosign-installer@f713795cb21599bc4e5c4b58cbad1da852d7eeb9 # v3
         with:
           cosign-release: v3.0.6
@@ -54,14 +79,11 @@ jobs:
       - name: Publish separate signed update-test fixture
         id: fixture
         env:
-          COSIGN_PRIVATE_KEY: ${{ secrets.COSIGN_PRIVATE_KEY }}
+          COSIGN_PRIVATE_KEY: ${{ secrets.SIGNING_SECRET }}
           COSIGN_PASSWORD: ${{ secrets.COSIGN_PASSWORD }}
           REGISTRY_AUTH_FILE: /root/.docker/config.json
         run: |
-          cosign public-key --key env://COSIGN_PRIVATE_KEY > "$RUNNER_TEMP/signing.pub"
-          openssl pkey -pubin -in "$RUNNER_TEMP/signing.pub" -outform DER -out "$RUNNER_TEMP/signing.der"
-          openssl pkey -pubin -in cosign.pub -outform DER -out "$RUNNER_TEMP/trusted.der"
-          cmp "$RUNNER_TEMP/signing.der" "$RUNNER_TEMP/trusted.der"
+          bash scripts/check-signing-key.sh
           fixture_repo=ghcr.io/mertensiaos/mertensiaos-integration
           fixture_tag="run-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           public_key_b64="$(base64 -w0 cosign.pub)"
@@ -89,7 +111,7 @@ jobs:
       - name: Publish, sign, verify and promote
         id: publish
         env:
-          COSIGN_PRIVATE_KEY: ${{ secrets.COSIGN_PRIVATE_KEY }}
+          COSIGN_PRIVATE_KEY: ${{ secrets.SIGNING_SECRET }}
           COSIGN_PASSWORD: ${{ secrets.COSIGN_PASSWORD }}
           RELEASE_VERSION: ${{ inputs.version }}
           RELEASE_CHANNEL: ${{ inputs.channel }}
@@ -105,7 +127,7 @@ jobs:
           sudo chown -R "$(id -u):$(id -g)" output/installer
       - name: Sign installer checksums
         env:
-          COSIGN_PRIVATE_KEY: ${{ secrets.COSIGN_PRIVATE_KEY }}
+          COSIGN_PRIVATE_KEY: ${{ secrets.SIGNING_SECRET }}
           COSIGN_PASSWORD: ${{ secrets.COSIGN_PASSWORD }}
         run: cosign sign-blob --yes --key env://COSIGN_PRIVATE_KEY --bundle output/installer/SHA256SUMS.sigstore.json output/installer/SHA256SUMS
       - name: Save installer and signed checksums
