@@ -11,6 +11,7 @@ import tempfile
 import unittest
 import xml.etree.ElementTree as ET
 from pathlib import Path
+from types import SimpleNamespace
 from unittest import mock
 
 
@@ -325,6 +326,50 @@ class HarnessTests(unittest.TestCase):
             process.kill.assert_called_once()
             self.assertTrue(launched.call_args.kwargs["stdout"].closed)
 
+    def test_each_boot_restarts_swtpm_and_preserves_the_selected_state(self):
+        with tempfile.TemporaryDirectory() as directory:
+            work = Path(directory)
+            processes = []
+            state_directories = []
+
+            def start_tpm(argv, **kwargs):
+                state = Path(argv[argv.index("--tpmstate") + 1].removeprefix("dir="))
+                marker = state / "enrolled-key"
+                if state in state_directories:
+                    self.assertEqual(marker.read_text(), "persistent TPM identity")
+                else:
+                    marker.write_text("persistent TPM identity")
+                state_directories.append(state)
+                process = mock.Mock()
+                process.poll.return_value = None
+                processes.append(process)
+                return process
+
+            def boot_guest(*args, **kwargs):
+                process = processes[-1]
+                self.assertIsNone(process.poll(), "QEMU must not reuse a shut-down swtpm process")
+                instance = mock.Mock()
+                instance.secret = "private-test-recovery-key"
+                instance.command.return_value = {"digest": "original-deployment"}
+                instance.serial.prompt_answered = True
+                # QEMU's normal shutdown also shuts down swtpm, removing its
+                # control socket. The next boot must start a fresh emulator.
+                instance.poweroff.side_effect = lambda: setattr(process.poll, "return_value", 0)
+                return instance
+
+            firmware = harness.Firmware(Path("/tmp/CODE.fd"), Path("/tmp/VARS.fd"))
+            with mock.patch.object(harness.subprocess, "run"), \
+                 mock.patch.object(harness.shutil, "copyfile"), \
+                 mock.patch.object(harness.subprocess, "Popen", side_effect=start_tpm), \
+                 mock.patch.object(harness, "wait_path"), \
+                 mock.patch.object(harness, "Guest", side_effect=boot_guest), \
+                 mock.patch("builtins.print"):
+                harness.run_suite(self.args(), work, firmware, harness.Results(work))
+            self.assertEqual(state_directories, [work / name for name in (
+                "tpm", "tpm", "tpm", "tpm-recovery", "tpm",
+            )])
+            self.assertTrue(all(process.poll() == 0 for process in processes))
+
 
 class TestSigningPolicyTests(unittest.TestCase):
     def setUp(self):
@@ -346,6 +391,41 @@ class TestSigningPolicyTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.policy.add_scope({"default": [{"type": "reject"}], "transports": {"docker": {"ghcr.io/example/integration": []}}},
                                   "ghcr.io/example/integration:next")
+
+
+class TPMUnlockResultTests(unittest.TestCase):
+    def test_original_tpm_requires_success(self):
+        for code in (0, 1, 2, 4, -9):
+            with self.subTest(code=code):
+                result = SimpleNamespace(returncode=code, stderr="TPM key integrity check failed")
+                if code == 0:
+                    guest.check_tpm_unlock(result, expect_tpm=True)
+                else:
+                    with self.assertRaisesRegex(RuntimeError, "TPM unlock returned"):
+                        guest.check_tpm_unlock(result, expect_tpm=True)
+
+    def test_replacement_tpm_accepts_only_known_key_rejection_diagnostics(self):
+        for code in (1, 2):
+            for diagnostic in (
+                "Failed to unseal secret using TPM2: State not recoverable",
+                "TPM key integrity check failed. Key enrolled in superblock most likely does not belong to this TPM.",
+            ):
+                with self.subTest(code=code, diagnostic=diagnostic):
+                    guest.check_tpm_unlock(SimpleNamespace(returncode=code, stderr=diagnostic), expect_tpm=False)
+
+    def test_operational_errors_and_unexpected_success_do_not_prove_rejection(self):
+        for code, diagnostic in (
+            (0, ""),
+            (1, "Failed to create TPM2 context: State not recoverable"),
+            (1, "Failed to load external token plugin systemd-tpm2"),
+            (1, "Unknown option"),
+            (2, "Permission denied"),
+            (2, "No key available with this token"),
+            (4, "TPM key integrity check failed"),
+            (-9, "Failed to unseal secret using TPM2: State not recoverable"),
+        ):
+            with self.subTest(code=code, diagnostic=diagnostic), self.assertRaisesRegex(RuntimeError, "Expected TPM key rejection"):
+                guest.check_tpm_unlock(SimpleNamespace(returncode=code, stderr=diagnostic), expect_tpm=False)
 
 
 class GuestGuardContractTests(unittest.TestCase):

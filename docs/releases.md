@@ -20,12 +20,25 @@ cannot sign updates accepted by existing installations. The publisher compares
 the signing key's public half with the checked-in key before pushing. Never
 commit private keys; keep them in protected secrets or a supported KMS.
 
-Configure the repository's GitHub Actions `release` environment with:
+Configure GitHub Actions repository secrets, or secrets in the `release`
+environment, with:
 
 | Secret | Purpose |
 | --- | --- |
-| `COSIGN_PRIVATE_KEY` | The encrypted private key matching `cosign.pub` |
+| `SIGNING_SECRET` | Complete PEM private key matching `cosign.pub`, including header, footer and newlines; not base64-encoded |
 | `COSIGN_PASSWORD` | Its passphrase, or empty for an unencrypted key |
+
+The workflow maps `SIGNING_SECRET` to the `COSIGN_PRIVATE_KEY` environment
+variable used by Cosign. Repository secrets are inherited by the `release`
+environment unless an environment secret overrides the same name. Private keys
+stay in the signing steps' environment; they are not build arguments or artifacts.
+
+To check the stored key before publishing, dispatch **Publish signed release**
+with `signing_check_only` enabled. Leave the version empty. This mode only opens
+the key and compares its public half with `cosign.pub`; it does not build images,
+publish packages or promote an update channel. It can also run on a branch when
+validating a workflow change. A missing key, incorrect passphrase, invalid format
+or mismatched public key fails the check without printing the secret.
 
 Allow the workflow's `GITHUB_TOKEN` to write packages and ensure both the official
 GHCR package and `mertensiaos-integration` test package are publicly readable.

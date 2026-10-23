@@ -1,5 +1,5 @@
 FROM quay.io/fedora/fedora-bootc:45 AS accountsservice-build
-RUN dnf -y install dnf-plugins-core rpm-build
+RUN dnf -y install dnf5-plugins rpm-build
 COPY system/patches/accountsservice-homed-enumeration.patch /build/accountsservice-homed-enumeration.patch
 COPY scripts/build-accountsservice.sh /build/build-accountsservice.sh
 RUN bash /build/build-accountsservice.sh
