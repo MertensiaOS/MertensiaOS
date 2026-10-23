@@ -147,6 +147,22 @@ def install(send):
             process.wait(timeout=30)
 
 
+def check_tpm_unlock(result, *, expect_tpm):
+    if expect_tpm:
+        require(result.returncode == 0, f"TPM unlock returned {result.returncode}: {result.stderr[-2000:]}")
+        return
+    # Replacing the TPM can fail while loading the sealed key, before a
+    # passphrase is available. libcryptsetup reports that as exit 1 rather
+    # than the exit 2 used for an incorrect passphrase. Require the specific
+    # key rejection diagnostic so missing plugins/devices or other failures
+    # cannot satisfy this negative test.
+    rejected = result.returncode in {1, 2} and any(message in result.stderr for message in (
+        "TPM key integrity check failed",
+        "Failed to unseal secret using TPM2: State not recoverable",
+    ))
+    require(rejected, f"Expected TPM key rejection, got exit {result.returncode}: {result.stderr[-2000:]}")
+
+
 def root_checks(recovery_key, *, expect_tpm=True):
     require(role() == "payload", "installed test payload is not booted")
     require(secure_boot(), "Secure Boot is disabled in the installed system")
@@ -168,9 +184,7 @@ def root_checks(recovery_key, *, expect_tpm=True):
     require("tpm2-device=auto" in Path("/etc/crypttab").read_text(), "installed crypttab lacks TPM unlock")
     token = subprocess.run(["cryptsetup", "open", "--test-passphrase", "--token-only", "--token-type", "systemd-tpm2", ROOT_PARTITION],
                            text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=180)
-    expected_code = 0 if expect_tpm else 2
-    require(token.returncode == expected_code,
-            f"TPM unlock returned {token.returncode}; expected {'success' if expect_tpm else 'key rejection (exit 2)'}")
+    check_tpm_unlock(token, expect_tpm=expect_tpm)
     with tempfile.NamedTemporaryFile(mode="w", dir="/run", prefix="integration-recovery-") as key:
         os.fchmod(key.fileno(), 0o600)
         key.write(recovery_key)
