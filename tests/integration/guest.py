@@ -5,9 +5,12 @@ from __future__ import annotations
 
 import ctypes
 import ctypes.util
+from contextlib import contextmanager
 import json
 import os
 import pwd
+import re
+import shlex
 import subprocess
 import sys
 import tempfile
@@ -28,6 +31,10 @@ ROLE = Path("/usr/share/mertensia-integration/role")
 ACCOUNT = "integration_admin"
 SECOND_ACCOUNT = "integration_user"
 ROOT_PARTITION = "/dev/vda3"
+HEALTH_UNIT = "greenboot-healthcheck.service"
+HEALTH_FAILURE = Path("/etc/greenboot/check/required.d/00-mertensia-integration-local.sh")
+EVENT = Path("/var/lib/mertensia/boot-health/recovery.json")
+TEST_STATE = Path("/var/lib/mertensia-integration")
 
 
 def require(condition, message):
@@ -98,6 +105,9 @@ def secure_boot():
 
 def live_probe():
     require(role() == "live", "installation requires the integration live image")
+    for unit in (HEALTH_UNIT, "greenboot-set-rollback-trigger.service", "mertensia-boot-health-status.service"):
+        masked = subprocess.run(["systemctl", "is-enabled", unit], text=True, capture_output=True, timeout=10)
+        require(masked.stdout.strip() == "masked", f"live installer did not mask {unit}")
     rows = run(["/usr/libexec/mertensia-installer-helper", "probe"]).splitlines()
     result = json.loads(rows[-1])
     require(result.get("ok") is True, f"installer requirements failed: {result}")
@@ -163,7 +173,7 @@ def check_tpm_unlock(result, *, expect_tpm):
     require(rejected, f"Expected TPM key rejection, got exit {result.returncode}: {result.stderr[-2000:]}")
 
 
-def root_checks(recovery_key, *, expect_tpm=True):
+def root_checks(recovery_key, *, expect_tpm=True, expect_offline=False):
     require(role() == "payload", "installed test payload is not booted")
     require(secure_boot(), "Secure Boot is disabled in the installed system")
     require(Path("/dev/tpmrm0").exists() or Path("/dev/tpm0").exists(), "TPM disappeared after installation")
@@ -181,6 +191,8 @@ def root_checks(recovery_key, *, expect_tpm=True):
     mapped = run(["cryptsetup", "status", mapping])
     require(ROOT_PARTITION in mapped, "root mapping does not use the disposable test disk")
     require(Path("/sys/fs/selinux/enforce").read_text().strip() == "1", "installed SELinux is not enforcing")
+    if expect_offline:
+        require(run(["nmcli", "networking"]).strip() == "disabled", "networking did not remain disabled across the offline boot")
     require("tpm2-device=auto" in Path("/etc/crypttab").read_text(), "installed crypttab lacks TPM unlock")
     token = subprocess.run(["cryptsetup", "open", "--test-passphrase", "--token-only", "--token-type", "systemd-tpm2", ROOT_PARTITION],
                            text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=180)
@@ -191,8 +203,143 @@ def root_checks(recovery_key, *, expect_tpm=True):
         key.flush()
         run(["cryptsetup", "open", "--test-passphrase", "--disable-external-tokens", "--key-file", key.name, ROOT_PARTITION])
     wait_for_gdm()
+    health = boot_health()
+    require(health["healthy"], "installed system did not pass Greenboot: " + json.dumps(health))
     return {"secure_boot": True, "selinux_enforcing": True, "tpm_unlock": expect_tpm,
-            "recovery_key_unlock": True, "gdm_active": True, **boot_identity()}
+            "recovery_key_unlock": True, "gdm_active": True, "greenboot_healthy": True,
+            "offline_checked": expect_offline, **boot_identity()}
+
+
+def health_fixture():
+    guard_guest()
+    require(role() == "payload", "health failure injection requires the test payload")
+    mode = Path("/usr/share/mertensia-integration/health-mode").read_text().strip()
+    if mode == "always":
+        print("Injected persistent integration health-check failure", flush=True)
+        return 1
+    require(mode == "transient", "unexpected integration health fixture mode")
+    TEST_STATE.mkdir(mode=0o700, exist_ok=True)
+    marker = TEST_STATE / "transient-failed"
+    revision = Path("/usr/share/mertensia-integration/revision").read_text()
+    if marker.exists() and marker.read_text() == revision:
+        return 0
+    marker.write_text(revision)
+    print("Injected one-time integration health-check failure", flush=True)
+    return 1
+
+
+def boot_health():
+    require(role() == "payload", "health inspection requires the installed test system")
+    deadline = time.monotonic() + 180
+    while time.monotonic() < deadline:
+        output = run(["systemctl", "show", HEALTH_UNIT, "--property=ActiveState,Result"], timeout=10)
+        state = dict(line.split("=", 1) for line in output.splitlines() if "=" in line)
+        if state.get("ActiveState") in {"active", "failed"}:
+            messages = run(["journalctl", "-b", "-u", HEALTH_UNIT, "--no-pager", "-o", "cat", "-n", "200"], timeout=10)
+            healthy = state["ActiveState"] == "active" and state.get("Result") == "success"
+            if healthy:
+                fragment = Path("/usr/lib/bootupd/grub2-static/configs.d/08_greenboot.cfg").read_text().strip()
+                config = Path("/boot/grub2/grub.cfg").read_text()
+                require(fragment in config, "installed GRUB configuration lacks the packaged Greenboot fragment")
+                require("grubenv" in config, "installed GRUB does not load the persistent environment")
+                environment = run(["grub2-editenv", "/boot/grub2/grubenv", "list"], timeout=10)
+                require("boot_success=1" in environment.splitlines(), "Greenboot did not set boot success")
+                require(not any(line.startswith("boot_counter=") for line in environment.splitlines()),
+                        "healthy boot retained the retry counter")
+            return {"healthy": healthy, "manual_intervention": "manual intervention" in messages.lower(),
+                    "boot_id": Path("/proc/sys/kernel/random/boot_id").read_text().strip(),
+                    "journal": messages, **boot_identity()}
+        time.sleep(1)
+    raise RuntimeError("Greenboot did not settle within 180 seconds")
+
+
+def recovery_event():
+    health = boot_health()
+    require(health["healthy"], "cannot confirm recovery on an unhealthy boot")
+    deadline = time.monotonic() + 35
+    while time.monotonic() < deadline:
+        if EVENT.exists():
+            event = json.loads(EVENT.read_text())
+            if event.get("boot_id") == health["boot_id"]:
+                require(event.get("restored_image_digest") == health["digest"], "recovery event names the wrong image")
+                require(EVENT.stat().st_mode & 0o777 == 0o644, "recovery event is not readable by the desktop")
+                return event
+        time.sleep(1)
+    raise RuntimeError("successful fallback did not publish a current-boot recovery event")
+
+
+def set_local_health_failure(enabled):
+    require(role() == "payload" and isinstance(enabled, bool), "invalid health failure request")
+    if enabled:
+        require(not HEALTH_FAILURE.exists(), "local health fixture already exists")
+        HEALTH_FAILURE.parent.mkdir(parents=True, exist_ok=True)
+        HEALTH_FAILURE.write_text("#!/usr/bin/bash\necho 'Injected integration failure in every deployment'\nexit 1\n")
+        HEALTH_FAILURE.chmod(0o755)
+    else:
+        HEALTH_FAILURE.unlink(missing_ok=True)
+    return {"local_health_failure": enabled}
+
+
+@contextmanager
+def writable_boot():
+    options = run(["findmnt", "-nro", "OPTIONS", "--mountpoint", "/boot"]).strip().split(",")
+    readonly = "ro" in options
+    if readonly:
+        run(["mount", "-o", "remount,rw", "/boot"])
+    try:
+        yield
+    finally:
+        if readonly:
+            run(["mount", "-o", "remount,ro", "/boot"])
+
+
+def stage_grub_failure(image):
+    """Break only the staged test BLS entry; leave signed kernel bytes intact."""
+    result = stage_upgrade(image)
+    staged = status()["status"]["staged"]
+    checksum = staged["ostree"]["checksum"]
+    require(isinstance(checksum, str) and re.fullmatch(r"[a-f0-9]{64}", checksum), "invalid staged checksum")
+    # Use upstream arming before explicit finalization, just as its shutdown
+    # service does. This lets the fixed test operation alter the resulting BLS.
+    run(["/usr/libexec/greenboot/greenboot", "set-rollback-trigger"])
+    run(["ostree", "admin", "finalize-staged"], timeout=180)
+    def deployment_checksum(path):
+        for line in path.read_text().splitlines():
+            if line.startswith("options "):
+                for option in shlex.split(line[len("options "):]):
+                    if option.startswith("ostree=/ostree/"):
+                        target = (Path("/sysroot") / option.removeprefix("ostree=/")).resolve()
+                        return target.name.partition(".")[0]
+        return None
+
+    entries = [path for path in Path("/boot/loader/entries").glob("*.conf")
+               if deployment_checksum(path) == checksum]
+    require(len(entries) == 1, "could not uniquely identify the staged test BLS entry")
+    entry = entries[0]
+    text = entry.read_text()
+    require(any(line.startswith("linux ") for line in text.splitlines()), "staged BLS has no linux directive")
+    TEST_STATE.mkdir(mode=0o700, exist_ok=True)
+    backup = TEST_STATE / "grub-entry.json"
+    require(not backup.exists(), "a GRUB failure fixture is already pending")
+    backup.write_text(json.dumps({"name": entry.name, "text": text}))
+    with writable_boot():
+        entry.write_text("\n".join("linux /mertensia-integration-missing-kernel" if line.startswith("linux ") else line
+                                   for line in text.splitlines()) + "\n")
+    return result | {"grub_failure_staged": True}
+
+
+def restore_grub_entry():
+    backup = TEST_STATE / "grub-entry.json"
+    value = json.loads(backup.read_text())
+    require(Path(value["name"]).name == value["name"], "invalid test BLS backup")
+    linux = next(line for line in value["text"].splitlines() if line.startswith("linux "))
+    with writable_boot():
+        for path in Path("/boot/loader/entries").glob("*.conf"):
+            text = path.read_text()
+            if "linux /mertensia-integration-missing-kernel" in text:
+                path.write_text(text.replace("linux /mertensia-integration-missing-kernel", linux))
+    backup.unlink()
+    return {"grub_entry_restored": True}
 
 
 def account_request(user, password, *, firstboot):
@@ -360,7 +507,8 @@ def stage_upgrade(image):
     run(["bootc", "switch", "--enforce-container-sigpolicy", image], timeout=2400)
     staged = status().get("status", {}).get("staged")
     require(isinstance(staged, dict), "bootc did not stage the requested upgrade")
-    return {"previous_digest": before["digest"], "staged": True, "signature_policy_enforced": True}
+    return {"previous_digest": before["digest"], "staged_digest": staged["image"]["imageDigest"],
+            "staged": True, "signature_policy_enforced": True}
 
 
 def reject_wrong_signer(image):
@@ -432,7 +580,8 @@ def main():
                 elif command == "install":
                     result = install(send)
                 elif command == "root-checks":
-                    result = root_checks(request["recovery_key"], expect_tpm=request.get("expect_tpm", True))
+                    result = root_checks(request["recovery_key"], expect_tpm=request.get("expect_tpm", True),
+                                         expect_offline=request.get("expect_offline", False))
                 elif command == "create-accounts":
                     result = create_accounts(request["password"])
                 elif command == "login-checks":
@@ -441,6 +590,20 @@ def main():
                     result = reject_wrong_signer(request["image"])
                 elif command == "upgrade":
                     result = stage_upgrade(request["image"])
+                elif command == "boot-health":
+                    result = boot_health()
+                elif command == "recovery-event":
+                    result = recovery_event()
+                elif command == "set-health-failure":
+                    result = set_local_health_failure(request["enabled"])
+                elif command == "stage-grub-failure":
+                    result = stage_grub_failure(request["image"])
+                elif command == "restore-grub-entry":
+                    result = restore_grub_entry()
+                elif command == "networking":
+                    require(role() == "payload" and isinstance(request["enabled"], bool), "invalid network request")
+                    run(["nmcli", "networking", "on" if request["enabled"] else "off"])
+                    result = {"networking_enabled": request["enabled"]}
                 elif command == "rollback":
                     require(role() == "payload", "rollback requires the installed system")
                     run(["bootc", "rollback"])
@@ -457,4 +620,4 @@ def main():
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(health_fixture() if sys.argv[1:] == ["health-fixture"] else main())

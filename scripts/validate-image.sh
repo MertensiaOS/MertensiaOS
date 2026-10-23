@@ -18,6 +18,11 @@ podman run --rm --entrypoint /usr/bin/bash "$IMAGE" -euc "$(cat <<'BASH'
   shopt -s nullglob
   for test_artifact in \
       /usr/lib/systemd/system/mertensia-integration* \
+      /usr/lib/systemd/system/greenboot-healthcheck.service.d/*mertensia-integration* \
+      /usr/lib/greenboot/check/required.d/*mertensia-integration* \
+      /usr/lib/greenboot/check/wanted.d/*mertensia-integration* \
+      /etc/greenboot/check/required.d/*mertensia-integration* \
+      /etc/greenboot/check/wanted.d/*mertensia-integration* \
       /usr/libexec/mertensia-integration* \
       /etc/systemd/system/mertensia-integration* \
       /etc/systemd/system/*.wants/mertensia-integration* \
@@ -28,6 +33,15 @@ podman run --rm --entrypoint /usr/bin/bash "$IMAGE" -euc "$(cat <<'BASH'
       exit 1
     fi
   done
+  test -x /usr/libexec/mertensia-boot-health
+  test -x /usr/libexec/mertensia-boot-health-notify
+  test -x /usr/lib/greenboot/check/required.d/50-mertensia-desktop.sh
+  test -s /usr/lib/bootupd/grub2-static/configs.d/08_greenboot.cfg
+  test -L /etc/systemd/system/graphical.target.wants/greenboot-healthcheck.service
+  test ! -L /etc/systemd/system/multi-user.target.wants/greenboot-healthcheck.service
+  test -L /etc/systemd/system/ostree-finalize-staged.service.requires/greenboot-set-rollback-trigger.service
+  test -L /etc/systemd/system/greenboot-success.target.wants/mertensia-boot-health-status.service
+  test "$(readlink /etc/systemd/user/grub-boot-success.timer)" = /dev/null
   for test_user in testing integration_admin integration_user; do
     if getent passwd "$test_user" >/dev/null; then
       echo "Refusing to release a development image with account $test_user" >&2
@@ -52,6 +66,8 @@ from pathlib import Path
 import sys
 
 expected_policy = json.loads(sys.argv[1])
+if "GREENBOOT_MAX_BOOT_ATTEMPTS=3" not in Path("/etc/greenboot/greenboot.conf").read_text().splitlines():
+    raise SystemExit("Payload does not use the release Greenboot retry policy")
 for policy_file in ("/etc/containers/policy.json", "/usr/share/mertensia/bootc-policy.json"):
     policy = json.loads(Path(policy_file).read_text())
     if policy != expected_policy:

@@ -10,6 +10,11 @@ internet connection is available; failed downloads retry every five minutes.
 Once installed, open **Bazaar** from GNOME's app grid. Removing it opts out of
 automatic installation. OS updates continue to use bootc.
 
+Greenboot checks local storage and core desktop services after boot and can
+automatically restore the previous OS deployment when an update fails. Boots
+work offline, and users receive a desktop notification after automatic recovery.
+See [boot health](docs/boot-health.md) for checks, limits and diagnosis.
+
 The installer erases a whole disk. Supported targets are x86_64 computers with
 UEFI, Secure Boot enabled, a usable TPM 2.0, and a disk of at least 24 GiB.
 The project is under development; a passing unit suite does not establish that
@@ -43,7 +48,7 @@ builds, signed payload requirements and build prerequisites.
 On Fedora, install the desktop libraries used by the UI and tests:
 
 ```sh
-sudo dnf install python3 python3-gobject python3-dbus gtk4 libadwaita openssl \
+sudo dnf install python3 python3-gobject python3-dbus python3-pyyaml gtk4 libadwaita openssl \
   libxcrypt systemd iso-codes xkeyboard-config kbd tzdata
 python3 scripts/check-source.py
 python3 tests/run_tests.py

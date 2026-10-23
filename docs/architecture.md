@@ -49,6 +49,16 @@ removals, so later boots do not reinstall an app the user removed. Downloads and
 installed apps live in persistent `/var/lib/flatpak`, rather than the bootc image.
 The timer and service skip the disposable live installer.
 
+`mertensia.boot_health` implements the offline desktop checks used by Greenboot
+and the per-user GNOME recovery notifier. Greenboot owns retries and bootc
+rollback; MertensiaOS's separate status collector publishes confirmed recovery
+metadata under `/var/lib/mertensia/boot-health/`. The notifier reads that metadata
+without root privileges and stores delivery state inside the encrypted user
+home. Greenboot is pulled in by `graphical.target`; its probe waits for local
+services without ordering itself after a possibly stuck service start job.
+The live installer and direct development VM overlay mask recovery. See
+[boot health](boot-health.md) for the policy and interfaces.
+
 `Containerfile.installer` derives from that payload, adds only the live installer
 package and launchers, and overrides live-session configuration. It inherits
 shared branding from the payload. Installer code is absent from the clean payload.

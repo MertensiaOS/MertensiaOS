@@ -20,6 +20,7 @@ RUN dnf -y install \
     authselect \
     cryptsetup \
     tpm2-tools \
+    greenboot \
     python3-gobject \
     python3-dbus \
     gtk4 \
@@ -76,6 +77,28 @@ COPY src/mertensia/__init__.py /usr/lib/mertensia/python/mertensia/__init__.py
 COPY src/mertensia/accounts /usr/lib/mertensia/python/mertensia/accounts
 COPY src/mertensia/firstboot /usr/lib/mertensia/python/mertensia/firstboot
 COPY src/mertensia/ui /usr/lib/mertensia/python/mertensia/ui
+COPY src/mertensia/boot_health /usr/lib/mertensia/python/mertensia/boot_health
+
+## Local desktop health and automatic bootc recovery, independent of networking.
+COPY system/config/greenboot/greenboot.conf /etc/greenboot/greenboot.conf
+COPY system/config/greenboot/50-mertensia-desktop.sh /usr/lib/greenboot/check/required.d/50-mertensia-desktop.sh
+COPY system/config/systemd/greenboot-healthcheck.service.d /usr/lib/systemd/system/greenboot-healthcheck.service.d
+COPY system/config/systemd/greenboot-set-rollback-trigger.service.d /usr/lib/systemd/system/greenboot-set-rollback-trigger.service.d
+COPY system/config/systemd/mertensia-boot-health-status.service /usr/lib/systemd/system/mertensia-boot-health-status.service
+COPY system/config/journald/mertensia-boot-health.conf /usr/lib/systemd/journald.conf.d/50-mertensia-boot-health.conf
+COPY system/config/tmpfiles.d/mertensia-boot-health.conf /usr/lib/tmpfiles.d/mertensia-boot-health.conf
+COPY system/config/desktop/org.mertensia.BootHealth.desktop /etc/xdg/autostart/org.mertensia.BootHealth.desktop
+COPY system/config/desktop/org.mertensia.BootHealth.desktop /usr/share/applications/org.mertensia.BootHealth.desktop
+COPY system/bin/mertensia-boot-health /usr/libexec/mertensia-boot-health
+COPY system/bin/mertensia-boot-health-notify /usr/libexec/mertensia-boot-health-notify
+RUN chmod 0755 /usr/libexec/mertensia-boot-health /usr/libexec/mertensia-boot-health-notify \
+      /usr/lib/greenboot/check/required.d/50-mertensia-desktop.sh && \
+    test -s /usr/lib/bootupd/grub2-static/configs.d/08_greenboot.cfg && \
+    ! rpm -q greenboot-default-health-checks && \
+    systemctl disable greenboot-healthcheck.service && \
+    systemctl enable greenboot-healthcheck.service mertensia-boot-health-status.service && \
+    systemctl --global mask grub-boot-success.timer grub-boot-success.service && \
+    systemctl mask grub-boot-success.timer grub-boot-success.service
 
 ## Initial setup user with invalid (not blank) password
 COPY system/config/gnome/mertensia-setup.json /usr/share/gnome-shell/modes/mertensia-setup.json
@@ -115,7 +138,7 @@ RUN chmod 0755 \
 
 ## Clean up temporary files
 RUN dnf clean all && \
-    rm -rf /run/dnf /run/tuned /var/lib/dnf/repos && \
+    rm -rf /run/dnf /run/tuned /run/selinux-policy /var/lib/dnf/repos && \
     rm -f /var/cache/ldconfig/aux-cache \
           /var/cache/ibus/bus/registry \
           /var/cache/swcatalog/cache/*.xb && \

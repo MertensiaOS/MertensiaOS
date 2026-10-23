@@ -371,6 +371,116 @@ class HarnessTests(unittest.TestCase):
             self.assertTrue(all(process.poll() == 0 for process in processes))
 
 
+class GreenbootRecoveryTests(unittest.TestCase):
+    def test_follows_expected_reboots_then_checks_restored_digest(self):
+        ready = mock.Mock()
+        ready.command.return_value = {"healthy": True, "digest": "original"}
+        boot = mock.Mock(side_effect=[harness.ExpectedReboot("retry"), harness.ExpectedReboot("retry"), ready])
+        instance, result = harness.follow_greenboot(boot, "original")
+        self.assertIs(instance, ready)
+        self.assertEqual(result["automatic_reboots"], 2)
+        ready.close.assert_not_called()
+
+    def test_running_unhealthy_guest_is_never_force_rebooted(self):
+        stopped = mock.Mock()
+        stopped.command.return_value = {"healthy": False, "digest": "original", "manual_intervention": True}
+        stopped.wait_for_reboot.return_value = False
+        instance, summary = harness.follow_greenboot(lambda: stopped, "original", terminal_unhealthy=True)
+        self.assertIs(instance, stopped)
+        self.assertTrue(summary["manual_intervention"])
+        stopped.close.assert_not_called()
+
+    def test_automatic_reboot_budget_is_enforced(self):
+        boot = mock.Mock(side_effect=harness.ExpectedReboot("retry"))
+        with self.assertRaisesRegex(harness.HarnessError, "3-reboot recovery limit"):
+            harness.follow_greenboot(boot, "original", max_reboots=3)
+        self.assertEqual(boot.call_count, 4)
+
+    def test_wrong_digest_and_unexpected_success_fail_acceptance(self):
+        for terminal, digest in ((False, "wrong"), (True, "original")):
+            instance = mock.Mock()
+            instance.command.return_value = {"healthy": True, "digest": digest}
+            with self.assertRaises(harness.HarnessError):
+                harness.follow_greenboot(lambda: instance, "original", terminal_unhealthy=terminal)
+            instance.close.assert_called_once()
+
+    def test_only_explicit_recovery_channel_closures_can_mean_reboot(self):
+        for expected in (True, False):
+            instance = object.__new__(harness.Guest)
+            instance.stream = mock.Mock()
+            instance.stream.readline.return_value = b""
+            instance.expect_reboot = expected
+            instance.wait_for_reboot = mock.Mock(return_value=True)
+            exception = harness.ExpectedReboot if expected else harness.HarnessError
+            with self.assertRaises(exception):
+                instance.receive()
+            self.assertEqual(instance.wait_for_reboot.call_count, int(expected))
+
+    def test_unhealthy_guest_without_diagnostic_fails_instead_of_passing(self):
+        instance = mock.Mock()
+        instance.command.return_value = {"healthy": False, "digest": "original", "manual_intervention": False}
+        instance.wait_for_reboot.return_value = False
+        with self.assertRaisesRegex(harness.HarnessError, "manual-intervention diagnostic"):
+            harness.follow_greenboot(lambda: instance, "original", terminal_unhealthy=True)
+
+    def test_recovery_options_require_distinct_signed_fixtures_in_one_repository(self):
+        base = "ghcr.io/example/mertensia-integration:"
+        invalid = [
+            ["--require-greenboot-recovery"],
+            ["--greenboot-failure-image", base + "bad"],
+            ["--upgrade-image", base + "good", "--greenboot-failure-image", base + "good"],
+            ["--upgrade-image", base + "good", "--greenboot-failure-image", "ghcr.io/other/another-integration:bad"],
+        ]
+        for arguments in invalid:
+            with self.subTest(arguments=arguments), mock.patch("sys.stderr", new_callable=io.StringIO), \
+                 self.assertRaises(SystemExit) as error:
+                harness.main(arguments + ["--check"])
+            self.assertEqual(error.exception.code, 2)
+
+    def test_transient_fixture_fails_once_and_is_guarded(self):
+        original = Path.read_text
+        with tempfile.TemporaryDirectory() as directory:
+            state = Path(directory)
+
+            def read(path, *args, **kwargs):
+                if path.name == "health-mode":
+                    return "transient"
+                if path.name == "revision":
+                    return "test-revision"
+                return original(path, *args, **kwargs)
+
+            with mock.patch.object(guest, "guard_guest") as guard, \
+                 mock.patch.object(guest, "role", return_value="payload"), \
+                 mock.patch.object(guest, "TEST_STATE", state), \
+                 mock.patch.object(Path, "read_text", read):
+                self.assertEqual(guest.health_fixture(), 1)
+                self.assertEqual(guest.health_fixture(), 0)
+            self.assertEqual(guard.call_count, 2)
+
+    def test_numbered_boot_diagnostics_never_overwrite_an_earlier_boot(self):
+        args = harness.parser().parse_args([])
+        firmware = harness.Firmware(Path("/tmp/CODE.fd"), Path("/tmp/VARS.fd"))
+        first = harness.qemu_command(args, Path("/tmp/run"), firmware, live=False, boot_label="001")
+        second = harness.qemu_command(args, Path("/tmp/run"), firmware, live=False, boot_label="002")
+        self.assertIn("file:/tmp/run/installed-001.serial.log", first)
+        self.assertIn("file:/tmp/run/installed-002.serial.log", second)
+        self.assertIn("-no-reboot", first)
+
+    def test_boot_mount_mode_is_restored_even_when_fixture_write_fails(self):
+        with mock.patch.object(guest, "run", side_effect=["ro,relatime", "", ""]) as run:
+            with self.assertRaises(OSError):
+                with guest.writable_boot():
+                    raise OSError("injected write failure")
+        self.assertEqual(run.call_args_list[-1].args[0], ["mount", "-o", "remount,ro", "/boot"])
+
+    def test_failed_fixture_cannot_run_outside_the_guarded_guest(self):
+        with mock.patch.object(guest, "guard_guest", side_effect=RuntimeError("not a disposable guest")), \
+             mock.patch.object(Path, "read_text") as read:
+            with self.assertRaisesRegex(RuntimeError, "not a disposable guest"):
+                guest.health_fixture()
+        read.assert_not_called()
+
+
 class TestSigningPolicyTests(unittest.TestCase):
     def setUp(self):
         self.policy = add_test_policy

@@ -39,6 +39,10 @@ class HarnessError(RuntimeError):
     pass
 
 
+class ExpectedReboot(HarnessError):
+    """QEMU exited cleanly during an explicitly expected recovery boot."""
+
+
 @dataclass(frozen=True)
 class Firmware:
     code: Path
@@ -112,7 +116,7 @@ def safe_option_path(path):
     return value
 
 
-def qemu_command(args, work, firmware, *, live, recovery_console=False):
+def qemu_command(args, work, firmware, *, live, recovery_console=False, boot_label=None):
     work = Path(work)
     disk = safe_option_path(work / "target.qcow2")
     code = safe_option_path(firmware.code)
@@ -140,7 +144,8 @@ def qemu_command(args, work, firmware, *, live, recovery_console=False):
         argv.extend(["-chardev", f"socket,id=recovery,path={safe_option_path(work / 'recovery.sock')},server=on,wait=off",
                      "-serial", "chardev:recovery"])
     else:
-        argv.extend(["-serial", f"file:{safe_option_path(work / ('live.serial.log' if live else 'installed.serial.log'))}"])
+        serial_name = "live" if live else ("installed-" + boot_label if boot_label else "installed")
+        argv.extend(["-serial", f"file:{safe_option_path(work / (serial_name + '.serial.log'))}"])
     if live:
         argv.extend(["-drive", f"file={safe_option_path(args.iso)},media=cdrom,readonly=on", "-boot", "order=d"])
     else:
@@ -192,7 +197,8 @@ def wait_path(path, process, timeout):
 
 
 class Guest:
-    def __init__(self, args, work, firmware, live, recovery_key=None, *, on_secret=None, redact=None):
+    def __init__(self, args, work, firmware, live, recovery_key=None, *, on_secret=None, redact=None,
+                 expect_reboot=False, boot_label=None):
         self.args, self.work = args, work
         self.process = None
         self.socket = None
@@ -203,12 +209,15 @@ class Guest:
         self.on_secret = on_secret
         self.redact = redact or (lambda value: value)
         self.counter = 0
+        self.expect_reboot = expect_reboot
         channel = work / "agent.sock"
         channel.unlink(missing_ok=True)
         (work / "recovery.sock").unlink(missing_ok=True)
         try:
-            self.log = (work / ("qemu-live.log" if live else "qemu-installed.log")).open("ab")
-            self.process = subprocess.Popen(qemu_command(args, work, firmware, live=live, recovery_console=recovery_key is not None),
+            log_name = "qemu-live" if live else ("qemu-installed-" + boot_label if boot_label else "qemu-installed")
+            self.log = (work / (log_name + ".log")).open("ab")
+            self.process = subprocess.Popen(qemu_command(args, work, firmware, live=live,
+                                                        recovery_console=recovery_key is not None, boot_label=boot_label),
                                             stdout=self.log, stderr=self.log)
             wait_path(channel, self.process, 30)
             if recovery_key is not None:
@@ -227,21 +236,31 @@ class Guest:
             if recovery_key is not None and not self.serial.prompt_answered:
                 raise HarnessError("guest booted without answering the expected initramfs recovery prompt")
         except socket.timeout as error:
+            if expect_reboot and self.process and self.process.poll() == 0:
+                self.close()
+                raise ExpectedReboot("guest rebooted before its agent handshake") from error
             stage = "live ISO" if live else "installed disk"
             state = "still running" if self.process and self.process.poll() is None else "exited"
+            serial_name = "live" if live else ("installed-" + boot_label if boot_label else "installed")
             message = (f"timed out after {args.boot_timeout}s waiting for the integration agent on the {stage}; "
-                       f"QEMU is {state}. Inspect {work / ('live.serial.log' if live else 'installed.serial.log')} "
-                       f"and {work / ('qemu-live.log' if live else 'qemu-installed.log')}. "
+                       f"QEMU is {state}. Inspect {work / (serial_name + '.serial.log')} "
+                       f"and {work / (log_name + '.log')}. "
                        "A guest that reached Linux should log integration-agent startup errors on its serial console.")
             self.close()
             raise HarnessError(message) from error
-        except Exception:
+        except Exception as error:
+            clean_reboot = (expect_reboot and isinstance(error, (HarnessError, OSError))
+                            and self.process and self.process.poll() == 0)
             self.close()
+            if clean_reboot:
+                raise ExpectedReboot("guest rebooted before its agent handshake") from error
             raise
 
     def receive(self):
         line = self.stream.readline(1024 * 1024)
         if not line:
+            if self.expect_reboot and self.wait_for_reboot():
+                raise ExpectedReboot("Greenboot rebooted the disposable guest")
             raise HarnessError("guest channel closed; inspect QEMU/serial logs")
         if len(line) >= 1024 * 1024:
             raise HarnessError("guest response exceeded the protocol size limit")
@@ -280,6 +299,15 @@ class Guest:
             raise HarnessError(f"QEMU exited {self.process.returncode} after guest shutdown")
         self.close()
 
+    def wait_for_reboot(self, timeout=120):
+        try:
+            self.process.wait(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            return False
+        if self.process.returncode:
+            raise HarnessError(f"QEMU exited {self.process.returncode} during recovery")
+        return True
+
     def close(self):
         if self.serial:
             self.serial.close()
@@ -296,6 +324,37 @@ class Guest:
                 self.process.wait(timeout=10)
         if self.log:
             self.log.close()
+
+
+def follow_greenboot(boot, expected_digest, *, terminal_unhealthy=False, max_reboots=8):
+    """Follow bounded guest-requested reboots, never resetting a running guest."""
+    history = []
+    for attempt in range(max_reboots + 1):
+        instance = None
+        keep = False
+        try:
+            instance = boot()
+            health = instance.command("boot-health")
+            history.append({"attempt": attempt, **health})
+            if health["healthy"]:
+                if terminal_unhealthy:
+                    raise HarnessError("failure fixture unexpectedly passed its health checks")
+                if health["digest"] != expected_digest:
+                    raise HarnessError("automatic recovery booted the wrong deployment digest")
+                keep = True
+                return instance, {"automatic_reboots": attempt, "boots": history, "digest": expected_digest}
+            if instance.wait_for_reboot():
+                continue
+            if terminal_unhealthy and health["manual_intervention"] and health["digest"] == expected_digest:
+                keep = True
+                return instance, {"automatic_reboots": attempt, "boots": history, "manual_intervention": True}
+            raise HarnessError("unhealthy guest stopped without the expected manual-intervention diagnostic")
+        except ExpectedReboot:
+            history.append({"attempt": attempt, "reboot_before_health_response": True})
+        finally:
+            if instance is not None and not keep:
+                instance.close()
+    raise HarnessError(f"Greenboot exceeded the {max_reboots}-reboot recovery limit")
 
 
 class SerialRecovery:
@@ -524,6 +583,7 @@ def run_suite(args, work, firmware, results):
 
     tpm = None
     guest = None
+    installed_boots = 0
     recovery = None
     password = "Integration-" + secrets.token_urlsafe(24)
     results.secrets.append(password)
@@ -544,24 +604,62 @@ def run_suite(args, work, firmware, results):
         guest = None
 
         def boot_installed():
-            nonlocal guest, tpm
+            nonlocal guest, tpm, installed_boots
             # QEMU sends swtpm a shutdown command when the VM exits. Restart
             # the emulator for each boot, reusing its state so enrolled keys
             # survive live-media removal, reboot, update and rollback.
             stop_tpm()
             tpm = start_tpm("tpm")
-            guest = Guest(args, work, firmware, False, on_secret=results.secrets.append, redact=results.redact)
+            installed_boots += 1
+            guest = Guest(args, work, firmware, False, on_secret=results.secrets.append, redact=results.redact,
+                          boot_label=f"{installed_boots:03d}")
             return {"agent_role": "payload"}
+
+        def recover(name, digest, *, terminal_unhealthy=False):
+            nonlocal guest, tpm, installed_boots
+
+            def next_boot():
+                nonlocal guest, tpm, installed_boots
+                stop_tpm()
+                tpm = start_tpm("tpm")
+                installed_boots += 1
+                guest = None
+                guest = Guest(args, work, firmware, False, on_secret=results.secrets.append, redact=results.redact,
+                              expect_reboot=True, boot_label=f"{installed_boots:03d}")
+                return guest
+
+            def action():
+                nonlocal guest
+                guest, summary = follow_greenboot(next_boot, digest, terminal_unhealthy=terminal_unhealthy)
+                return summary
+
+            return results.step(name, action)
 
         results.step("Boot installed disk without installation media", boot_installed)
         original = results.step("Verify TPM unlock, recovery key, enforcing SELinux and GDM", lambda: guest.command("root-checks", recovery_key=recovery))
+        if args.require_greenboot_recovery:
+            if original["status"].get("status", {}).get("rollback"):
+                raise HarnessError("first-install failure test requires no previous deployment")
+            results.step("Inject first-install failure with no previous deployment", lambda: guest.command("set-health-failure", enabled=True))
+            results.step("Power off before first-install failure", guest.poweroff)
+            guest = None
+            exhausted = recover("First-install failure stops for manual intervention", original["digest"], terminal_unhealthy=True)
+            if exhausted["automatic_reboots"] < 1:
+                raise HarnessError("first-install failure did not exercise the Greenboot retry budget")
+            results.step("Remove first-install failure fixture", lambda: guest.command("set-health-failure", enabled=False))
+            results.step("Power off after first-install failure", guest.poweroff)
+            guest = None
+            results.step("Boot repaired first installation", boot_installed)
+            results.step("Verify first-boot setup remains healthy without accounts", lambda: guest.command("root-checks", recovery_key=recovery))
         results.step("Create initial administrator and additional encrypted account", lambda: guest.command("create-accounts", password=password))
         results.step("Authenticate both accounts through GDM PAM, reject incorrect passwords and check retirement/cache",
                      lambda: guest.command("login-checks", password=password, check_wrong_password=True))
+        results.step("Disable networking before offline boot", lambda: guest.command("networking", enabled=False))
         results.step("Power off installed system", guest.poweroff)
         guest = None
         results.step("Reboot installed disk with persistent TPM state", boot_installed)
-        results.step("Verify root unlock after reboot", lambda: guest.command("root-checks", recovery_key=recovery))
+        results.step("Verify offline boot, root unlock and Greenboot", lambda: guest.command("root-checks", recovery_key=recovery, expect_offline=True))
+        results.step("Restore networking after healthy offline boot", lambda: guest.command("networking", enabled=True))
         results.step("Verify persisted accounts and login integration after reboot", lambda: guest.command("login-checks", password=password))
         if args.upgrade_image:
             results.step("Reject signed update with an incorrect verification key", lambda: guest.command("reject-update", image=args.upgrade_image))
@@ -587,6 +685,55 @@ def run_suite(args, work, firmware, results):
             results.step("Verify accounts survived rollback", lambda: guest.command("login-checks", password=password))
         else:
             results.skip("Signed update and rollback", "--upgrade-image was not supplied; requires a distinct signed integration payload reachable from the guest")
+        if args.greenboot_transient_image:
+            staged = results.step("Stage signed transient-failure update", lambda: guest.command("upgrade", image=args.greenboot_transient_image))
+            results.step("Power off before transient-failure update", guest.poweroff)
+            guest = None
+            summary = recover("Transient failure recovers without rollback", staged["staged_digest"])
+            if summary["automatic_reboots"] < 1:
+                raise HarnessError("transient fixture did not cause a Greenboot retry")
+            results.step("Verify root unlock after transient recovery", lambda: guest.command("root-checks", recovery_key=recovery))
+            results.step("Verify accounts after transient recovery", lambda: guest.command("login-checks", password=password))
+            results.step("Return from transient fixture", lambda: guest.command("rollback"))
+            results.step("Power off transient fixture", guest.poweroff)
+            guest = None
+            results.step("Boot original after transient fixture", boot_installed)
+            restored = results.step("Verify original before rollback-failure tests", lambda: guest.command("root-checks", recovery_key=recovery))
+            if restored["digest"] != original["digest"]:
+                raise HarnessError("rollback after transient recovery did not restore the original deployment")
+        if args.greenboot_failure_image:
+            results.step("Stage signed update with an unreadable test BLS kernel", lambda: guest.command("stage-grub-failure", image=args.upgrade_image))
+            results.step("Power off before GRUB failure", guest.poweroff)
+            guest = None
+            recover("GRUB falls back and Greenboot makes recovery permanent", original["digest"])
+            results.step("Verify GRUB fallback recovery notification event", lambda: guest.command("recovery-event"))
+            results.step("Restore disposable BLS fixture", lambda: guest.command("restore-grub-entry"))
+            results.step("Verify root after GRUB fallback", lambda: guest.command("root-checks", recovery_key=recovery))
+            results.step("Verify accounts after GRUB fallback", lambda: guest.command("login-checks", password=password))
+            results.step("Stage signed persistent-failure update", lambda: guest.command("upgrade", image=args.greenboot_failure_image))
+            results.step("Power off before persistent-failure update", guest.poweroff)
+            guest = None
+            summary = recover("Failed update automatically restores original deployment", original["digest"])
+            if summary["automatic_reboots"] < 1:
+                raise HarnessError("persistent failure fixture did not cause a Greenboot retry")
+            results.step("Verify automatic rollback notification event", lambda: guest.command("recovery-event"))
+            results.step("Verify TPM and recovery unlock after automatic rollback", lambda: guest.command("root-checks", recovery_key=recovery))
+            results.step("Verify accounts after automatic rollback", lambda: guest.command("login-checks", password=password))
+            if args.require_greenboot_recovery:
+                results.step("Inject failure that also affects fallback deployment", lambda: guest.command("set-health-failure", enabled=True))
+                results.step("Stage signed update before unhealthy fallback", lambda: guest.command("upgrade", image=args.greenboot_failure_image))
+                results.step("Power off before unhealthy fallback test", guest.poweroff)
+                guest = None
+                exhausted = recover("Unhealthy fallback stops for manual intervention", original["digest"], terminal_unhealthy=True)
+                if exhausted["automatic_reboots"] < 1:
+                    raise HarnessError("unhealthy fallback did not exercise the Greenboot retry budget")
+                results.step("Remove unhealthy fallback fixture", lambda: guest.command("set-health-failure", enabled=False))
+                results.step("Power off after unhealthy fallback", guest.poweroff)
+                guest = None
+                results.step("Boot repaired fallback deployment", boot_installed)
+                results.step("Verify repaired fallback is healthy", lambda: guest.command("root-checks", recovery_key=recovery))
+        else:
+            results.skip("Automatic Greenboot recovery", "--greenboot-failure-image was not supplied")
         results.step("Power off before forced initramfs recovery boot", guest.poweroff)
         guest = None
         stop_tpm()
@@ -607,6 +754,7 @@ def run_suite(args, work, firmware, results):
         results.step("Final clean poweroff", guest.poweroff)
         guest = None
         results.skip("Graphical login and polkit UI", "PAM and helper integration are automated; see docs/testing.md for interactive GNOME/polkit acceptance checks")
+        results.skip("GNOME recovery notification appearance", "event publication is automated; real-session appearance and per-user delivery require interactive acceptance")
     finally:
         if guest:
             guest.close()
@@ -631,6 +779,9 @@ def parser():
     result.add_argument("--upgrade-image", help="distinct signed integration payload for actual update and rollback tests")
     result.add_argument("--upgrade-public-key", type=Path, help="trust this public key for the integration update repo in test overlays only (with --build)")
     result.add_argument("--require-upgrade", action="store_true", help="fail argument validation unless --upgrade-image is supplied")
+    result.add_argument("--greenboot-failure-image", help="signed integration payload with INTEGRATION_HEALTH_MODE=always")
+    result.add_argument("--greenboot-transient-image", help="signed integration payload with INTEGRATION_HEALTH_MODE=transient")
+    result.add_argument("--require-greenboot-recovery", action="store_true", help="require all recovery fixtures and test exhausted first-install/fallback retries")
     result.add_argument("--firmware-json", type=Path, help="QEMU enrolled-key Secure Boot firmware descriptor")
     result.add_argument("--ovmf-code", type=Path, help="explicit raw Secure Boot firmware code")
     result.add_argument("--ovmf-vars", type=Path, help="explicit raw firmware variables with enrolled keys")
@@ -654,6 +805,22 @@ def main(argv=None):
         cli.error("--require-upgrade requires --upgrade-image")
     if args.upgrade_public_key and not (args.build and args.upgrade_image):
         cli.error("--upgrade-public-key requires --build and --upgrade-image")
+    if (args.greenboot_failure_image or args.greenboot_transient_image) and not args.upgrade_image:
+        cli.error("Greenboot fixtures require --upgrade-image")
+    if args.require_greenboot_recovery and not (args.upgrade_image and args.greenboot_failure_image and args.greenboot_transient_image):
+        cli.error("--require-greenboot-recovery requires --upgrade-image, --greenboot-failure-image and --greenboot-transient-image")
+    if args.greenboot_failure_image or args.greenboot_transient_image:
+        # The existing test overlay trusts one narrowly scoped repository.
+        try:
+            from .add_test_policy import repository
+        except ImportError:
+            from add_test_policy import repository
+        images = [image for image in (args.upgrade_image, args.greenboot_failure_image, args.greenboot_transient_image) if image]
+        try:
+            if len({repository(image) for image in images}) != 1 or len(set(images)) != len(images):
+                cli.error("Greenboot fixtures must be distinct images in the same integration repository")
+        except ValueError as error:
+            cli.error(str(error))
     available = capabilities(args)
     if args.check:
         print(json.dumps(available, indent=2))
