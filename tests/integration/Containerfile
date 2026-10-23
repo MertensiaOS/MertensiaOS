@@ -6,18 +6,28 @@ ARG INTEGRATION_ROLE=payload
 ARG INTEGRATION_REVISION=initial
 ARG INTEGRATION_UPGRADE_IMAGE=
 ARG INTEGRATION_PUBLIC_KEY_B64=
+ARG INTEGRATION_HEALTH_MODE=none
 COPY tests/integration/guest.py /usr/libexec/mertensia-integration-agent
 COPY tests/integration/contract.json /usr/share/mertensia-integration/contract.json
 COPY tests/integration/iso.yaml /usr/share/mertensia-integration/iso.yaml
 COPY tests/integration/mertensia-integration.service /usr/lib/systemd/system/mertensia-integration.service
 COPY tests/integration/90-mertensia-integration.toml /usr/lib/bootc/install/90-mertensia-integration.toml
 COPY tests/integration/add_test_policy.py /usr/share/mertensia-integration/add_test_policy.py
+COPY tests/integration/health-failure.sh /usr/share/mertensia-integration/health-failure.sh
+COPY tests/integration/99-greenboot-console.conf /usr/lib/systemd/system/greenboot-healthcheck.service.d/99-mertensia-integration-console.conf
 RUN test "${INTEGRATION_ROLE}" = payload -o "${INTEGRATION_ROLE}" = live && \
     mkdir -p /usr/share/mertensia-integration && \
     printf '%s\n' "${INTEGRATION_ROLE}" > /usr/share/mertensia-integration/role && \
     printf '%s\n' "${INTEGRATION_REVISION}" > /usr/share/mertensia-integration/revision && \
     chmod 0755 /usr/libexec/mertensia-integration-agent && \
     systemctl enable mertensia-integration.service
+RUN case "${INTEGRATION_HEALTH_MODE}" in none|always|transient) ;; *) exit 1 ;; esac && \
+    printf '%s\n' "${INTEGRATION_HEALTH_MODE}" > /usr/share/mertensia-integration/health-mode && \
+    if test "${INTEGRATION_HEALTH_MODE}" != none; then \
+      test "${INTEGRATION_ROLE}" = payload && \
+      install -Dm0755 /usr/share/mertensia-integration/health-failure.sh \
+        /usr/lib/greenboot/check/required.d/00-mertensia-integration-failure.sh; \
+    fi
 RUN if test "${INTEGRATION_ROLE}" = live; then \
       install -Dm0644 /usr/share/mertensia-integration/iso.yaml /usr/lib/image-builder/bootc/iso.yaml; \
     fi

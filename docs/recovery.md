@@ -79,5 +79,7 @@ Once it commits, the setup identity loses authorization and the app moves to
 login. If automatic login handoff fails, follow the completion screen's restart
 instruction; do not try to create the same first account again.
 
-For release and update rollback, see [releases](releases.md). Account maintenance
+For automatic boot-health recovery, notifications and diagnostics, see
+[boot health](boot-health.md). For release and update rollback, see
+[releases](releases.md). Account maintenance
 features beyond creation and a dedicated home-recovery UI remain future work.

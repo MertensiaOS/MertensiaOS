@@ -1,0 +1,9 @@
+#!/usr/bin/python3 -I
+"""Launch the installed GNOME recovery notifier."""
+import sys
+
+sys.path.insert(0, "/usr/lib/mertensia/python")
+from mertensia.boot_health.notifier import main
+
+if __name__ == "__main__":
+    raise SystemExit(main())

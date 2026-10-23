@@ -120,6 +120,10 @@ against `/etc/containers/policy.json`; the installed update reference follows
 the selected signed channel. A digest target remains pinned until explicitly
 switched. No automatic update/reboot timer is enabled by this project.
 
+Greenboot evaluates local desktop readiness after an update and can initiate
+automatic retry reboots and rollback. This does not schedule update downloads.
+See [boot health](boot-health.md) for the checks, notifications and recovery limits.
+
 To return to the previous deployment:
 
 ```sh
@@ -131,6 +135,11 @@ If a new deployment cannot boot, choose the previous deployment in the firmware
 bootloader menu. Rollback does not undo changes to `/var` or encrypted homes;
 keep separate user-data backups. See [recovery](recovery.md) if firmware or
 Secure Boot changes cause the TPM to request the root recovery key.
+
+The release workflow additionally requires signed persistent/transient failure
+fixtures, automatic rollback, GRUB fallback, recovery-event publication and
+bounded first-install/unhealthy-fallback retries. See
+[automatic recovery tests](testing.md#automatic-greenboot-recovery).
 
 The release workflow requires the integration harness's signed update and
 rollback checks before promoting a channel. Ordinary offline CI ISO runs

@@ -53,7 +53,7 @@ jobs:
     needs: [checks, signing]
     runs-on: ubuntu-24.04
     environment: release
-    timeout-minutes: 120
+    timeout-minutes: 240
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - name: Require release version
@@ -76,7 +76,7 @@ jobs:
         run: |
           sudo install -d -m 0700 /root/.docker
           printf '%s' "$GHCR_TOKEN" | sudo podman login --authfile /root/.docker/config.json ghcr.io --username "$GHCR_USER" --password-stdin
-      - name: Publish separate signed update-test fixture
+      - name: Publish separate signed update and recovery fixtures
         id: fixture
         env:
           COSIGN_PRIVATE_KEY: ${{ secrets.SIGNING_SECRET }}
@@ -85,28 +85,35 @@ jobs:
         run: |
           bash scripts/check-signing-key.sh
           fixture_repo=ghcr.io/mertensiaos/mertensiaos-integration
-          fixture_tag="run-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           public_key_b64="$(base64 -w0 cosign.pub)"
-          sudo podman build --build-arg BASE_IMAGE=localhost/mertensiaos:release \
-            --build-arg INTEGRATION_ROLE=payload --build-arg "INTEGRATION_REVISION=$fixture_tag" \
-            --build-arg "INTEGRATION_UPGRADE_IMAGE=$fixture_repo:$fixture_tag" \
-            --build-arg "INTEGRATION_PUBLIC_KEY_B64=$public_key_b64" \
-            -f tests/integration/Containerfile -t localhost/mertensiaos:upgrade-fixture .
-          sudo env "REGISTRY_AUTH_FILE=$REGISTRY_AUTH_FILE" podman push --digestfile "$RUNNER_TEMP/fixture-digest" \
-            localhost/mertensiaos:upgrade-fixture "docker://$fixture_repo:$fixture_tag"
-          fixture_digest="$(cat "$RUNNER_TEMP/fixture-digest")"
-          [[ "$fixture_digest" =~ ^sha256:[a-f0-9]{64}$ ]]
-          fixture_image="$fixture_repo@$fixture_digest"
-          sudo --preserve-env=COSIGN_PRIVATE_KEY,COSIGN_PASSWORD cosign sign --yes \
-            --new-bundle-format=false --use-signing-config=false --key env://COSIGN_PRIVATE_KEY "$fixture_image"
-          cosign verify --new-bundle-format=false --key cosign.pub "$fixture_image" >/dev/null
-          printf 'image=%s\n' "$fixture_image" >> "$GITHUB_OUTPUT"
-      - name: Gate release on installation, signed upgrade and rollback
+          for mode in none always transient; do
+            fixture_tag="run-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-$mode"
+            sudo podman build --build-arg BASE_IMAGE=localhost/mertensiaos:release \
+              --build-arg INTEGRATION_ROLE=payload --build-arg "INTEGRATION_REVISION=$fixture_tag" \
+              --build-arg "INTEGRATION_HEALTH_MODE=$mode" \
+              --build-arg "INTEGRATION_UPGRADE_IMAGE=$fixture_repo:$fixture_tag" \
+              --build-arg "INTEGRATION_PUBLIC_KEY_B64=$public_key_b64" \
+              -f tests/integration/Containerfile -t "localhost/mertensiaos:fixture-$mode" .
+            sudo env "REGISTRY_AUTH_FILE=$REGISTRY_AUTH_FILE" podman push --digestfile "$RUNNER_TEMP/fixture-digest" \
+              "localhost/mertensiaos:fixture-$mode" "docker://$fixture_repo:$fixture_tag"
+            fixture_digest="$(cat "$RUNNER_TEMP/fixture-digest")"
+            [[ "$fixture_digest" =~ ^sha256:[a-f0-9]{64}$ ]]
+            fixture_image="$fixture_repo@$fixture_digest"
+            sudo --preserve-env=COSIGN_PRIVATE_KEY,COSIGN_PASSWORD cosign sign --yes \
+              --new-bundle-format=false --use-signing-config=false --key env://COSIGN_PRIVATE_KEY "$fixture_image"
+            cosign verify --new-bundle-format=false --key cosign.pub "$fixture_image" >/dev/null
+            printf '%s=%s\n' "$mode" "$fixture_image" >> "$GITHUB_OUTPUT"
+          done
+      - name: Gate release on installation, signed upgrade and automatic recovery
         env:
-          UPGRADE_IMAGE: ${{ steps.fixture.outputs.image }}
+          UPGRADE_IMAGE: ${{ steps.fixture.outputs.none }}
+          FAILURE_IMAGE: ${{ steps.fixture.outputs.always }}
+          TRANSIENT_IMAGE: ${{ steps.fixture.outputs.transient }}
         run: |
           sudo bash scripts/test-iso.sh --build --base-image localhost/mertensiaos:release \
             --upgrade-image "$UPGRADE_IMAGE" --upgrade-public-key cosign.pub --require-upgrade \
+            --greenboot-failure-image "$FAILURE_IMAGE" --greenboot-transient-image "$TRANSIENT_IMAGE" \
+            --require-greenboot-recovery \
             --work-dir "$RUNNER_TEMP/mertensia-release-test" --junit "$RUNNER_TEMP/mertensia-release-test/junit.xml"
       - name: Publish, sign, verify and promote
         id: publish

@@ -5,6 +5,11 @@
 ARG BASE_IMAGE=localhost/mertensiaos:base
 FROM ${BASE_IMAGE}
 
+## This shortcut disk is unencrypted and bypasses the supported installer.
+RUN systemctl mask greenboot-healthcheck.service greenboot-set-rollback-trigger.service \
+      greenboot-success.target mertensia-boot-health-status.service && \
+    rm -f /etc/xdg/autostart/org.mertensia.BootHealth.desktop
+
 RUN dnf -y install qemu-guest-agent && \
     dnf clean all
 

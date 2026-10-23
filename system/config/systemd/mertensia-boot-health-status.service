@@ -1,0 +1,14 @@
+[Unit]
+Description=Record a confirmed automatic MertensiaOS recovery
+After=greenboot-healthcheck.service
+ConditionPathExists=/run/ostree-booted
+ConditionPathExists=!/usr/bin/mertensia-installer
+ConditionVirtualization=!container
+
+[Service]
+Type=oneshot
+ExecStart=/usr/libexec/mertensia-boot-health collect
+TimeoutStartSec=30s
+
+[Install]
+WantedBy=greenboot-success.target

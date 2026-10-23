@@ -61,6 +61,9 @@ class ApplicationPackagingTests(unittest.TestCase):
         result = self.launcher("/usr/bin/mertensia-firstboot", "--help")
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertIn("--add-user", result.stdout)
+        result = self.launcher("/usr/libexec/mertensia-boot-health", "--help")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("collect", result.stdout)
         result = self.launcher("/usr/libexec/mertensia-accounts-helper", input_text="{}\n")
         self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
         self.assertEqual(json.loads(result.stdout)["event"], "error")
@@ -89,6 +92,15 @@ class ApplicationPackagingTests(unittest.TestCase):
             "usr/lib/systemd/system/mertensia-login-users.service",
             "usr/lib/systemd/system/mertensia-flatpak-preinstall.service",
             "usr/lib/systemd/system/mertensia-flatpak-preinstall.timer",
+            "usr/lib/systemd/system/mertensia-boot-health-status.service",
+            "usr/lib/systemd/system/greenboot-healthcheck.service.d/50-mertensia-desktop.conf",
+            "usr/lib/systemd/system/greenboot-set-rollback-trigger.service.d/50-mertensia-installed.conf",
+            "usr/lib/greenboot/check/required.d/50-mertensia-desktop.sh",
+            "usr/lib/systemd/journald.conf.d/50-mertensia-boot-health.conf",
+            "usr/lib/tmpfiles.d/mertensia-boot-health.conf",
+            "etc/greenboot/greenboot.conf",
+            "etc/xdg/autostart/org.mertensia.BootHealth.desktop",
+            "usr/share/applications/org.mertensia.BootHealth.desktop",
             "usr/share/flatpak/remotes.d/flathub.flatpakrepo",
             "usr/share/flatpak/preinstall.d/mertensia.preinstall",
             "usr/share/polkit-1/actions/org.mertensia.Accounts.policy",
@@ -97,6 +109,16 @@ class ApplicationPackagingTests(unittest.TestCase):
         ):
             with self.subTest(path=name):
                 self.assertTrue((self.image / name).is_file())
+
+    def test_only_supported_installed_payload_enables_recovery(self):
+        payload = (ROOT / "Containerfile").read_text()
+        self.assertIn("systemctl enable greenboot-healthcheck.service mertensia-boot-health-status.service", payload)
+        self.assertIn("systemctl --global mask grub-boot-success.timer grub-boot-success.service", payload)
+        self.assertIn("! rpm -q greenboot-default-health-checks", payload)
+        for name in ("Containerfile.installer", "Containerfile.dev"):
+            text = (ROOT / name).read_text()
+            self.assertIn("systemctl mask greenboot-healthcheck.service greenboot-set-rollback-trigger.service", text)
+            self.assertIn("/etc/xdg/autostart/org.mertensia.BootHealth.desktop", text)
         self.stage("Containerfile.installer")
         for name in (
             "etc/systemd/system/var-tmp.mount",

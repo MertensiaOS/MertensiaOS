@@ -9,10 +9,14 @@ ARG BUILD_MODE=development
 
 ## These payload entry points must not run in the disposable live session.
 RUN rm -f \
+    /etc/xdg/autostart/org.mertensia.BootHealth.desktop \
     /etc/xdg/autostart/mertensia-firstboot.desktop \
     /usr/share/applications/org.mertensia.Accounts.desktop \
     /usr/share/applications/org.gnome.Tour.desktop \
     /usr/share/dbus-1/services/org.gnome.Tour.service
+
+RUN systemctl mask greenboot-healthcheck.service greenboot-set-rollback-trigger.service \
+      greenboot-success.target mertensia-boot-health-status.service
 
 ## Runtime dependencies plus the bootc-generic-iso container contract.
 RUN dnf -y install \

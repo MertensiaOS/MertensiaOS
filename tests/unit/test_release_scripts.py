@@ -9,6 +9,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+import yaml
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -165,11 +166,29 @@ class ReleaseScriptTests(unittest.TestCase):
             "etc/containers/policy.json": ROOT / "system/config/containers/policy.json",
             "usr/share/mertensia/bootc-policy.json": ROOT / "system/config/containers/policy.json",
             "etc/containers/registries.d/mertensia.yaml": ROOT / "system/config/containers/registries.yaml",
+            "etc/greenboot/greenboot.conf": ROOT / "system/config/greenboot/greenboot.conf",
+            "usr/libexec/mertensia-boot-health": ROOT / "system/bin/mertensia-boot-health",
+            "usr/libexec/mertensia-boot-health-notify": ROOT / "system/bin/mertensia-boot-health-notify",
+            "usr/lib/greenboot/check/required.d/50-mertensia-desktop.sh": ROOT / "system/config/greenboot/50-mertensia-desktop.sh",
         }
         for target, source in fixtures.items():
             destination = payload / target
             destination.parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(source, destination)
+            if target.startswith(("usr/libexec/", "usr/lib/greenboot/")):
+                destination.chmod(0o755)
+        fragment = payload / "usr/lib/bootupd/grub2-static/configs.d/08_greenboot.cfg"
+        fragment.parent.mkdir(parents=True, exist_ok=True)
+        fragment.write_text("# packaged Greenboot GRUB fragment\n")
+        for link, target in {
+            "etc/systemd/system/graphical.target.wants/greenboot-healthcheck.service": "/usr/lib/systemd/system/greenboot-healthcheck.service",
+            "etc/systemd/system/ostree-finalize-staged.service.requires/greenboot-set-rollback-trigger.service": "/usr/lib/systemd/system/greenboot-set-rollback-trigger.service",
+            "etc/systemd/system/greenboot-success.target.wants/mertensia-boot-health-status.service": "/usr/lib/systemd/system/mertensia-boot-health-status.service",
+            "etc/systemd/user/grub-boot-success.timer": "/dev/null",
+        }.items():
+            path = payload / link
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.symlink_to(target)
         self.environment["FAKE_PAYLOAD_ROOT"] = str(payload)
         return payload
 
@@ -426,6 +445,9 @@ class ReleaseScriptTests(unittest.TestCase):
         payload = self.payload_fixture()
         for relative in ("usr/libexec/mertensia-integration-agent",
                          "usr/lib/systemd/system/mertensia-integration.service",
+                         "usr/lib/systemd/system/greenboot-healthcheck.service.d/99-mertensia-integration-console.conf",
+                         "usr/lib/greenboot/check/required.d/00-mertensia-integration-failure.sh",
+                         "etc/greenboot/check/required.d/00-mertensia-integration-local.sh",
                          "usr/share/mertensia-integration",
                          "etc/systemd/system/multi-user.target.wants/mertensia-integration.service"):
             with self.subTest(relative=relative):
@@ -441,6 +463,21 @@ class ReleaseScriptTests(unittest.TestCase):
                 self.assertIn("integration artifact", result.stderr)
                 self.assert_no_push_or_promotion()
                 artifact.unlink()
+
+    def test_missing_health_check_and_wrong_retry_policy_prevent_publication(self):
+        payload = self.payload_fixture()
+        hook = payload / "usr/lib/greenboot/check/required.d/50-mertensia-desktop.sh"
+        hook.unlink()
+        result = self.publish()
+        self.assertNotEqual(result.returncode, 0)
+        self.assert_no_push_or_promotion()
+        hook.write_text("#!/usr/bin/bash\nexit 0\n")
+        hook.chmod(0o755)
+        (payload / "etc/greenboot/greenboot.conf").write_text("GREENBOOT_MAX_BOOT_ATTEMPTS=0\n")
+        result = self.publish()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("Greenboot retry policy", result.stderr)
+        self.assert_no_push_or_promotion()
 
     def test_development_accounts_prevent_publication(self):
         self.payload_fixture()
@@ -465,6 +502,21 @@ class ReleaseScriptTests(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("Could not check", result.stderr)
         self.assert_no_push_or_promotion()
+
+    def test_release_signs_all_health_fixtures_and_requires_automatic_recovery(self):
+        workflow = yaml.safe_load((ROOT / ".github/workflows/release.yml").read_text())
+        steps = workflow["jobs"]["release"]["steps"]
+        fixture = next(step for step in steps if step.get("id") == "fixture")
+        gate = next(step for step in steps if "--require-greenboot-recovery" in step.get("run", ""))
+        self.assertIn("for mode in none always transient", fixture["run"])
+        self.assertIn('INTEGRATION_HEALTH_MODE=$mode', fixture["run"])
+        self.assertIn('cosign sign --yes', fixture["run"])
+        self.assertIn('--greenboot-failure-image "$FAILURE_IMAGE"', gate["run"])
+        self.assertIn('--greenboot-transient-image "$TRANSIENT_IMAGE"', gate["run"])
+        self.assertLess(steps.index(gate), next(index for index, step in enumerate(steps) if step.get("id") == "publish"))
+        for step in (fixture, gate):
+            checked = subprocess.run(["bash", "-n"], input=step["run"], capture_output=True, text=True)
+            self.assertEqual(checked.returncode, 0, checked.stderr)
 
 
 if __name__ == "__main__":

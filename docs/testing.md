@@ -90,6 +90,8 @@ The core run asserts:
 3. The installed disk boots with persistent TPM state, root is encrypted,
    automatic TPM unlock succeeds, the saved recovery key independently unlocks
    root, installed SELinux enforces, and GDM is active.
+   Greenboot passes before any accounts exist. A later reboot with networking
+   disabled must also pass; networking is restored before registry tests.
 4. The real account helper creates an initial administrator and an additional
    non-administrator with LUKS/ext4 homes. Both authenticate through the actual
    `gdm-password` PAM stack, reject incorrect passwords and appear in
@@ -148,6 +150,53 @@ The release workflow prepares a signed update fixture in the separate public
 update/rollback sequence before publishing the clean production payload. Routine
 offline ISO runs can omit it; that omission remains visible as skipped coverage.
 
+## Automatic Greenboot recovery
+
+Build and sign three distinct integration overlays in the same separate
+integration repository, using the same public key. Set
+`INTEGRATION_HEALTH_MODE=none` for the healthy update, `always` for a persistent
+failure and `transient` for a check that fails once per fixture revision. Set a
+distinct `INTEGRATION_REVISION` for each image. These hooks invoke the guarded
+test agent and must never be included in a production payload.
+
+```sh
+sudo scripts/test-iso.sh --build --base-image localhost/mertensiaos:release \
+  --upgrade-image ghcr.io/YOUR_ORG/mertensia-integration:healthy \
+  --greenboot-failure-image ghcr.io/YOUR_ORG/mertensia-integration:unhealthy \
+  --greenboot-transient-image ghcr.io/YOUR_ORG/mertensia-integration:transient \
+  --upgrade-public-key /path/to/integration-signing.pub \
+  --require-upgrade --require-greenboot-recovery \
+  --work-dir /tmp/mertensia-greenboot-test
+```
+
+`--require-greenboot-recovery` rejects missing fixtures. The release workflow
+publishes these disposable signed fixtures, requires this suite, then validates
+and publishes only the clean production payload.
+
+The suite checks first-install failure without a rollback deployment, a
+transient failure that recovers on the same update, automatic rollback after a
+persistent failure, and exhaustion when the fallback is also unhealthy. Fixed
+test operations install/remove a local failing check for the first-install and
+unhealthy-fallback cases. A stopped guest must report manual intervention;
+timeouts, unexpected success and unlimited rebooting fail acceptance.
+
+For pre-userspace fallback, the agent stages the signed healthy fixture, invokes
+the upstream rollback-trigger operation and explicitly finalizes the deployment.
+It temporarily changes only that deployment's BLS `linux` directive to a
+nonexistent test path. GRUB must fall back, and Greenboot must make that fallback
+permanent and publish a current-boot recovery event. The test restores the BLS
+directive afterward; signed kernel bytes are never changed. This exercises a
+GRUB load failure, not a kernel hang or panic.
+
+QEMU exits on each guest reboot. The host starts the next attempt only after a
+clean exit, preserving the disk, enrolled firmware variables and TPM identity.
+Recovery follows at most eight automatic reboots and never forces a reset of a
+running unhealthy guest. Each installed boot has its own numbered QEMU/serial
+logs; successful recovery summaries include boot identities and Greenboot
+journals. The suite also verifies root/home authentication and recovery-event
+metadata after rollback. Missing automatic-recovery coverage is explicitly
+reported as skipped on ordinary runs without fixtures.
+
 ## Interactive acceptance
 
 Before releasing, also boot the uninstrumented production ISO in a disposable
@@ -168,6 +217,13 @@ use a visible display and the normal production ISO for these checks.
 5. On a disposable disk, test root recovery after changing Secure Boot/TPM state,
    reseal the root volume, and verify automatic unlock on the next boot. Test
    suspend/resume and encrypted-home recovery separately on supported hardware.
+6. Trigger an automatic rollback with disposable integration fixtures, then log
+   into GNOME. Confirm the recovery notification appears with the intended text.
+   Log out/in and reboot: that user must not receive the same event again. A
+   second user must receive it once. Confirm normal boots, healthy updates and
+   the setup session stay quiet. Temporarily stop the session notification
+   service and verify delivery retries when it becomes available. The automated
+   suite tests event publication and per-user delivery logic, not GNOME visuals.
 
 Record the tested image digest, firmware/TPM versions and pass/fail results.
 Automated PAM success does not establish that a full GNOME desktop session starts

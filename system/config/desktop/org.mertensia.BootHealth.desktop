@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=MertensiaOS Boot Health
+Exec=/usr/libexec/mertensia-boot-health-notify
+Icon=dialog-warning-symbolic
+OnlyShowIn=GNOME;
+NoDisplay=true
+X-GNOME-Autostart-enabled=true
+X-GNOME-UsesNotifications=true
