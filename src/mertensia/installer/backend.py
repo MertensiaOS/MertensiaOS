@@ -10,6 +10,7 @@ import argparse
 import json
 import os
 import subprocess
+from contextlib import ExitStack
 from pathlib import Path
 from typing import Any
 
@@ -33,99 +34,98 @@ def install(requested_disk: str) -> None:
     work: Path | None = None
     state: dict[str, Any] | None = None
     mapper = Path("/dev/mapper") / constants.MAPPER_NAME
-    mounts: list[Path] = []
-    mapper_open = False
     root_part = ""
     try:
-        commands.emit("phase", id="partition", message="Preparing the selected disk", progress=0.05)
-        # Recheck immediately before the first destructive command. Do not force
-        # wipefs past its own protection against mounted filesystems.
-        devices.assert_workspace_idle()
-        devices.assert_disk_idle(disk)
-        commands.run(["wipefs", "--all", disk["path"]])
-        commands.run(["sgdisk", "--zap-all", disk["path"]])
-        commands.run(["sgdisk", "--new=1:1MiB:+1GiB", "--typecode=1:ef00", "--change-name=1:Mertensia EFI", disk["path"]])
-        commands.run(["sgdisk", "--new=2:0:+2GiB", "--typecode=2:ea00", "--change-name=2:Mertensia boot", disk["path"]])
-        commands.run(["sgdisk", "--new=3:0:0", "--typecode=3:8309", "--change-name=3:Mertensia root", disk["path"]])
-        commands.run(["partprobe", disk["path"]])
-        commands.run(["udevadm", "settle"])
-        efi_part = devices.partition_path(disk["path"], 1)
-        boot_part = devices.partition_path(disk["path"], 2)
-        root_part = devices.partition_path(disk["path"], 3)
+        with ExitStack() as cleanup:
+            commands.emit("phase", id="partition", message="Preparing the selected disk", progress=0.05)
+            # Recheck immediately before the first destructive command. Do not force
+            # wipefs past its own protection against mounted filesystems.
+            devices.assert_workspace_idle()
+            devices.assert_disk_idle(disk)
+            commands.run(["wipefs", "--all", disk["path"]])
+            commands.run(["sgdisk", "--zap-all", disk["path"]])
+            commands.run(["sgdisk", "--new=1:1MiB:+1GiB", "--typecode=1:ef00", "--change-name=1:Mertensia EFI", disk["path"]])
+            commands.run(["sgdisk", "--new=2:0:+2GiB", "--typecode=2:ea00", "--change-name=2:Mertensia boot", disk["path"]])
+            commands.run(["sgdisk", "--new=3:0:0", "--typecode=3:8309", "--change-name=3:Mertensia root", disk["path"]])
+            commands.run(["partprobe", disk["path"]])
+            commands.run(["udevadm", "settle"])
+            efi_part = devices.partition_path(disk["path"], 1)
+            boot_part = devices.partition_path(disk["path"], 2)
+            root_part = devices.partition_path(disk["path"], 3)
 
-        commands.emit("phase", id="encrypt", message="Encrypting the system volume", progress=0.15)
-        commands.run(["mkfs.fat", "-F", "32", "-n", "MERT-EFI", efi_part])
-        commands.run(["mkfs.ext4", "-F", "-L", "mertensia-boot", boot_part])
-        work, state = recovery.new_state(disk, root_part)
-        setup_key = work / "setup.key"
-        recovery_file = work / "recovery.key"
-        commands.run(["cryptsetup", "luksFormat", "--type", "luks2", "--batch-mode", "--uuid", state["luks_uuid"],
-             "--key-file", str(setup_key), root_part])
-        state["phase"] = "encrypted"
-        recovery.save_state(work, state)
-        commands.run(["cryptsetup", "open", "--key-file", str(setup_key), root_part, constants.MAPPER_NAME])
-        mapper_open = True
-        commands.run(["mkfs.ext4", "-F", "-L", "mertensia-root", str(mapper)])
+            commands.emit("phase", id="encrypt", message="Encrypting the system volume", progress=0.15)
+            commands.run(["mkfs.fat", "-F", "32", "-n", "MERT-EFI", efi_part])
+            commands.run(["mkfs.ext4", "-F", "-L", "mertensia-boot", boot_part])
+            work, state = recovery.new_state(disk, root_part)
+            setup_key = work / "setup.key"
+            recovery_file = work / "recovery.key"
+            commands.run(["cryptsetup", "luksFormat", "--type", "luks2", "--batch-mode", "--uuid", state["luks_uuid"],
+                 "--key-file", str(setup_key), root_part])
+            state["phase"] = "encrypted"
+            recovery.save_state(work, state)
+            commands.run(["cryptsetup", "open", "--key-file", str(setup_key), root_part, constants.MAPPER_NAME])
+            cleanup.callback(commands.run, ["cryptsetup", "close", constants.MAPPER_NAME])
+            commands.run(["mkfs.ext4", "-F", "-L", "mertensia-root", str(mapper)])
 
-        commands.run(["cryptsetup", "luksAddKey", "--key-file", str(setup_key), "--new-keyfile", str(recovery_file), root_part])
-        commands.run(
-            [
-                "systemd-cryptenroll",
-                "--unlock-key-file=" + str(setup_key),
-                "--tpm2-device=auto",
-                "--tpm2-pcrs=7",
-                root_part,
+            commands.run(["cryptsetup", "luksAddKey", "--key-file", str(setup_key), "--new-keyfile", str(recovery_file), root_part])
+            commands.run(
+                [
+                    "systemd-cryptenroll",
+                    "--unlock-key-file=" + str(setup_key),
+                    "--tpm2-device=auto",
+                    "--tpm2-pcrs=7",
+                    root_part,
+                ]
+            )
+
+            commands.emit("phase", id="install", message="Installing MertensiaOS", progress=0.30)
+            constants.MOUNTPOINT.mkdir(parents=True, exist_ok=True)
+            commands.run(["mount", str(mapper), str(constants.MOUNTPOINT)])
+            cleanup.callback(commands.run, ["umount", "--recursive", str(constants.MOUNTPOINT)])
+            (constants.MOUNTPOINT / "boot/efi").mkdir(parents=True, exist_ok=True)
+            commands.run(["mount", boot_part, str(constants.MOUNTPOINT / "boot")])
+            cleanup.callback(commands.run, ["umount", "--recursive", str(constants.MOUNTPOINT / "boot")])
+            (constants.MOUNTPOINT / "boot/efi").mkdir(parents=True, exist_ok=True)
+            commands.run(["mount", efi_part, str(constants.MOUNTPOINT / "boot/efi")])
+            cleanup.callback(commands.run, ["umount", "--recursive", str(constants.MOUNTPOINT / "boot/efi")])
+            root_uuid = commands.run(["blkid", "-s", "UUID", "-o", "value", str(mapper)], capture=True).stdout.strip()
+            boot_uuid = commands.run(["blkid", "-s", "UUID", "-o", "value", boot_part], capture=True).stdout.strip()
+            luks_uuid = commands.run(["cryptsetup", "luksUUID", root_part], capture=True).stdout.strip()
+            if luks_uuid != state["luks_uuid"]:
+                raise commands.InstallError("The formatted LUKS UUID does not match the retained recovery state.")
+            source = "containers-storage:" + config["SOURCE_IMAGE"]
+            bootc_args = [
+                "bootc", "install", "to-filesystem",
+                "--source-imgref", source,
+                "--target-imgref", config["TARGET_IMAGE"],
+                "--root-mount-spec", "UUID=" + root_uuid,
+                "--boot-mount-spec", "UUID=" + boot_uuid,
+                "--skip-finalize",
+                "--karg", "rd.luks.uuid=luks-" + luks_uuid,
+                # Match the installed crypttab name so switch-root does not try
+                # to activate the same partition under a second mapping name.
+                "--karg", "rd.luks.name=" + luks_uuid + "=" + constants.MAPPER_NAME,
+                "--karg", "rd.luks.options=" + luks_uuid + "=tpm2-device=auto",
+                str(constants.MOUNTPOINT),
             ]
-        )
-
-        commands.emit("phase", id="install", message="Installing MertensiaOS", progress=0.30)
-        constants.MOUNTPOINT.mkdir(parents=True, exist_ok=True)
-        commands.run(["mount", str(mapper), str(constants.MOUNTPOINT)])
-        mounts.append(constants.MOUNTPOINT)
-        (constants.MOUNTPOINT / "boot/efi").mkdir(parents=True, exist_ok=True)
-        commands.run(["mount", boot_part, str(constants.MOUNTPOINT / "boot")])
-        mounts.append(constants.MOUNTPOINT / "boot")
-        (constants.MOUNTPOINT / "boot/efi").mkdir(parents=True, exist_ok=True)
-        commands.run(["mount", efi_part, str(constants.MOUNTPOINT / "boot/efi")])
-        mounts.append(constants.MOUNTPOINT / "boot/efi")
-        root_uuid = commands.run(["blkid", "-s", "UUID", "-o", "value", str(mapper)], capture=True).stdout.strip()
-        boot_uuid = commands.run(["blkid", "-s", "UUID", "-o", "value", boot_part], capture=True).stdout.strip()
-        luks_uuid = commands.run(["cryptsetup", "luksUUID", root_part], capture=True).stdout.strip()
-        if luks_uuid != state["luks_uuid"]:
-            raise commands.InstallError("The formatted LUKS UUID does not match the retained recovery state.")
-        source = "containers-storage:" + config["SOURCE_IMAGE"]
-        bootc_args = [
-            "bootc", "install", "to-filesystem",
-            "--source-imgref", source,
-            "--target-imgref", config["TARGET_IMAGE"],
-            "--root-mount-spec", "UUID=" + root_uuid,
-            "--boot-mount-spec", "UUID=" + boot_uuid,
-            "--skip-finalize",
-            "--karg", "rd.luks.uuid=luks-" + luks_uuid,
-            # Match the installed crypttab name so switch-root does not try
-            # to activate the same partition under a second mapping name.
-            "--karg", "rd.luks.name=" + luks_uuid + "=" + constants.MAPPER_NAME,
-            "--karg", "rd.luks.options=" + luks_uuid + "=tpm2-device=auto",
-            str(constants.MOUNTPOINT),
-        ]
-        if config.get("BUILD_MODE", "development") == "production":
-            bootc_args[3:3] = ["--enforce-container-sigpolicy", "--run-fetch-check"]
-        else:
-            bootc_args.insert(3, "--skip-fetch-check")
-        commands.run(bootc_args)
-        deployment.configure_installed_system(constants.MOUNTPOINT, luks_uuid)
-        state["phase"] = "installed"
-        recovery.save_state(work, state)
+            if config.get("BUILD_MODE", "development") == "production":
+                bootc_args[3:3] = ["--enforce-container-sigpolicy", "--run-fetch-check"]
+            else:
+                bootc_args.insert(3, "--skip-fetch-check")
+            # bootc and its storage helpers create temporary bind/overlay mounts.
+            # Keep them private so they disappear when bootc exits and cannot keep
+            # the encrypted target busy during cleanup in the live session.
+            commands.run(["unshare", "--mount", "--propagation", "private", "--", *bootc_args])
+            deployment.configure_installed_system(constants.MOUNTPOINT, luks_uuid)
+            state["phase"] = "installed"
+            recovery.save_state(work, state)
+        # ExitStack unmounts children before parents and closes the mapping.
+        # Verify/confirm recovery and report success only after checked cleanup.
         recovery.finish_install(work, state)
     except (commands.InstallError, OSError) as error:
         if work and state and work.exists():
             raise commands.InstallError(f"{error}\n{recovery.recovery_notice(state)}") from error
         raise
-    finally:
-        for target in reversed(mounts):
-            subprocess.run(["umount", str(target)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        if mapper_open:
-            subprocess.run(["cryptsetup", "close", constants.MAPPER_NAME], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 
 def main() -> int:

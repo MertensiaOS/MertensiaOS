@@ -268,105 +268,129 @@ class InstallerBackendTests(unittest.TestCase):
         ):
             self.assertFalse(hardware.tpm_available())
 
-    def test_unlock_verification_does_not_require_an_exclusive_mapping(self):
-        # Keep the installation mapping busy to reproduce the live installer
-        # failure without touching real disks or requiring a TPM.
-        for failure, mode in ((None, "development"), (None, "production"), ("busy-root", "development"), ("tpm", "development"), ("recovery", "development")):
+    def test_install_checks_cleanup_before_completing(self):
+        for failure, mode in ((None, "development"), (None, "production"),
+                              ("busy-root", "development"), ("close", "development"),
+                              ("bootc", "development"), ("boot-mount", "development"),
+                              ("tpm", "development"), ("recovery", "development")):
             with self.subTest(failure=failure, mode=mode), tempfile.TemporaryDirectory() as directory, ExitStack() as stack:
                 target = Path(directory) / "target"
                 state_root = Path(directory) / "state"
                 work = state_root / "disk-123"
                 active_mounts = []
                 mapping_open = False
+                setup_key_present = True
                 commands = []
-                injected = False
 
                 def command(argv, **kwargs):
-                    nonlocal mapping_open, injected
+                    nonlocal mapping_open, setup_key_present
                     commands.append(argv)
-                    operation = argv[1] if argv[0] in ("cryptsetup", "systemd-cryptsetup") else argv[0]
-                    if "--token-only" in argv:
-                        operation = "tpm"
-                    elif "--test-passphrase" in argv and str(work / "recovery.key") in argv:
-                        operation = "recovery"
-                    if operation == failure and not injected:
-                        injected = True
-                        raise protocol.InstallError("simulated busy device")
-                    if argv[0] == "mount":
-                        active_mounts.append(argv[-1])
+                    code, stderr = 0, ""
+                    if argv[0] == "unshare":
+                        self.assertEqual(argv[:6], ["unshare", "--mount", "--propagation", "private", "--", "bootc"])
+                        if failure == "bootc":
+                            code, stderr = 1, "deployment failed"
+                    elif argv[0] == "mount":
+                        if failure == "boot-mount" and argv[-1] == str(target / "boot"):
+                            code, stderr = 32, "boot mount failed"
+                        else:
+                            active_mounts.append(argv[-1])
                     elif argv[0] == "umount":
-                        self.assertEqual(argv[-1], active_mounts[-1])
+                        self.assertIn("--recursive", argv)
                         if failure == "busy-root" and argv[-1] == str(target):
-                            return SimpleNamespace(returncode=32, stderr="target is busy")
-                        active_mounts.pop()
+                            code, stderr = 32, "target is busy"
+                        else:
+                            # Include unexpected deployment submounts, not only
+                            # the three mount points the installer created.
+                            active_mounts[:] = [mount for mount in active_mounts
+                                                if not Path(mount).is_relative_to(argv[-1])]
                     elif argv[:2] == ["cryptsetup", "open"] and "--test-passphrase" not in argv:
                         mapping_open = True
                     elif argv[:2] == ["cryptsetup", "close"]:
                         self.assertTrue(mapping_open)
-                        return SimpleNamespace(returncode=5, stderr="Device is still in use")
+                        if active_mounts or failure == "close":
+                            code, stderr = 5, "Device is still in use"
+                        else:
+                            mapping_open = False
                     elif "--token-only" in argv:
-                        self.assertEqual(len(active_mounts), 3)
-                        self.assertTrue(mapping_open)
+                        self.assertEqual(active_mounts, [])
+                        self.assertFalse(mapping_open)
                         self.assertIn("--test-passphrase", argv)
                         self.assertEqual(argv[argv.index("--token-type") + 1], "systemd-tpm2")
                         self.assertNotIn("--key-file", argv)
+                        if failure == "tpm":
+                            code, stderr = 1, "TPM verification failed"
                     elif "--test-passphrase" in argv and "--key-file" in argv:
                         self.assertIn("--disable-external-tokens", argv)
-                    return SimpleNamespace(stdout="test-uuid", returncode=2)
+                        if str(work / "setup.key") in argv:
+                            code = 0 if setup_key_present else 2
+                        elif failure == "recovery":
+                            code, stderr = 2, "recovery verification failed"
+                    elif argv[:2] == ["cryptsetup", "luksRemoveKey"]:
+                        setup_key_present = False
+                    return SimpleNamespace(stdout="test-uuid", returncode=code, stderr=stderr)
+
+                def configure(*args):
+                    active_mounts.append(str(target / "ostree/deploy/default/deploy/test.0/sys"))
+
+                def emit(event, **kwargs):
+                    if event == "complete":
+                        self.assertFalse(mapping_open)
+                        self.assertEqual(active_mounts, [])
+                        self.assertFalse(work.exists())
 
                 for (module, name), value in {
                     (hardware, "requirements"): {"ok": True},
-                    (hardware, "resolve_selected_disk"): {"path": "/dev/test", "stable_path": "/dev/test",
-                                              "device_id": 123, "size": 40 * 1024**3, "serial": "test"},
+                    (hardware, "resolve_selected_disk"): self.disk(),
                     (images, "load_config"): {"SOURCE_IMAGE": "test", "TARGET_IMAGE": "test", "BUILD_MODE": mode},
                     (images, "check_scratch"): None,
-                    (images, "configure_installed_system"): None,
                     (recovery, "wait_for_confirmation"): None,
                     (hardware, "assert_disk_idle"): None,
+                    (hardware, "assert_workspace_idle"): None,
                 }.items():
                     stack.enter_context(mock.patch.object(module, name, return_value=value))
+                stack.enter_context(mock.patch.object(images, "configure_installed_system", side_effect=configure))
                 stack.enter_context(mock.patch.object(constants, "MOUNTPOINT", target))
                 stack.enter_context(mock.patch.object(constants, "STATE_ROOT", state_root))
                 stack.enter_context(mock.patch.object(recovery.uuid, "uuid4", return_value="test-uuid"))
                 stack.enter_context(mock.patch.object(hardware, "partition_path", side_effect=lambda disk, n: f"{disk}{n}"))
-                stack.enter_context(mock.patch.object(protocol, "run", side_effect=command))
-                stack.enter_context(mock.patch.object(recovery.subprocess, "run", side_effect=command))
-                emit = stack.enter_context(mock.patch.object(protocol, "emit"))
+                # Exercise the real checked command wrapper, including cleanup
+                # exit codes; raw subprocess probes share this same mock.
+                stack.enter_context(mock.patch.object(protocol.subprocess, "run", side_effect=command))
+                events = stack.enter_context(mock.patch.object(protocol, "emit", side_effect=emit))
 
-                if failure in ("tpm", "recovery"):
-                    with self.assertRaisesRegex(protocol.InstallError, "simulated busy device") as error:
+                if failure:
+                    with self.assertRaises(protocol.InstallError) as error:
                         backend.install("/dev/test")
                     self.assertIn("Recovery state retained", str(error.exception))
-                    self.assertIn("resume --disk /dev/test", str(error.exception))
                     self.assertTrue((work / "setup.key").exists())
                     self.assertTrue((work / "recovery.key").exists())
-                    self.assertEqual(json.loads((work / "state.json").read_text())["phase"], "installed")
-                    self.assertFalse(any(call.args[0] == "complete" for call in emit.call_args_list))
-                    self.assertFalse(any(call.args[0] == "recovery-key" for call in emit.call_args_list))
+                    self.assertFalse(any(call.args[0] == "complete" for call in events.call_args_list))
+                    if failure in {"busy-root", "close"}:
+                        self.assertIn("Device is still in use", str(error.exception))
+                    if failure not in {"bootc", "boot-mount"}:
+                        self.assertEqual(json.loads((work / "state.json").read_text())["phase"], "installed")
                 else:
                     backend.install("/dev/test")
-                    self.assertTrue(any(call.args[0] == "complete" for call in emit.call_args_list))
+                    self.assertEqual(sum(call.args[0] == "complete" for call in events.call_args_list), 1)
                     self.assertEqual(sum("--token-only" in argv for argv in commands), 1)
-                    # Flush all writes before best-effort unmounting, even if
-                    # a live-session process continues to hold the root busy.
-                    self.assertLess(commands.index(["sync"]), next(
-                        i for i, argv in enumerate(commands) if argv[0] == "umount"
-                    ))
+                    self.assertLess(commands.index(["cryptsetup", "close", constants.MAPPER_NAME]),
+                                    next(i for i, argv in enumerate(commands) if "--test-passphrase" in argv))
                 self.assertFalse(any(argv[0] == "systemd-cryptsetup" for argv in commands))
-                bootc = next(argv for argv in commands if argv[0] == "bootc")
-                self.assertIn("rd.luks.name=test-uuid=" + constants.MAPPER_NAME, bootc)
-                if mode == "production":
-                    self.assertIn("--enforce-container-sigpolicy", bootc)
-                    self.assertIn("--run-fetch-check", bootc)
-                    self.assertNotIn("--skip-fetch-check", bootc)
-                    self.assertLess(next(i for i, argv in enumerate(commands) if argv[0] == "skopeo"),
-                                    next(i for i, argv in enumerate(commands) if argv[0] == "wipefs"))
-                else:
-                    self.assertIn("--skip-fetch-check", bootc)
-                # The only close attempt is best-effort cleanup, after verification.
-                self.assertEqual(commands[-1], ["cryptsetup", "close", constants.MAPPER_NAME])
-                self.assertEqual(active_mounts, [str(target)] if failure == "busy-root" else [])
-                self.assertTrue(mapping_open)
+                if failure != "boot-mount":
+                    bootc = next(argv for argv in commands if argv[0] == "unshare")
+                    self.assertIn("rd.luks.name=test-uuid=" + constants.MAPPER_NAME, bootc)
+                    if mode == "production":
+                        self.assertIn("--enforce-container-sigpolicy", bootc)
+                        self.assertIn("--run-fetch-check", bootc)
+                        self.assertNotIn("--skip-fetch-check", bootc)
+                        self.assertLess(next(i for i, argv in enumerate(commands) if argv[0] == "skopeo"),
+                                        next(i for i, argv in enumerate(commands) if argv[0] == "wipefs"))
+                    else:
+                        self.assertIn("--skip-fetch-check", bootc)
+                self.assertEqual(active_mounts, [str(target), str(target / "ostree/deploy/default/deploy/test.0/sys")]
+                                 if failure == "busy-root" else [])
+                self.assertEqual(mapping_open, failure in {"busy-root", "close"})
 
     def test_setup_key_removal_check_rejects_token_unlock_and_other_errors(self):
         for code in (0, 1, 2, 3, 4, 5, -9):
