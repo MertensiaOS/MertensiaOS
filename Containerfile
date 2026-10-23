@@ -56,10 +56,18 @@ RUN systemctl enable NetworkManager.service && \
 
 ## GNOME apps
 RUN dnf -y install \
+    flatpak \
     ptyxis \
     gnome-text-editor \
     gnome-firmware \
     && dnf clean all
+
+## Install Bazaar from Flathub on the installed system, where /var is persistent.
+COPY system/config/flatpak/flathub.flatpakrepo /usr/share/flatpak/remotes.d/flathub.flatpakrepo
+COPY system/config/flatpak/mertensia.preinstall /usr/share/flatpak/preinstall.d/mertensia.preinstall
+COPY system/config/systemd/mertensia-flatpak-preinstall.service /usr/lib/systemd/system/mertensia-flatpak-preinstall.service
+COPY system/config/systemd/mertensia-flatpak-preinstall.timer /usr/lib/systemd/system/mertensia-flatpak-preinstall.timer
+RUN systemctl enable mertensia-flatpak-preinstall.timer
 
 COPY system/config/tmpfiles.d/mertensia.conf /usr/lib/tmpfiles.d/mertensia.conf
 

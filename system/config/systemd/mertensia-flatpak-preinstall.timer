@@ -1,0 +1,11 @@
+[Unit]
+Description=Retry installation of MertensiaOS default Flatpak applications
+ConditionPathExists=!/usr/bin/mertensia-installer
+
+[Timer]
+OnBootSec=30s
+OnUnitInactiveSec=5min
+
+[Install]
+WantedBy=timers.target
+

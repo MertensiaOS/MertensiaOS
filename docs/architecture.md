@@ -40,6 +40,15 @@ consumers (`systemd`, `polkit`, `gdm`, `homed`, `containers`, `desktop`, `gnome`
 `sysusers.d`, `tmpfiles.d`, `identity` and `accountsservice`). The Containerfile
 maps these files to the paths required by each system component.
 
+Flatpak's signed Flathub remote and Bazaar preinstall declaration live in
+`system/config/flatpak/` and are shipped under `/usr/share/flatpak/`.
+`mertensia-flatpak-preinstall.timer` starts installation after boot and retries
+failures every five minutes without blocking the desktop. On success the service
+stays active until shutdown. Flatpak tracks completed preinstalls and user
+removals, so later boots do not reinstall an app the user removed. Downloads and
+installed apps live in persistent `/var/lib/flatpak`, rather than the bootc image.
+The timer and service skip the disposable live installer.
+
 `Containerfile.installer` derives from that payload, adds only the live installer
 package and launchers, and overrides live-session configuration. It inherits
 shared branding from the payload. Installer code is absent from the clean payload.

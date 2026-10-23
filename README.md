@@ -4,6 +4,12 @@
 MertensiaOS is a Fedora 45 bootc desktop with GNOME, an encrypted system volume,
 TPM-backed root unlock, and separate encrypted homes managed by systemd-homed.
 
+Bazaar is the app store for discovering, installing and updating Flatpak apps
+from Flathub. It installs system-wide in the background after boot when an
+internet connection is available; failed downloads retry every five minutes.
+Once installed, open **Bazaar** from GNOME's app grid. Removing it opts out of
+automatic installation. OS updates continue to use bootc.
+
 The installer erases a whole disk. Supported targets are x86_64 computers with
 UEFI, Secure Boot enabled, a usable TPM 2.0, and a disk of at least 24 GiB.
 The project is under development; a passing unit suite does not establish that
