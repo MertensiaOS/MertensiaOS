@@ -544,7 +544,12 @@ def run_suite(args, work, firmware, results):
         guest = None
 
         def boot_installed():
-            nonlocal guest
+            nonlocal guest, tpm
+            # QEMU sends swtpm a shutdown command when the VM exits. Restart
+            # the emulator for each boot, reusing its state so enrolled keys
+            # survive live-media removal, reboot, update and rollback.
+            stop_tpm()
+            tpm = start_tpm("tpm")
             guest = Guest(args, work, firmware, False, on_secret=results.secrets.append, redact=results.redact)
             return {"agent_role": "payload"}
 
@@ -597,8 +602,6 @@ def run_suite(args, work, firmware, results):
         results.step("Verify accounts after root recovery", lambda: guest.command("login-checks", password=password))
         results.step("Power off recovered system", guest.poweroff)
         guest = None
-        stop_tpm()
-        tpm = start_tpm("tpm")
         results.step("Boot with restored original TPM state", boot_installed)
         results.step("Verify automatic TPM unlock after restoring original TPM", lambda: guest.command("root-checks", recovery_key=recovery))
         results.step("Final clean poweroff", guest.poweroff)

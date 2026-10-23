@@ -325,6 +325,50 @@ class HarnessTests(unittest.TestCase):
             process.kill.assert_called_once()
             self.assertTrue(launched.call_args.kwargs["stdout"].closed)
 
+    def test_each_boot_restarts_swtpm_and_preserves_the_selected_state(self):
+        with tempfile.TemporaryDirectory() as directory:
+            work = Path(directory)
+            processes = []
+            state_directories = []
+
+            def start_tpm(argv, **kwargs):
+                state = Path(argv[argv.index("--tpmstate") + 1].removeprefix("dir="))
+                marker = state / "enrolled-key"
+                if state in state_directories:
+                    self.assertEqual(marker.read_text(), "persistent TPM identity")
+                else:
+                    marker.write_text("persistent TPM identity")
+                state_directories.append(state)
+                process = mock.Mock()
+                process.poll.return_value = None
+                processes.append(process)
+                return process
+
+            def boot_guest(*args, **kwargs):
+                process = processes[-1]
+                self.assertIsNone(process.poll(), "QEMU must not reuse a shut-down swtpm process")
+                instance = mock.Mock()
+                instance.secret = "private-test-recovery-key"
+                instance.command.return_value = {"digest": "original-deployment"}
+                instance.serial.prompt_answered = True
+                # QEMU's normal shutdown also shuts down swtpm, removing its
+                # control socket. The next boot must start a fresh emulator.
+                instance.poweroff.side_effect = lambda: setattr(process.poll, "return_value", 0)
+                return instance
+
+            firmware = harness.Firmware(Path("/tmp/CODE.fd"), Path("/tmp/VARS.fd"))
+            with mock.patch.object(harness.subprocess, "run"), \
+                 mock.patch.object(harness.shutil, "copyfile"), \
+                 mock.patch.object(harness.subprocess, "Popen", side_effect=start_tpm), \
+                 mock.patch.object(harness, "wait_path"), \
+                 mock.patch.object(harness, "Guest", side_effect=boot_guest), \
+                 mock.patch("builtins.print"):
+                harness.run_suite(self.args(), work, firmware, harness.Results(work))
+            self.assertEqual(state_directories, [work / name for name in (
+                "tpm", "tpm", "tpm", "tpm-recovery", "tpm",
+            )])
+            self.assertTrue(all(process.poll() == 0 for process in processes))
+
 
 class TestSigningPolicyTests(unittest.TestCase):
     def setUp(self):
