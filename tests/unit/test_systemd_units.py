@@ -81,10 +81,15 @@ class GreenbootOrderingTests(unittest.TestCase):
                 "sysinit.target": "[Unit]\nDefaultDependencies=no\n",
                 "shutdown.target": "[Unit]\nDefaultDependencies=no\n",
                 "basic.target": "[Unit]\nRequires=sysinit.target\nAfter=sysinit.target\n",
-                "multi-user.target": "[Unit]\nRequires=basic.target\nAfter=basic.target\n",
+                "multi-user.target": "[Unit]\nRequires=basic.target\nAfter=basic.target\nWants=timers.target\n",
+                "timers.target": "[Unit]\nWants=bootc-fetch-apply-updates.timer\n",
                 "graphical.target": "[Unit]\nRequires=multi-user.target\nAfter=multi-user.target\nWants=gdm.service greenboot-healthcheck.service\n",
                 "boot-complete.target": "[Unit]\n",
-                "greenboot-success.target": "[Unit]\nAfter=greenboot-healthcheck.service\nRequires=boot-complete.target\nWants=mertensia-boot-health-status.service\n",
+                "greenboot-success.target": "[Unit]\nAfter=greenboot-healthcheck.service\nRequires=boot-complete.target\nWants=mertensia-boot-health-status.service mertensia-update-status.service\n",
+                "bootc-status-updated.target": "[Unit]\nStopWhenUnneeded=true\nConditionPathExists=/run/ostree-booted\n",
+                "bootc-fetch-apply-updates.timer": "[Timer]\nOnBootSec=1h\nOnUnitInactiveSec=8h\nRandomizedDelaySec=2h\n",
+                "bootc-fetch-apply-updates.service": "[Service]\nType=oneshot\nExecStart=/usr/bin/true\n",
+                "network-online.target": "[Unit]\n",
                 "greenboot-healthcheck.service": (
                     "[Unit]\nBefore=boot-complete.target\nWants=greenboot-success.target\n"
                     "[Service]\nType=oneshot\nRemainAfterExit=yes\nExecStart=/usr/bin/true\n"
@@ -109,15 +114,30 @@ class GreenbootOrderingTests(unittest.TestCase):
             source = (ROOT / "system/config/systemd/mertensia-boot-health-status.service").read_text()
             source = source.replace("ExecStart=/usr/libexec/mertensia-boot-health collect", "ExecStart=/usr/bin/true")
             (units / "mertensia-boot-health-status.service").write_text(source)
+            source = (ROOT / "system/config/systemd/mertensia-update-status.service").read_text()
+            (units / "mertensia-update-status.service").write_text(source.replace("ExecStart=/usr/bin/mertensia-update status", "ExecStart=/usr/bin/true"))
+            for name in ("bootc-fetch-apply-updates.service.d", "bootc-fetch-apply-updates.timer.d"):
+                shutil.copytree(ROOT / "system/config/systemd" / name, units / name)
+            override = units / "bootc-fetch-apply-updates.service.d/50-mertensia-stage.conf"
+            override.write_text(override.read_text().replace("ExecStart=/usr/bin/mertensia-update stage", "ExecStart=/usr/bin/true"))
             enabled = subprocess.run(["systemctl", "--root", directory, "enable", "greenboot-healthcheck.service",
-                                      "mertensia-boot-health-status.service"], capture_output=True, text=True, timeout=15)
+                                      "mertensia-boot-health-status.service", "mertensia-update-status.service"],
+                                     capture_output=True, text=True, timeout=15)
             self.assertEqual(enabled.returncode, 0, enabled.stderr)
             installed = root / "etc/systemd/system"
             self.assertTrue((installed / "graphical.target.wants/greenboot-healthcheck.service").is_symlink())
             self.assertFalse((installed / "multi-user.target.wants/greenboot-healthcheck.service").is_symlink())
             self.assertTrue((installed / "ostree-finalize-staged.service.requires/greenboot-set-rollback-trigger.service").is_symlink())
-            result = subprocess.run(["systemd-analyze", "verify", "--man=no", "--generators=no", str(units / "graphical.target")],
-                                    env=dict(os.environ, SYSTEMD_UNIT_PATH=str(units)), capture_output=True, text=True, timeout=15)
+            for target in ("greenboot-success.target", "bootc-status-updated.target"):
+                link = installed / f"{target}.wants/mertensia-update-status.service"
+                self.assertTrue(link.is_symlink())
+                self.assertEqual(os.readlink(link), "/usr/lib/systemd/system/mertensia-update-status.service")
+            # Both boot-time and bootc event transactions must resolve the
+            # actual enablement symlinks, without introducing an ordering cycle.
+            result = subprocess.run(["systemd-analyze", "verify", "--man=no", "--generators=no",
+                                     str(units / "graphical.target"), str(units / "bootc-status-updated.target")],
+                                    env=dict(os.environ, SYSTEMD_UNIT_PATH=f"{installed}:{units}"),
+                                    capture_output=True, text=True, timeout=15)
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             self.assertNotIn("ordering cycle", (result.stdout + result.stderr).lower())
 

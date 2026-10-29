@@ -1,0 +1,7 @@
+{
+  "SafeBrowsingProtectionLevel": 1,
+  "BackgroundModeEnabled": false,
+  "SearchSuggestEnabled": false,
+  "NetworkPredictionOptions": 2,
+  "SpellCheckServiceEnabled": false
+}

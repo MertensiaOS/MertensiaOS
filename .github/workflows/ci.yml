@@ -33,3 +33,5 @@ jobs:
         run: |
           sudo podman build --pull -f Containerfile -t localhost/mertensiaos:ci .
           sudo bash scripts/validate-image.sh localhost/mertensiaos:ci
+      - name: Verify native Flatpak update permission handling
+        run: sudo bash scripts/test-flatpak-updates.sh localhost/mertensiaos:ci

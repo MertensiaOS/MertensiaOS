@@ -1,0 +1,4 @@
+[org.gnome.software]
+download-updates=true
+download-updates-notify=true
+refresh-when-metered=false

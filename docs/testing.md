@@ -28,9 +28,11 @@ Never publish an integration image as a production release.
 
 Required host packages are QEMU (`qemu-system-x86_64` and `qemu-img`), swtpm,
 enrolled-key OVMF firmware, and Podman for builds. KVM accelerates the run when
-available; TCG works more slowly. Allocate at least 12 GiB of guest RAM by default
-because the live installer stages the payload in its temporary filesystem, and
-allow substantial free disk space for images, containers and artifacts.
+available; TCG works more slowly. The default guest RAM allocation is 12 GiB.
+The live installer stages the payload in its temporary filesystem; larger
+payloads can exceed this allocation and fail the installer's memory preflight.
+Use a host with enough available RAM before increasing the guest allocation,
+and allow substantial free disk space for images, containers and artifacts.
 
 ```sh
 # Read-only capability inventory. Does not build images or start a VM.
@@ -80,6 +82,12 @@ The integration-only live ISO uses the serial console with boot messages enabled
 Agent prerequisite failures appear in the virtio handshake and serial log;
 timeouts identify the boot stage and the diagnostic files to inspect. The normal
 production ISO keeps its regular graphical boot configuration.
+
+The installed-system run also requires the unprivileged headless Chromium probe:
+effective policies, native namespace/seccomp sandboxing and active site
+isolation. It opens no debugging TCP port. Graphical desktop integration,
+two-account browser data persistence and live Safe Browsing checks remain
+[explicit interactive acceptance checks](chromium.md#acceptance-checks).
 
 The core run asserts:
 
@@ -149,6 +157,61 @@ The release workflow prepares a signed update fixture in the separate public
 `ghcr.io/mertensiaos/mertensiaos-integration` repository and requires this complete
 update/rollback sequence before publishing the clean production payload. Routine
 offline ISO runs can omit it; that omission remains visible as skipped coverage.
+
+## Automatic updates and Flatpak permissions
+
+Run the stock GNOME Software permission checks against a built payload:
+
+```sh
+sudo bash scripts/test-flatpak-updates.sh localhost/mertensiaos:base
+```
+
+The script builds a disposable container with a private Xvfb display, D-Bus and
+a local Flatpak repository; it exposes no host mounts. The fixture repository
+uses unsigned local test content and a tiny runtime so no SDK is downloaded.
+It installs three apps in both system and user scopes, publishes updates with
+unchanged, reduced and expanded permissions, and checks the actual GNOME
+Software Flatpak plugin's `new-permissions` classification. It verifies declining
+an expanded-permission update leaves the installed commit unchanged, then applies
+the unrelated updates without installing the held app. CI requires this check.
+The container's test files are rejected by production image validation.
+
+These checks do not run the real logged-in user's GNOME background scheduler or
+prove the visual review flow. In an ordinary GNOME session, verify Software starts
+at login, automatically applies unchanged/reduced-access updates, and leaves
+expanded-access updates pending. Open a flagged app's update details and check
+that the added access is clearly described. Cancel and verify the old version
+remains. Then manually update the app. Stock **Update All** can approve such
+updates without forcing the details open; this is the chosen native behavior.
+Also verify the update preferences, metered-network deferral, and that existing
+Flatpak overrides and portal permissions remain intact.
+
+For actual automatic OS staging, add `--automatic-update-image` to the signed
+ISO suite, specifying a tagged healthy fixture in the same integration repository
+as `--upgrade-image`. The tag must resolve to the healthy fixture's signed digest.
+Release CI creates a unique signed fixture tag and requires this path. For example:
+
+```sh
+sudo scripts/test-iso.sh --build --require-upgrade \
+  --upgrade-image ghcr.io/YOUR_ORG/mertensia-integration@sha256:REPLACE_WITH_DIGEST \
+  --automatic-update-image ghcr.io/YOUR_ORG/mertensia-integration:healthy \
+  --upgrade-public-key /path/to/integration-signing.pub \
+  --work-dir /tmp/mertensia-automatic-updates
+```
+
+The guarded guest operation temporarily points only the disposable booted
+deployment's origin at that signed tag, invokes the unmodified production update
+service, and restores the origin even on failure. It checks signature policy,
+the staged digest, desktop status and unchanged boot identity, then the existing
+suite boots the update and verifies accounts and rollback. Recovery fixtures also
+verify staging pauses after both GRUB fallback and Greenboot rollback, and that
+administrator acknowledgement does not itself change deployments. Offline runs
+without the tagged fixture explicitly report automatic staging as skipped.
+
+In a normal GNOME session, also verify the OS restart-ready notification, one
+delivery per digest/user, stale-notice clearing after boot, and the explanation
+of paused OS updates after recovery. These visual checks remain release
+acceptance requirements.
 
 ## Automatic Greenboot recovery
 

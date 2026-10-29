@@ -16,7 +16,9 @@ RUN rm -f \
     /usr/share/dbus-1/services/org.gnome.Tour.service
 
 RUN systemctl mask greenboot-healthcheck.service greenboot-set-rollback-trigger.service \
-      greenboot-success.target mertensia-boot-health-status.service
+      greenboot-success.target mertensia-boot-health-status.service \
+      bootc-fetch-apply-updates.timer bootc-fetch-apply-updates.service mertensia-update-status.service && \
+    systemctl --global mask gnome-software.service
 
 ## Runtime dependencies plus the bootc-generic-iso container contract.
 RUN dnf -y install \

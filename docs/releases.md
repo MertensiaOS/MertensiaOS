@@ -50,6 +50,12 @@ source code; configure them before dispatching a release.
 
 ## Automated publication
 
+Release payload builds use `podman build --pull --no-cache`, refreshing RPMs
+including Chromium even when the Fedora base digest is unchanged. Publication
+still requires a manual dispatch. Complete the graphical and live Safe Browsing
+[Chromium acceptance checks](chromium.md#acceptance-checks) before promoting a
+release; the headless VM probe does not cover these services.
+
 Run **Publish signed release** from GitHub Actions with a new version, such as
 `45.20261005.1`, and channel `testing` or `latest`, from `main`. The workflow
 requires the source tests and payload build first, then:
@@ -77,7 +83,7 @@ install -d -m 0700 /root/.docker
 podman login --authfile /root/.docker/config.json ghcr.io
 export REGISTRY_AUTH_FILE=/root/.docker/config.json
 export MERTENSIA_SIGNING_KEY=/secure/location/cosign.key
-podman build --pull -f Containerfile -t localhost/mertensiaos:release .
+podman build --pull --no-cache -f Containerfile -t localhost/mertensiaos:release .
 bash scripts/publish-image.sh localhost/mertensiaos:release 45.20261005.1 testing
 ```
 
@@ -118,18 +124,27 @@ sudo systemctl reboot
 `upgrade` stages the image for the next boot. bootc verifies registry pulls
 against `/etc/containers/policy.json`; the installed update reference follows
 the selected signed channel. A digest target remains pinned until explicitly
-switched. No automatic update/reboot timer is enabled by this project.
+switched. The bootc timer stages signed updates daily on unmetered connections;
+users choose when to restart. See [automatic updates](updates.md) for controls,
+GNOME Software permission review and recovery acknowledgement.
 
 Greenboot evaluates local desktop readiness after an update and can initiate
 automatic retry reboots and rollback. This does not schedule update downloads.
 See [boot health](boot-health.md) for the checks, notifications and recovery limits.
 
-To return to the previous deployment:
+Before a manual rollback, disable automatic staging so it cannot replace the
+rollback with another upgrade. Then return to the previous deployment:
 
 ```sh
+sudo systemctl disable --now bootc-fetch-apply-updates.timer
 sudo bootc rollback
 sudo systemctl reboot
 ```
+
+Re-enable the timer when ready with
+`sudo systemctl enable --now bootc-fetch-apply-updates.timer`. After automatic
+Greenboot recovery, also run `sudo mertensia-update resume` when the problem has
+been resolved; this acknowledgement does not itself download or restart.
 
 If a new deployment cannot boot, choose the previous deployment in the firmware
 bootloader menu. Rollback does not undo changes to `/var` or encrypted homes;

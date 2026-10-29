@@ -2,8 +2,10 @@
 
 MertensiaOS installs Fedora's Rust Greenboot package and enables automatic
 recovery on systems installed through the supported encrypted-disk installer.
-OS updates are still initiated manually with bootc. Greenboot does not download
-updates or roll back user data.
+Automatic OS updates stage with bootc; users choose when to restart. Greenboot
+does not download updates or roll back user data. After automatic recovery, OS
+staging pauses until an administrator acknowledges the recovery. See
+[automatic updates](updates.md).
 
 ## What a healthy boot means
 
@@ -19,8 +21,8 @@ service timeout. The check requires:
   oneshot service normally becomes inactive after succeeding.
 
 No users need to exist yet. First-boot setup may be unfinished, and encrypted
-homes may remain locked. Network connectivity, DNS, registry access, Bazaar
-installation and a logged-in GNOME session are not health criteria. The upstream
+homes may remain locked. Network connectivity, DNS, registry access, application
+updates and a logged-in GNOME session are not health criteria. The upstream
 `greenboot-default-health-checks` package is deliberately omitted.
 
 The live installer and the unencrypted direct development VM image mask recovery
@@ -64,7 +66,9 @@ At login, each ordinary GNOME user receives:
 
 > MertensiaOS restored the previous OS version because an update could not start correctly.
 
-The notifier also watches for events recorded after login. It remembers the last
+The recovery notification also explains that automatic OS updates pause until
+an administrator runs `sudo mertensia-update resume`. The notifier also watches
+for events recorded after login. It remembers the last
 delivered event in `$XDG_STATE_HOME/mertensia/boot-health-notification.json`
 (normally `~/.local/state/mertensia/boot-health-notification.json`). Each user
 sees an event once. An unavailable notification service leaves the event pending

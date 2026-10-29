@@ -1,0 +1,8 @@
+# Disposable application-update acceptance image; never a release payload.
+ARG BASE_IMAGE
+FROM ${BASE_IMAGE}
+RUN dnf -y --setopt=install_weak_deps=False install xorg-x11-server-Xvfb dbus-daemon && \
+    dnf clean all && \
+    rm /usr/share/flatpak/remotes.d/flathub.flatpakrepo
+COPY tests/flatpak/check_updates.py /usr/share/mertensia-flatpak-tests/check_updates.py
+ENTRYPOINT ["dbus-run-session", "--", "/usr/bin/python3", "/usr/share/mertensia-flatpak-tests/check_updates.py"]

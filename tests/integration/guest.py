@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import ctypes
 import ctypes.util
+import configparser
 from contextlib import contextmanager
 import json
 import os
@@ -105,7 +106,8 @@ def secure_boot():
 
 def live_probe():
     require(role() == "live", "installation requires the integration live image")
-    for unit in (HEALTH_UNIT, "greenboot-set-rollback-trigger.service", "mertensia-boot-health-status.service"):
+    for unit in (HEALTH_UNIT, "greenboot-set-rollback-trigger.service", "mertensia-boot-health-status.service",
+                 "bootc-fetch-apply-updates.timer", "bootc-fetch-apply-updates.service", "mertensia-update-status.service"):
         masked = subprocess.run(["systemctl", "is-enabled", unit], text=True, capture_output=True, timeout=10)
         require(masked.stdout.strip() == "masked", f"live installer did not mask {unit}")
     rows = run(["/usr/libexec/mertensia-installer-helper", "probe"]).splitlines()
@@ -511,6 +513,65 @@ def stage_upgrade(image):
             "staged": True, "signature_policy_enforced": True}
 
 
+def automatic_upgrade(image):
+    """Point only the disposable booted origin at the signed fixture tag."""
+    require(role() == "payload", "automatic update requires the installed system")
+    require(isinstance(image, str) and "@" not in image and not image.startswith("-"), "a tagged fixture is required")
+    repository = image.rsplit(":", 1)[0]
+    require("integration" in repository.rsplit("/", 1)[-1], "automatic update requires an integration repository")
+    policy = json.loads(Path("/etc/containers/policy.json").read_text())
+    rules = policy.get("transports", {}).get("docker", {}).get(repository, [])
+    require(any(rule.get("type") == "sigstoreSigned" for rule in rules), "fixture has no signature policy")
+    require(boot_health()["healthy"], "automatic update requires a healthy boot")
+    run(["systemctl", "start", "mertensia-boot-health-status.service"])
+    before = boot_identity()
+    require(not before["status"]["status"].get("staged"), "automatic update requires no staged deployment")
+    ostree = before["status"]["status"]["booted"]["ostree"]
+    deployment_root = Path("/sysroot/ostree/deploy").resolve()
+    origin = (deployment_root / ostree["stateroot"] / "deploy" /
+              f'{ostree["checksum"]}.{ostree["deploySerial"]}.origin').resolve(strict=True)
+    require(origin.is_relative_to(deployment_root), "origin is outside the disposable deployment")
+    original = origin.read_bytes()
+    config = configparser.ConfigParser(interpolation=None)
+    config.read_string(original.decode())
+    require(config.has_option("origin", "container-image-reference"), "booted deployment has no container origin")
+    boot_id = Path("/proc/sys/kernel/random/boot_id").read_text()
+    try:
+        # Offline test installation tracks a local image. Changing only this
+        # test origin exercises the unmodified production updater, including
+        # its signature checks, instead of replacing bootc with a test command.
+        config.set("origin", "container-image-reference", "ostree-image-signed:docker://" + image)
+        with origin.open("w") as stream:
+            config.write(stream, space_around_delimiters=False)
+        run(["systemctl", "start", "bootc-fetch-apply-updates.service"], timeout=3900)
+        after = boot_identity()
+        staged = after["status"]["status"].get("staged")
+        require(isinstance(staged, dict), "automatic service did not stage the signed fixture")
+        require(after["digest"] == before["digest"] and Path("/proc/sys/kernel/random/boot_id").read_text() == boot_id,
+                "automatic service changed the running deployment or restarted")
+        require(staged["image"]["image"]["signature"] == "containerPolicy", "automatic update bypassed signatures")
+        published = json.loads(Path("/var/lib/mertensia/updates/status.json").read_text())
+        require(published["staged_digest"] == staged["image"]["imageDigest"], "desktop update status is incorrect")
+        return {"staged_digest": staged["image"]["imageDigest"], "no_restart": True,
+                "automatic_service": True, "signature_policy_enforced": True}
+    finally:
+        origin.write_bytes(original)
+
+
+def update_recovery_pause():
+    event = recovery_event()
+    run(["systemctl", "start", "mertensia-boot-health-status.service"])
+    before = status()
+    run(["systemctl", "start", "bootc-fetch-apply-updates.service"], timeout=60)
+    public = json.loads(Path("/var/lib/mertensia/updates/status.json").read_text())
+    require(public.get("recovery_pending") == event["event_id"], "automatic OS updates did not pause after recovery")
+    require(status() == before, "paused automatic updater modified deployments")
+    resumed = json.loads(run(["mertensia-update", "resume"]).splitlines()[-1])
+    require(resumed.get("recovery_pending") is None, "administrator acknowledgement did not resume updates")
+    require(status() == before, "resuming updates modified deployments")
+    return {"paused_after_recovery": True, "no_deployment_changed": True, "administrator_resume": True}
+
+
 def reject_wrong_signer(image):
     """Prove the same signed update is rejected when its trusted key is wrong."""
     require(role() == "payload", "signature rejection requires the installed system")
@@ -548,6 +609,23 @@ def reject_wrong_signer(image):
         finally:
             path.write_bytes(original)
     return {"incorrect_signing_key_rejected": True, "no_deployment_staged": True, "original_trust_restored": True}
+
+
+def chromium_checks():
+    require(role() == "payload", "browser checks require the installed system")
+    # Disposable account; never start a root browser or touch locked homed homes.
+    name = "mertensia-browser-test"
+    require(subprocess.run(["getent", "passwd", name], capture_output=True).returncode == 2,
+            "browser fixture account already exists")
+    TEST_STATE.mkdir(parents=True, exist_ok=True)
+    run(["useradd", "--system", "--no-log-init", "--create-home", "--home-dir", "/var/lib/mertensia-integration/browser-home", name])
+    try:
+        result = run(["runuser", "-u", name, "--", "env", "-u", "WAYLAND_DISPLAY",
+                      "-u", "CHROMIUM_USER_FLAGS", "/usr/bin/python3", "-I",
+                      "/usr/share/mertensia-integration/chromium_probe.py"], timeout=180)
+        return json.loads(result)
+    finally:
+        run(["userdel", "--remove", name])
 
 
 def main():
@@ -590,8 +668,14 @@ def main():
                     result = reject_wrong_signer(request["image"])
                 elif command == "upgrade":
                     result = stage_upgrade(request["image"])
+                elif command == "automatic-upgrade":
+                    result = automatic_upgrade(request["image"])
+                elif command == "update-recovery-pause":
+                    result = update_recovery_pause()
                 elif command == "boot-health":
                     result = boot_health()
+                elif command == "chromium-checks":
+                    result = chromium_checks()
                 elif command == "recovery-event":
                     result = recovery_event()
                 elif command == "set-health-failure":

@@ -1,0 +1,14 @@
+[Unit]
+Description=Refresh MertensiaOS desktop update status
+After=mertensia-boot-health-status.service
+ConditionPathExists=/run/ostree-booted
+ConditionPathExists=!/usr/bin/mertensia-installer
+ConditionVirtualization=!container
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/mertensia-update status
+TimeoutStartSec=30s
+
+[Install]
+WantedBy=greenboot-success.target bootc-status-updated.target

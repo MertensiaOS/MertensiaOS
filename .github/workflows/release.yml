@@ -68,7 +68,8 @@ jobs:
       - name: Install build and test tools
         run: sudo apt-get update && sudo apt-get install -y podman skopeo qemu-system-x86 qemu-utils ovmf swtpm xorriso python3
       - name: Build clean release payload
-        run: sudo podman build --pull -f Containerfile -t localhost/mertensiaos:release .
+        # Refresh RPMs even when the base image digest has not changed.
+        run: sudo podman build --pull --no-cache -f Containerfile -t localhost/mertensiaos:release .
       - name: Authenticate registry
         env:
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -103,15 +104,20 @@ jobs:
               --new-bundle-format=false --use-signing-config=false --key env://COSIGN_PRIVATE_KEY "$fixture_image"
             cosign verify --new-bundle-format=false --key cosign.pub "$fixture_image" >/dev/null
             printf '%s=%s\n' "$mode" "$fixture_image" >> "$GITHUB_OUTPUT"
+            if [[ "$mode" = none ]]; then
+              printf 'automatic=%s:%s\n' "$fixture_repo" "$fixture_tag" >> "$GITHUB_OUTPUT"
+            fi
           done
       - name: Gate release on installation, signed upgrade and automatic recovery
         env:
           UPGRADE_IMAGE: ${{ steps.fixture.outputs.none }}
+          AUTOMATIC_UPDATE_IMAGE: ${{ steps.fixture.outputs.automatic }}
           FAILURE_IMAGE: ${{ steps.fixture.outputs.always }}
           TRANSIENT_IMAGE: ${{ steps.fixture.outputs.transient }}
         run: |
           sudo bash scripts/test-iso.sh --build --base-image localhost/mertensiaos:release \
             --upgrade-image "$UPGRADE_IMAGE" --upgrade-public-key cosign.pub --require-upgrade \
+            --automatic-update-image "$AUTOMATIC_UPDATE_IMAGE" \
             --greenboot-failure-image "$FAILURE_IMAGE" --greenboot-transient-image "$TRANSIENT_IMAGE" \
             --require-greenboot-recovery \
             --work-dir "$RUNNER_TEMP/mertensia-release-test" --junit "$RUNNER_TEMP/mertensia-release-test/junit.xml"

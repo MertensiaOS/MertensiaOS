@@ -637,6 +637,8 @@ def run_suite(args, work, firmware, results):
 
         results.step("Boot installed disk without installation media", boot_installed)
         original = results.step("Verify TPM unlock, recovery key, enforcing SELinux and GDM", lambda: guest.command("root-checks", recovery_key=recovery))
+        results.step("Verify Chromium policies, native sandbox and site isolation as an unprivileged user",
+                     lambda: guest.command("chromium-checks"))
         if args.require_greenboot_recovery:
             if original["status"].get("status", {}).get("rollback"):
                 raise HarnessError("first-install failure test requires no previous deployment")
@@ -663,7 +665,12 @@ def run_suite(args, work, firmware, results):
         results.step("Verify persisted accounts and login integration after reboot", lambda: guest.command("login-checks", password=password))
         if args.upgrade_image:
             results.step("Reject signed update with an incorrect verification key", lambda: guest.command("reject-update", image=args.upgrade_image))
-            results.step("Stage signed integration update", lambda: guest.command("upgrade", image=args.upgrade_image))
+            if args.automatic_update_image:
+                results.step("Automatically stage signed update without restart",
+                             lambda: guest.command("automatic-upgrade", image=args.automatic_update_image))
+            else:
+                results.step("Stage signed integration update", lambda: guest.command("upgrade", image=args.upgrade_image))
+                results.skip("Automatic OS update staging", "--automatic-update-image requires a signed tagged integration fixture")
             results.step("Power off before updated deployment boot", guest.poweroff)
             guest = None
             results.step("Boot updated deployment", boot_installed)
@@ -707,6 +714,8 @@ def run_suite(args, work, firmware, results):
             guest = None
             recover("GRUB falls back and Greenboot makes recovery permanent", original["digest"])
             results.step("Verify GRUB fallback recovery notification event", lambda: guest.command("recovery-event"))
+            results.step("Verify update pause and administrator resume after GRUB fallback",
+                         lambda: guest.command("update-recovery-pause"))
             results.step("Restore disposable BLS fixture", lambda: guest.command("restore-grub-entry"))
             results.step("Verify root after GRUB fallback", lambda: guest.command("root-checks", recovery_key=recovery))
             results.step("Verify accounts after GRUB fallback", lambda: guest.command("login-checks", password=password))
@@ -717,6 +726,8 @@ def run_suite(args, work, firmware, results):
             if summary["automatic_reboots"] < 1:
                 raise HarnessError("persistent failure fixture did not cause a Greenboot retry")
             results.step("Verify automatic rollback notification event", lambda: guest.command("recovery-event"))
+            results.step("Verify update pause and administrator resume after automatic rollback",
+                         lambda: guest.command("update-recovery-pause"))
             results.step("Verify TPM and recovery unlock after automatic rollback", lambda: guest.command("root-checks", recovery_key=recovery))
             results.step("Verify accounts after automatic rollback", lambda: guest.command("login-checks", password=password))
             if args.require_greenboot_recovery:
@@ -755,6 +766,10 @@ def run_suite(args, work, firmware, results):
         guest = None
         results.skip("Graphical login and polkit UI", "PAM and helper integration are automated; see docs/testing.md for interactive GNOME/polkit acceptance checks")
         results.skip("GNOME recovery notification appearance", "event publication is automated; real-session appearance and per-user delivery require interactive acceptance")
+        results.skip("Chromium graphical integration and per-user profile persistence",
+                     "headless policy/sandbox checks are automated; see docs/chromium.md for logged-in GNOME acceptance")
+        results.skip("Chromium live Safe Browsing protection",
+                     "requires successful network-backed database updates and harmless phishing/malware test interstitials; see docs/chromium.md")
     finally:
         if guest:
             guest.close()
@@ -777,6 +792,7 @@ def parser():
     result.add_argument("--target-image", help="future installed update target; fixture defaults to local payload")
     result.add_argument("--builder-image", default=BUILDER)
     result.add_argument("--upgrade-image", help="distinct signed integration payload for actual update and rollback tests")
+    result.add_argument("--automatic-update-image", help="signed tagged healthy fixture for testing the production automatic staging service")
     result.add_argument("--upgrade-public-key", type=Path, help="trust this public key for the integration update repo in test overlays only (with --build)")
     result.add_argument("--require-upgrade", action="store_true", help="fail argument validation unless --upgrade-image is supplied")
     result.add_argument("--greenboot-failure-image", help="signed integration payload with INTEGRATION_HEALTH_MODE=always")
@@ -803,6 +819,18 @@ def main(argv=None):
         cli.error("disk must be at least 24 GiB, memory at least 4096 MiB, CPUs/timeouts positive")
     if args.require_upgrade and not args.upgrade_image:
         cli.error("--require-upgrade requires --upgrade-image")
+    if args.automatic_update_image:
+        try:
+            from .add_test_policy import repository
+        except ImportError:
+            from add_test_policy import repository
+        try:
+            if (not args.upgrade_image or "@" in args.automatic_update_image
+                    or ":" not in args.automatic_update_image.rsplit("/", 1)[-1]
+                    or repository(args.automatic_update_image) != repository(args.upgrade_image)):
+                cli.error("--automatic-update-image requires a tagged fixture in the --upgrade-image integration repository")
+        except ValueError as error:
+            cli.error(str(error))
     if args.upgrade_public_key and not (args.build and args.upgrade_image):
         cli.error("--upgrade-public-key requires --build and --upgrade-image")
     if (args.greenboot_failure_image or args.greenboot_transient_image) and not args.upgrade_image:

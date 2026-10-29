@@ -1,5 +1,6 @@
 """Exercise the application files assembled by the image COPY instructions."""
 
+import configparser
 import json
 import os
 from pathlib import Path
@@ -64,6 +65,9 @@ class ApplicationPackagingTests(unittest.TestCase):
         result = self.launcher("/usr/libexec/mertensia-boot-health", "--help")
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertIn("collect", result.stdout)
+        result = self.launcher("/usr/bin/mertensia-update", "--help")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("resume", result.stdout)
         result = self.launcher("/usr/libexec/mertensia-accounts-helper", input_text="{}\n")
         self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
         self.assertEqual(json.loads(result.stdout)["event"], "error")
@@ -90,8 +94,12 @@ class ApplicationPackagingTests(unittest.TestCase):
             "usr/lib/systemd/system/mertensia-firstboot-finish.service",
             "usr/lib/systemd/system/mertensia-login-users.path",
             "usr/lib/systemd/system/mertensia-login-users.service",
-            "usr/lib/systemd/system/mertensia-flatpak-preinstall.service",
-            "usr/lib/systemd/system/mertensia-flatpak-preinstall.timer",
+            "usr/lib/systemd/system/bootc-fetch-apply-updates.service.d/50-mertensia-stage.conf",
+            "usr/lib/systemd/system/bootc-fetch-apply-updates.timer.d/50-mertensia-daily.conf",
+            "usr/lib/systemd/system/mertensia-update-status.service",
+            "usr/lib/tmpfiles.d/mertensia-updates.conf",
+            "usr/share/glib-2.0/schemas/zz-mertensia-software.gschema.override",
+            "usr/lib/systemd/user/gnome-software.service.d/50-mertensia-session.conf",
             "usr/lib/systemd/system/mertensia-boot-health-status.service",
             "usr/lib/systemd/system/greenboot-healthcheck.service.d/50-mertensia-desktop.conf",
             "usr/lib/systemd/system/greenboot-set-rollback-trigger.service.d/50-mertensia-installed.conf",
@@ -102,13 +110,28 @@ class ApplicationPackagingTests(unittest.TestCase):
             "etc/xdg/autostart/org.mertensia.BootHealth.desktop",
             "usr/share/applications/org.mertensia.BootHealth.desktop",
             "usr/share/flatpak/remotes.d/flathub.flatpakrepo",
-            "usr/share/flatpak/preinstall.d/mertensia.preinstall",
             "usr/share/polkit-1/actions/org.mertensia.Accounts.policy",
             "etc/containers/policy.json",
             "usr/lib/os-release",
         ):
             with self.subTest(path=name):
                 self.assertTrue((self.image / name).is_file())
+
+    def test_updates_are_staged_without_reboots_and_disabled_in_disposable_images(self):
+        units = ROOT / "system/config/systemd"
+        service = (units / "bootc-fetch-apply-updates.service.d/50-mertensia-stage.conf").read_text()
+        self.assertIn("ExecStart=\nExecStart=/usr/bin/mertensia-update stage", service)
+        self.assertNotIn("--apply", service)
+        timer = (units / "bootc-fetch-apply-updates.timer.d/50-mertensia-daily.conf").read_text()
+        for setting in ("OnBootSec=\n", "OnUnitInactiveSec=\n", "OnCalendar=daily", "Persistent=true", "RandomizedDelaySec=1h"):
+            self.assertIn(setting, timer)
+        for name in ("Containerfile.installer", "Containerfile.dev"):
+            text = (ROOT / name).read_text()
+            self.assertIn("bootc-fetch-apply-updates.timer bootc-fetch-apply-updates.service mertensia-update-status.service", text)
+        session = (units / "user/gnome-software.service.d/50-mertensia-session.conf").read_text()
+        self.assertIn("WantedBy=gnome-session.target", session)
+        self.assertIn("ConditionUser=!mertensia-setup", session)
+        self.assertIn("systemctl --global mask gnome-software.service", (ROOT / "Containerfile.installer").read_text())
 
     def test_only_supported_installed_payload_enables_recovery(self):
         payload = (ROOT / "Containerfile").read_text()
@@ -127,6 +150,34 @@ class ApplicationPackagingTests(unittest.TestCase):
         ):
             with self.subTest(path=name):
                 self.assertTrue((self.image / name).is_file())
+
+    def test_chromium_policies_and_default_handlers(self):
+        root = self.image / "etc/chromium/policies"
+        self.assertEqual(json.loads((root / "managed/mertensia.json").read_text()), {
+            "SitePerProcess": True, "MetricsReportingEnabled": False,
+            "UrlKeyedAnonymizedDataCollectionEnabled": False,
+        })
+        self.assertEqual(json.loads((root / "recommended/mertensia.json").read_text()), {
+            "SafeBrowsingProtectionLevel": 1, "BackgroundModeEnabled": False,
+            "SearchSuggestEnabled": False, "NetworkPredictionOptions": 2,
+            "SpellCheckServiceEnabled": False,
+        })
+        defaults = configparser.ConfigParser()
+        defaults.read(self.image / "usr/share/applications/gnome-mimeapps.list")
+        self.assertEqual(dict(defaults["Default Applications"]), {
+            mime: "chromium-browser.desktop;" for mime in (
+                "x-scheme-handler/http", "x-scheme-handler/https", "text/html", "application/xhtml+xml")
+        })
+
+    def test_chromium_wayland_hook_preserves_flags_and_headless_selection(self):
+        hook = self.image / "etc/chromium/mertensia-wayland.conf"
+        for display, expected in (("wayland-0", "--existing --ozone-platform=wayland"), ("", "--existing")):
+            with self.subTest(display=display):
+                result = subprocess.run(
+                    ["bash", "-euc", 'CHROMIUM_FLAGS=--existing; . "$1"; printf "%s" "$CHROMIUM_FLAGS"', "test", str(hook)],
+                    env=dict(os.environ, WAYLAND_DISPLAY=display), text=True, capture_output=True, check=True,
+                )
+                self.assertEqual(result.stdout, expected)
 
 
 if __name__ == "__main__":

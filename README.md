@@ -4,11 +4,17 @@
 MertensiaOS is a Fedora 45 bootc desktop with GNOME, an encrypted system volume,
 TPM-backed root unlock, and separate encrypted homes managed by systemd-homed.
 
-Bazaar is the app store for discovering, installing and updating Flatpak apps
-from Flathub. It installs system-wide in the background after boot when an
-internet connection is available; failed downloads retry every five minutes.
-Once installed, open **Bazaar** from GNOME's app grid. Removing it opts out of
-automatic installation. OS updates continue to use bootc.
+Fedora Chromium is the default browser, with native Wayland and sandboxing,
+enforced site isolation, and reduced optional data collection. Chromium updates
+arrive through OS releases and require a restart. See [browser hardening](docs/chromium.md)
+for defaults, diagnostics and compatibility checks.
+
+GNOME Software discovers, installs and automatically updates Flatpak apps from
+Flathub. Updates requesting additional permissions stay pending for manual review
+in Software. OS updates use bootc: signed updates download daily on unmetered
+connections and are staged for your next restart. A desktop notification tells
+you when an OS update is ready; automatic staging never requests a restart.
+See [automatic updates](docs/updates.md) for controls and permission review.
 
 Greenboot checks local storage and core desktop services after boot and can
 automatically restore the previous OS deployment when an update fails. Boots

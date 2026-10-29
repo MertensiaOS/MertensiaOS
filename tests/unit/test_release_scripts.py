@@ -4,6 +4,7 @@ import base64
 import json
 import os
 from pathlib import Path
+import shlex
 import shutil
 import subprocess
 import sys
@@ -78,8 +79,13 @@ elif command == "podman":
         script_index = args.index("-euc") + 1
         script = args[script_index]
         root = os.environ["FAKE_PAYLOAD_ROOT"]
-        for prefix in ("/usr/lib/", "/usr/libexec/", "/usr/share/", "/etc/"):
+        for prefix in ("/usr/lib/", "/usr/lib64/", "/usr/libexec/", "/usr/share/", "/etc/", "/usr/bin/mertensia-update", "/usr/bin/chromium-browser"):
             script = script.replace(prefix, root + prefix)
+        script = script.replace("'ExecStart=" + root + "/usr/bin/mertensia-update", "'ExecStart=/usr/bin/mertensia-update")
+        script = script.replace('["' + root + '/usr/bin/chromium-browser"]', '["/usr/bin/chromium-browser"]')
+        script = script.replace("'. " + root + "/etc/chromium/mertensia-wayland.conf'", "'. /etc/chromium/mertensia-wayland.conf'")
+        # Relocated fixtures belong to the test runner; production requires root.
+        script = script.replace("expected_owner = 0", "expected_owner = " + str(os.getuid()))
         result = subprocess.run(["bash", "-euc", script, *args[script_index + 1:]])
         sys.exit(result.returncode)
     if args[0] == "push":
@@ -111,6 +117,10 @@ elif command == "getent":
         print("account database unavailable", file=sys.stderr)
         sys.exit(1)
     sys.exit(0 if os.environ.get("FAKE_ACCOUNT") == args[-1] else 2)
+elif command == "gsettings":
+    print("false" if args[-1] == "refresh-when-metered" else "true")
+elif command == "rpm":
+    print("gnome-software-51.0-1.fc45.x86_64")
 '''
 
 
@@ -127,7 +137,7 @@ class ReleaseScriptTests(unittest.TestCase):
         self.bin = self.work / "bin"
         self.bin.mkdir()
         self.log = self.work / "commands.jsonl"
-        for name in ("podman", "cosign", "skopeo", "bootc", "getent"):
+        for name in ("podman", "cosign", "skopeo", "bootc", "getent", "rpm", "gsettings"):
             executable = self.bin / name
             executable.write_text(f"#!{sys.executable}\n" + FAKE_TOOL)
             executable.chmod(0o755)
@@ -169,14 +179,32 @@ class ReleaseScriptTests(unittest.TestCase):
             "etc/greenboot/greenboot.conf": ROOT / "system/config/greenboot/greenboot.conf",
             "usr/libexec/mertensia-boot-health": ROOT / "system/bin/mertensia-boot-health",
             "usr/libexec/mertensia-boot-health-notify": ROOT / "system/bin/mertensia-boot-health-notify",
+            "usr/bin/mertensia-update": ROOT / "system/bin/mertensia-update",
+            "usr/lib/systemd/system/bootc-fetch-apply-updates.service.d/50-mertensia-stage.conf": ROOT / "system/config/systemd/bootc-fetch-apply-updates.service.d/50-mertensia-stage.conf",
             "usr/lib/greenboot/check/required.d/50-mertensia-desktop.sh": ROOT / "system/config/greenboot/50-mertensia-desktop.sh",
+            "etc/chromium/policies/managed/mertensia.json": ROOT / "system/config/chromium/policies/managed/mertensia.json",
+            "etc/chromium/policies/recommended/mertensia.json": ROOT / "system/config/chromium/policies/recommended/mertensia.json",
+            "etc/chromium/mertensia-wayland.conf": ROOT / "system/config/chromium/mertensia-wayland.conf",
+            "usr/share/applications/gnome-mimeapps.list": ROOT / "system/config/desktop/gnome-mimeapps.list",
         }
         for target, source in fixtures.items():
             destination = payload / target
             destination.parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(source, destination)
-            if target.startswith(("usr/libexec/", "usr/lib/greenboot/")):
+            if target.startswith(("usr/libexec/", "usr/lib/greenboot/", "usr/bin/")):
                 destination.chmod(0o755)
+        plugin = payload / "usr/lib64/gnome-software/plugins-23/libgs_plugin_flatpak.so"
+        plugin.parent.mkdir(parents=True)
+        plugin.touch()
+        browser_config = payload / "etc/chromium/chromium.conf"
+        browser_config.write_text(". /etc/chromium/mertensia-wayland.conf\n")
+        for name in ("usr/bin/chromium-browser", "usr/lib64/chromium-browser/chrome-sandbox"):
+            executable = payload / name
+            executable.parent.mkdir(parents=True, exist_ok=True)
+            executable.write_text("#!/bin/sh\nexit 0\n")
+            executable.chmod(0o755)
+        (payload / "usr/share/applications/chromium-browser.desktop").write_text(
+            "[Desktop Entry]\nExec=/usr/bin/chromium-browser %U\n")
         fragment = payload / "usr/lib/bootupd/grub2-static/configs.d/08_greenboot.cfg"
         fragment.parent.mkdir(parents=True, exist_ok=True)
         fragment.write_text("# packaged Greenboot GRUB fragment\n")
@@ -184,6 +212,10 @@ class ReleaseScriptTests(unittest.TestCase):
             "etc/systemd/system/graphical.target.wants/greenboot-healthcheck.service": "/usr/lib/systemd/system/greenboot-healthcheck.service",
             "etc/systemd/system/ostree-finalize-staged.service.requires/greenboot-set-rollback-trigger.service": "/usr/lib/systemd/system/greenboot-set-rollback-trigger.service",
             "etc/systemd/system/greenboot-success.target.wants/mertensia-boot-health-status.service": "/usr/lib/systemd/system/mertensia-boot-health-status.service",
+            "etc/systemd/system/greenboot-success.target.wants/mertensia-update-status.service": "/usr/lib/systemd/system/mertensia-update-status.service",
+            "etc/systemd/system/bootc-status-updated.target.wants/mertensia-update-status.service": "/usr/lib/systemd/system/mertensia-update-status.service",
+            "etc/systemd/system/timers.target.wants/bootc-fetch-apply-updates.timer": "/usr/lib/systemd/system/bootc-fetch-apply-updates.timer",
+            "etc/systemd/user/gnome-session.target.wants/gnome-software.service": "/usr/lib/systemd/user/gnome-software.service",
             "etc/systemd/user/grub-boot-success.timer": "/dev/null",
         }.items():
             path = payload / link
@@ -392,6 +424,69 @@ class ReleaseScriptTests(unittest.TestCase):
         result = self.run_script("validate-image.sh", "localhost/mertensia:release")
         self.assertEqual(result.returncode, 0, result.stderr)
 
+    def test_release_build_refreshes_rpms_without_scheduling_publication(self):
+        workflow = yaml.safe_load((ROOT / ".github/workflows/release.yml").read_text())
+        steps = workflow["jobs"]["release"]["steps"]
+        build = next(step["run"] for step in steps if step.get("name") == "Build clean release payload")
+        self.assertIn("--pull", shlex.split(build))
+        self.assertIn("--no-cache", shlex.split(build))
+        self.assertNotIn("schedule", workflow.get("on", workflow.get(True, {})))
+
+    def test_payload_validation_rejects_host_update_plugins(self):
+        payload = self.payload_fixture()
+        for name in ("dnf5", "packagekit", "rpm-ostree", "fwupd"):
+            path = payload / f"usr/lib64/gnome-software/plugins-23/libgs_plugin_{name}.so"
+            path.touch()
+            result = self.run_script("validate-image.sh", "localhost/mertensia:release")
+            self.assertNotEqual(result.returncode, 0, name)
+            path.unlink()
+
+    def test_payload_validation_requires_bootc_status_change_hook(self):
+        payload = self.payload_fixture()
+        (payload / "etc/systemd/system/bootc-status-updated.target.wants/mertensia-update-status.service").unlink()
+        result = self.run_script("validate-image.sh", "localhost/mertensia:release")
+        self.assertNotEqual(result.returncode, 0)
+
+    def test_payload_validation_rejects_browser_policy_changes_and_writable_files(self):
+        payload = self.payload_fixture()
+        policy = payload / "etc/chromium/policies/managed/mertensia.json"
+        original = policy.read_text()
+        policy.write_text('{"SitePerProcess": false}')
+        result = self.run_script("validate-image.sh", "localhost/mertensia:release")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("Chromium managed policies differ", result.stderr)
+        values = json.loads(original)
+        values["SitePerProcess"] = 1  # Python considers 1 == True; Chromium types do not.
+        policy.write_text(json.dumps(values))
+        result = self.run_script("validate-image.sh", "localhost/mertensia:release")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("Chromium managed policies differ", result.stderr)
+        policy.write_text(original)
+        policy.chmod(0o666)
+        result = self.run_script("validate-image.sh", "localhost/mertensia:release")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("Unsafe Chromium policy", result.stderr)
+
+    def test_payload_validation_rejects_missing_browser_and_wrong_handler(self):
+        payload = self.payload_fixture()
+        defaults = payload / "usr/share/applications/gnome-mimeapps.list"
+        defaults.write_text(defaults.read_text().replace("chromium-browser.desktop", "other.desktop"))
+        result = self.run_script("validate-image.sh", "localhost/mertensia:release")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("Missing Chromium default handler", result.stderr)
+        (payload / "usr/bin/chromium-browser").unlink()
+        self.assertNotEqual(self.run_script("validate-image.sh", "localhost/mertensia:release").returncode, 0)
+
+    def test_payload_validation_rejects_missing_update_timer_or_rebooting_override(self):
+        payload = self.payload_fixture()
+        override = payload / "usr/lib/systemd/system/bootc-fetch-apply-updates.service.d/50-mertensia-stage.conf"
+        original = override.read_text()
+        override.write_text(original + "\nExecStartPost=/usr/bin/bootc upgrade --apply\n")
+        self.assertNotEqual(self.run_script("validate-image.sh", "localhost/mertensia:release").returncode, 0)
+        override.write_text(original)
+        (payload / "etc/systemd/system/timers.target.wants/bootc-fetch-apply-updates.timer").unlink()
+        self.assertNotEqual(self.run_script("validate-image.sh", "localhost/mertensia:release").returncode, 0)
+
     def test_changed_payload_key_prevents_publication(self):
         payload = self.payload_fixture()
         shutil.copyfile(self.mismatched_public_key(), payload / "etc/pki/containers/mertensia.pub")
@@ -449,6 +544,7 @@ class ReleaseScriptTests(unittest.TestCase):
                          "usr/lib/greenboot/check/required.d/00-mertensia-integration-failure.sh",
                          "etc/greenboot/check/required.d/00-mertensia-integration-local.sh",
                          "usr/share/mertensia-integration",
+                         "usr/share/mertensia-flatpak-tests",
                          "etc/systemd/system/multi-user.target.wants/mertensia-integration.service"):
             with self.subTest(relative=relative):
                 self.log.unlink(missing_ok=True)
@@ -513,6 +609,7 @@ class ReleaseScriptTests(unittest.TestCase):
         self.assertIn('cosign sign --yes', fixture["run"])
         self.assertIn('--greenboot-failure-image "$FAILURE_IMAGE"', gate["run"])
         self.assertIn('--greenboot-transient-image "$TRANSIENT_IMAGE"', gate["run"])
+        self.assertIn('--automatic-update-image "$AUTOMATIC_UPDATE_IMAGE"', gate["run"])
         self.assertLess(steps.index(gate), next(index for index, step in enumerate(steps) if step.get("id") == "publish"))
         for step in (fixture, gate):
             checked = subprocess.run(["bash", "-n"], input=step["run"], capture_output=True, text=True)

@@ -79,6 +79,13 @@ Once it commits, the setup identity loses authorization and the app moves to
 login. If automatic login handoff fails, follow the completion screen's restart
 instruction; do not try to create the same first account again.
 
+After automatic OS recovery, signed OS downloads pause to avoid repeatedly
+installing the failing update. An administrator can inspect
+`mertensia-update status` and the update-service journal, then acknowledge the
+recovery with `sudo mertensia-update resume`. This does not download an update or
+restart. See [automatic updates](updates.md) for disabling the scheduler before
+a manual rollback and for restarting it.
+
 For automatic boot-health recovery, notifications and diagnostics, see
 [boot health](boot-health.md). For release and update rollback, see
 [releases](releases.md). Account maintenance

@@ -57,18 +57,39 @@ RUN systemctl enable NetworkManager.service && \
 
 ## GNOME apps
 RUN dnf -y install \
+    chromium \
     flatpak \
+    gnome-software \
     ptyxis \
     gnome-text-editor \
     gnome-firmware \
     && dnf clean all
 
-## Install Bazaar from Flathub on the installed system, where /var is persistent.
+## Native browser: retain Fedora's launcher and sandbox, with system defaults.
+COPY system/config/chromium/policies /etc/chromium/policies
+COPY system/config/chromium/mertensia-wayland.conf /etc/chromium/mertensia-wayland.conf
+COPY system/config/desktop/gnome-mimeapps.list /usr/share/applications/gnome-mimeapps.list
+RUN chmod 0755 /etc/chromium/policies /etc/chromium/policies/managed /etc/chromium/policies/recommended && \
+    chmod 0644 /etc/chromium/policies/managed/mertensia.json /etc/chromium/policies/recommended/mertensia.json \
+      /etc/chromium/mertensia-wayland.conf /usr/share/applications/gnome-mimeapps.list && \
+    printf '\n# MertensiaOS native Wayland default\n. /etc/chromium/mertensia-wayland.conf\n' >> /etc/chromium/chromium.conf
+
+## GNOME Software owns Flatpak updates and native permission review.
 COPY system/config/flatpak/flathub.flatpakrepo /usr/share/flatpak/remotes.d/flathub.flatpakrepo
-COPY system/config/flatpak/mertensia.preinstall /usr/share/flatpak/preinstall.d/mertensia.preinstall
-COPY system/config/systemd/mertensia-flatpak-preinstall.service /usr/lib/systemd/system/mertensia-flatpak-preinstall.service
-COPY system/config/systemd/mertensia-flatpak-preinstall.timer /usr/lib/systemd/system/mertensia-flatpak-preinstall.timer
-RUN systemctl enable mertensia-flatpak-preinstall.timer
+COPY system/config/gnome/50-mertensia-software.gschema.override /usr/share/glib-2.0/schemas/zz-mertensia-software.gschema.override
+COPY system/config/systemd/user/gnome-software.service.d /usr/lib/systemd/user/gnome-software.service.d
+RUN find /usr/lib64/gnome-software -type f \
+      \( -name 'libgs_plugin_packagekit.so' -o -name 'libgs_plugin_dnf5.so' \
+         -o -name 'libgs_plugin_rpm-ostree.so' -o -name 'libgs_plugin_fwupd.so' \
+         -o -name 'libgs_plugin_epiphany.so' -o -name 'libgs_plugin_dkms.so' \) -delete && \
+    rm -f /usr/share/applications/gnome-software-local-file-packagekit.desktop \
+      /usr/share/applications/gnome-software-local-file-fwupd.desktop \
+      /usr/share/metainfo/org.gnome.Software.Plugin.Fwupd.metainfo.xml \
+      /usr/share/metainfo/org.gnome.Software.Plugin.Epiphany.metainfo.xml && \
+    glib-compile-schemas --strict /usr/share/glib-2.0/schemas && \
+    systemctl --global enable gnome-software.service && \
+    test -f /usr/lib64/gnome-software/plugins-23/libgs_plugin_flatpak.so && \
+    ! find /usr/lib64/gnome-software -name 'libgs_plugin_*.so' | grep -E '/libgs_plugin_(packagekit|dnf5|rpm-ostree|fwupd|epiphany|dkms)\.so$'
 
 COPY system/config/tmpfiles.d/mertensia.conf /usr/lib/tmpfiles.d/mertensia.conf
 
@@ -78,6 +99,16 @@ COPY src/mertensia/accounts /usr/lib/mertensia/python/mertensia/accounts
 COPY src/mertensia/firstboot /usr/lib/mertensia/python/mertensia/firstboot
 COPY src/mertensia/ui /usr/lib/mertensia/python/mertensia/ui
 COPY src/mertensia/boot_health /usr/lib/mertensia/python/mertensia/boot_health
+COPY src/mertensia/updates /usr/lib/mertensia/python/mertensia/updates
+
+## Reuse the packaged bootc scheduler, but never request an automatic reboot.
+COPY system/bin/mertensia-update /usr/bin/mertensia-update
+COPY system/config/systemd/bootc-fetch-apply-updates.service.d /usr/lib/systemd/system/bootc-fetch-apply-updates.service.d
+COPY system/config/systemd/bootc-fetch-apply-updates.timer.d /usr/lib/systemd/system/bootc-fetch-apply-updates.timer.d
+COPY system/config/systemd/mertensia-update-status.service /usr/lib/systemd/system/mertensia-update-status.service
+COPY system/config/tmpfiles.d/mertensia-updates.conf /usr/lib/tmpfiles.d/mertensia-updates.conf
+RUN chmod 0755 /usr/bin/mertensia-update && \
+    systemctl enable bootc-fetch-apply-updates.timer mertensia-update-status.service
 
 ## Local desktop health and automatic bootc recovery, independent of networking.
 COPY system/config/greenboot/greenboot.conf /etc/greenboot/greenboot.conf

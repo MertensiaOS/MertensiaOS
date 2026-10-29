@@ -23,6 +23,53 @@ class HarnessTests(unittest.TestCase):
     def args(self, *arguments):
         return harness.parser().parse_args(arguments)
 
+    def test_automatic_update_requires_a_tag_in_the_trusted_fixture_repository(self):
+        image = "ghcr.io/example/mertensia-integration"
+        for arguments in (
+            ["--automatic-update-image", image + ":next"],
+            ["--upgrade-image", image + ":next", "--automatic-update-image", image + "@sha256:" + "a" * 64],
+            ["--upgrade-image", image + ":next", "--automatic-update-image", "ghcr.io/example/other-integration:next"],
+        ):
+            with self.subTest(arguments=arguments), self.assertRaises(SystemExit) as raised:
+                harness.main(arguments)
+            self.assertEqual(raised.exception.code, 2)
+
+    def test_automatic_update_restores_test_origin_when_staging_fails(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            deployment_root = root / "deployments"
+            origin = deployment_root / "default/deploy/abcd.0.origin"
+            origin.parent.mkdir(parents=True)
+            original = "[origin]\ncontainer-image-reference=ostree-unverified-registry:localhost/test:base\n"
+            origin.write_text(original)
+            policy = root / "policy.json"
+            repository = "ghcr.io/example/mertensia-integration"
+            policy.write_text(json.dumps({"transports": {"docker": {repository: [{"type": "sigstoreSigned"}]}}}))
+            boot_id = root / "boot-id"
+            boot_id.write_text("boot-a")
+            actual_path = Path
+
+            def path(value):
+                return {"/sysroot/ostree/deploy": deployment_root, "/etc/containers/policy.json": policy,
+                        "/proc/sys/kernel/random/boot_id": boot_id}.get(str(value), actual_path(value))
+
+            def run(args, **kwargs):
+                if args[-1] == "bootc-fetch-apply-updates.service":
+                    self.assertIn("ostree-image-signed:docker://" + repository + ":next", origin.read_text())
+                    raise RuntimeError("download failed")
+                return ""
+
+            identity = {"digest": "original", "status": {"status": {"booted": {
+                "ostree": {"stateroot": "default", "checksum": "abcd", "deploySerial": 0}}}}}
+            with mock.patch.object(guest, "Path", side_effect=path), \
+                 mock.patch.object(guest, "role", return_value="payload"), \
+                 mock.patch.object(guest, "boot_health", return_value={"healthy": True}), \
+                 mock.patch.object(guest, "boot_identity", return_value=identity), \
+                 mock.patch.object(guest, "run", side_effect=run):
+                with self.assertRaisesRegex(RuntimeError, "download failed"):
+                    guest.automatic_upgrade(repository + ":next")
+            self.assertEqual(origin.read_text(), original)
+
     def test_existing_work_directory_is_rejected_without_changing_disk(self):
         with tempfile.TemporaryDirectory() as directory:
             work = Path(directory)

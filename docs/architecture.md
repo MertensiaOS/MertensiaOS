@@ -8,6 +8,8 @@ tooling have separate homes:
 src/mertensia/       Importable Python application packages
   accounts/         Privileged account helper and login-user synchronisation
   firstboot/        Setup/account UI, regional metadata and picker widget
+  boot_health/      Offline desktop health checks and GNOME notifications
+  updates/          Guarded OS staging and persistent update status
   installer/        Live installer UI, disk checks, deployment and recovery
   ui/               Shared branding paths and GTK theme loading
 branding/           Shared stylesheets, tokens, artwork, icons and licensed font
@@ -40,14 +42,31 @@ consumers (`systemd`, `polkit`, `gdm`, `homed`, `containers`, `desktop`, `gnome`
 `sysusers.d`, `tmpfiles.d`, `identity` and `accountsservice`). The Containerfile
 maps these files to the paths required by each system component.
 
-Flatpak's signed Flathub remote and Bazaar preinstall declaration live in
-`system/config/flatpak/` and are shipped under `/usr/share/flatpak/`.
-`mertensia-flatpak-preinstall.timer` starts installation after boot and retries
-failures every five minutes without blocking the desktop. On success the service
-stays active until shutdown. Flatpak tracks completed preinstalls and user
-removals, so later boots do not reinstall an app the user removed. Downloads and
-installed apps live in persistent `/var/lib/flatpak`, rather than the bootc image.
-The timer and service skip the disposable live installer.
+Flatpak's signed Flathub remote lives in `system/config/flatpak/` and is shipped
+under `/usr/share/flatpak/`. Fedora's stock GNOME Software owns application
+updates and permission review; host-package, firmware and web-app plugins are
+excluded from the image. A user service drop-in starts it with normal GNOME
+sessions, excluding setup and the live installer. GSettings defaults enable
+updates and notifications while retaining user preferences. Installed Flatpaks
+live in persistent `/var/lib/flatpak` or encrypted user homes.
+
+Fedora Chromium is a native payload package and follows bootc OS updates.
+Image-owned browser policies live under `system/config/chromium/`; the Fedora
+launcher sources a MertensiaOS Wayland hook after its packaged configuration.
+A GNOME MIME defaults file selects the packaged desktop entry without changing
+per-user preferences. See [Chromium](chromium.md) for policies and validation.
+
+`mertensia.updates` is a small guard around `bootc upgrade`, invoked by the
+packaged bootc timer/service with image-owned drop-ins. It defers staging until
+boot health and recovery collection succeed, respects metered connections and
+pinned images, and never requests a reboot. The existing recovery event ID and
+an administrator acknowledgement prevent update/recovery loops. Public status
+and private acknowledgement live under `/var/lib/mertensia/updates/`; the status
+service refreshes the public record after boot and on bootc's
+`bootc-status-updated.target`, including manual deployment changes. The staging
+helper also refreshes it after each attempt. The existing desktop notifier
+handles restart notices. See [automatic updates](updates.md) for interfaces
+and policy.
 
 `mertensia.boot_health` implements the offline desktop checks used by Greenboot
 and the per-user GNOME recovery notifier. Greenboot owns retries and bootc
