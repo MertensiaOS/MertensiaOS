@@ -144,12 +144,12 @@ class ApplicationPackagingTests(unittest.TestCase):
             self.assertIn("/etc/xdg/autostart/org.mertensia.BootHealth.desktop", text)
         self.stage("Containerfile.installer")
         for name in (
-            "etc/systemd/system/var-tmp.mount",
             "usr/lib/image-builder/bootc/iso.yaml",
             "usr/share/polkit-1/actions/org.mertensia.Installer.policy",
         ):
             with self.subTest(path=name):
                 self.assertTrue((self.image / name).is_file())
+        self.assertFalse((self.image / "etc/systemd/system/var-tmp.mount").exists())
 
     def test_chromium_policies_and_default_handlers(self):
         root = self.image / "etc/chromium/policies"

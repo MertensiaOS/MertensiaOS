@@ -488,13 +488,14 @@ class Results:
 
 def make_work_dir(requested):
     if requested is None:
-        return Path(tempfile.mkdtemp(prefix="mertensia-iso-"))
+        # VM disks and ISOs are large; /tmp is commonly RAM-backed on Fedora.
+        return Path(tempfile.mkdtemp(prefix="mertensia-iso-", dir="/var/tmp"))
     work = requested.absolute()
     if work.exists() or work.is_symlink():
         raise HarnessError("--work-dir must be a new directory; existing disks and firmware are never reused")
     work.mkdir(parents=True, mode=0o700)
     if len(str(work / "swtpm.sock").encode()) >= 100:
-        raise HarnessError("--work-dir path is too long for Unix sockets; choose a short path under /tmp")
+        raise HarnessError("--work-dir path is too long for Unix sockets; choose a short path under /var/tmp")
     return work
 
 
@@ -786,7 +787,7 @@ def parser():
     result.add_argument("--build", action="store_true", help="build disposable agent overlays and real ISO (requires root)")
     result.add_argument("--build-only", action="store_true", help="build ISO without booting it; implies --build")
     result.add_argument("--iso", type=Path, help="prebuilt integration ISO, never an uninstrumented production ISO")
-    result.add_argument("--work-dir", type=Path, help="new, short artifact directory; defaults to a new /tmp directory")
+    result.add_argument("--work-dir", type=Path, help="new, short artifact directory; defaults to a new /var/tmp directory")
     result.add_argument("--junit", type=Path, help="JUnit XML output for CI")
     result.add_argument("--base-image", help="existing production payload to overlay instead of building Containerfile")
     result.add_argument("--target-image", help="future installed update target; fixture defaults to local payload")
@@ -858,7 +859,7 @@ def main(argv=None):
     try:
         firmware = find_firmware(args.firmware_json, code=args.ovmf_code, variables=args.ovmf_vars)
         if args.dry_run:
-            work = args.work_dir or Path("/tmp/mertensia-iso-DRY-RUN")
+            work = args.work_dir or Path("/var/tmp/mertensia-iso-DRY-RUN")
             if not args.iso:
                 args.iso = work / "iso/mertensiaos-integration.iso"
             commands, images = build_commands(args, work) if args.build else ([], {})

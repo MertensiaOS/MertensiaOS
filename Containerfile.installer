@@ -54,7 +54,6 @@ RUN fc-cache -f /usr/share/fonts/mertensia
 COPY installer/bin/mertensia-installer-helper /usr/libexec/mertensia-installer-helper
 COPY installer/config/polkit/org.mertensia.Installer.policy /usr/share/polkit-1/actions/org.mertensia.Installer.policy
 COPY installer/config/polkit/49-mertensia-installer.rules /usr/share/polkit-1/rules.d/49-mertensia-installer.rules
-COPY installer/config/systemd/var-tmp.mount /etc/systemd/system/var-tmp.mount
 COPY installer/config/iso.yaml /usr/lib/image-builder/bootc/iso.yaml
 COPY installer/config/install.conf.in /tmp/install.conf.in
 RUN mkdir -p \
@@ -67,7 +66,6 @@ RUN mkdir -p \
     rm -f /tmp/install.conf.in && \
     ln -sfn ../image-builder/bootc/iso.yaml /usr/lib/bootc-image-builder/iso.yaml && \
     chmod 0755 /usr/bin/mertensia-installer /usr/libexec/mertensia-installer-helper && \
-    systemctl enable var-tmp.mount && \
     dnf clean all && \
     rm -rf /run/dnf /var/lib/dnf/repos && \
     rm -f /var/cache/ldconfig/aux-cache && \

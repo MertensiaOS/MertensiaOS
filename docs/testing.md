@@ -29,10 +29,13 @@ Never publish an integration image as a production release.
 Required host packages are QEMU (`qemu-system-x86_64` and `qemu-img`), swtpm,
 enrolled-key OVMF firmware, and Podman for builds. KVM accelerates the run when
 available; TCG works more slowly. The default guest RAM allocation is 12 GiB.
-The live installer stages the payload in its temporary filesystem; larger
-payloads can exceed this allocation and fail the installer's memory preflight.
-Use a host with enough available RAM before increasing the guest allocation,
-and allow substantial free disk space for images, containers and artifacts.
+The live installer uses the encrypted target disk for bulk image-export scratch
+data and checks target capacity for both the deployment and temporary data.
+Scratch files are removed before the target is unmounted. Guest RAM is used by
+the live desktop and installation processes; adjust it with `--memory-mib`.
+Allow substantial free disk space for images, containers and artifacts.
+VM artifacts default to `/var/tmp`; choose a disk-backed `--work-dir` rather
+than a RAM-backed temporary filesystem for large ISOs and virtual disks.
 
 ```sh
 # Read-only capability inventory. Does not build images or start a VM.
@@ -43,16 +46,16 @@ scripts/test-iso.sh --dry-run --build
 
 # Build isolated test overlays, produce the real ISO, and run all core checks.
 sudo scripts/test-iso.sh --build \
-  --work-dir /tmp/mertensia-iso-run --junit /tmp/mertensia-iso-run/junit.xml
+  --work-dir /var/tmp/mertensia-iso-run --junit /var/tmp/mertensia-iso-run/junit.xml
 
 # Reuse a production payload already in rootful Podman storage.
 sudo scripts/test-iso.sh --build --accel kvm --base-image localhost/mertensiaos:base \
-  --work-dir /tmp/mertensia-iso-next
+  --work-dir /var/tmp/mertensia-iso-next
 
 # Building an ISO alone requires root; booting a prebuilt integration ISO does not.
-sudo scripts/test-iso.sh --build-only --work-dir /tmp/mertensia-iso-build
-scripts/test-iso.sh --iso /tmp/mertensia-iso-build/iso/mertensiaos-integration.iso \
-  --work-dir /tmp/mertensia-iso-boot --junit /tmp/mertensia-iso-boot/junit.xml
+sudo scripts/test-iso.sh --build-only --work-dir /var/tmp/mertensia-iso-build
+scripts/test-iso.sh --iso /var/tmp/mertensia-iso-build/iso/mertensiaos-integration.iso \
+  --work-dir /var/tmp/mertensia-iso-boot --junit /var/tmp/mertensia-iso-boot/junit.xml
 ```
 
 `--work-dir` must be a new directory. Firmware variables, TPM state, the target
@@ -140,7 +143,7 @@ repository, embed its public verification key in the disposable overlay:
 sudo scripts/test-iso.sh --build --require-upgrade \
   --upgrade-image ghcr.io/YOUR_ORG/mertensia-integration:next \
   --upgrade-public-key /path/to/integration-signing.pub \
-  --work-dir /tmp/mertensia-iso-upgrade
+  --work-dir /var/tmp/mertensia-iso-upgrade
 ```
 
 The overlay adds a `sigstoreSigned` rule with `matchRepository` for that single
@@ -196,7 +199,7 @@ sudo scripts/test-iso.sh --build --require-upgrade \
   --upgrade-image ghcr.io/YOUR_ORG/mertensia-integration@sha256:REPLACE_WITH_DIGEST \
   --automatic-update-image ghcr.io/YOUR_ORG/mertensia-integration:healthy \
   --upgrade-public-key /path/to/integration-signing.pub \
-  --work-dir /tmp/mertensia-automatic-updates
+  --work-dir /var/tmp/mertensia-automatic-updates
 ```
 
 The guarded guest operation temporarily points only the disposable booted
@@ -229,7 +232,7 @@ sudo scripts/test-iso.sh --build --base-image localhost/mertensiaos:release \
   --greenboot-transient-image ghcr.io/YOUR_ORG/mertensia-integration:transient \
   --upgrade-public-key /path/to/integration-signing.pub \
   --require-upgrade --require-greenboot-recovery \
-  --work-dir /tmp/mertensia-greenboot-test
+  --work-dir /var/tmp/mertensia-greenboot-test
 ```
 
 `--require-greenboot-recovery` rejects missing fixtures. The release workflow

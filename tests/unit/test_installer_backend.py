@@ -137,7 +137,7 @@ class InstallerBackendTests(unittest.TestCase):
                     (hardware, "requirements"): {"ok": True},
                     (hardware, "resolve_selected_disk"): self.disk(),
                     (images, "load_config"): config,
-                    (images, "check_scratch"): None,
+                    (images, "source_image_size"): 5 * 1024**3,
                 }.items():
                     stack.enter_context(mock.patch.object(module, name, return_value=value))
                 stack.enter_context(mock.patch.object(constants, "STATE_ROOT", Path(directory) / "state"))
@@ -160,7 +160,7 @@ class InstallerBackendTests(unittest.TestCase):
                     (hardware, "requirements"): {"ok": True},
                     (hardware, "resolve_selected_disk"): self.disk(),
                     (images, "load_config"): {"SOURCE_IMAGE": "test", "TARGET_IMAGE": "test"},
-                    (images, "check_scratch"): None,
+                    (images, "source_image_size"): 5 * 1024**3,
                     (hardware, "assert_disk_idle"): None,
                 }.items():
                     stack.enter_context(mock.patch.object(module, name, return_value=value))
@@ -182,7 +182,7 @@ class InstallerBackendTests(unittest.TestCase):
                     (hardware, "requirements"): {"ok": True},
                     (hardware, "resolve_selected_disk"): self.disk(),
                     (images, "load_config"): {"SOURCE_IMAGE": "test", "TARGET_IMAGE": "test"},
-                    (images, "check_scratch"): None,
+                    (images, "source_image_size"): 5 * 1024**3,
                     (hardware, "assert_disk_idle"): None,
                     (hardware, "assert_workspace_idle"): None,
                     (recovery, "prepared_volume_status"): status,
@@ -272,6 +272,7 @@ class InstallerBackendTests(unittest.TestCase):
         for failure, mode in ((None, "development"), (None, "production"),
                               ("busy-root", "development"), ("close", "development"),
                               ("bootc", "development"), ("boot-mount", "development"),
+                              ("scratch-space", "development"),
                               ("tpm", "development"), ("recovery", "development")):
             with self.subTest(failure=failure, mode=mode), tempfile.TemporaryDirectory() as directory, ExitStack() as stack:
                 target = Path(directory) / "target"
@@ -287,7 +288,11 @@ class InstallerBackendTests(unittest.TestCase):
                     commands.append(argv)
                     code, stderr = 0, ""
                     if argv[0] == "unshare":
-                        self.assertEqual(argv[:6], ["unshare", "--mount", "--propagation", "private", "--", "bootc"])
+                        self.assertEqual(argv[:9], ["unshare", "--mount", "--pid", "--fork", "--kill-child=SIGKILL",
+                                                   "--mount-proc", "--propagation", "private", "--"])
+                        scratch = Path(argv[argv.index("mertensia-bootc") + 1])
+                        self.assertEqual(scratch.parent, target)
+                        (scratch / "partial-blob").write_text("temporary image data")
                         if failure == "bootc":
                             code, stderr = 1, "deployment failed"
                     elif argv[0] == "mount":
@@ -331,6 +336,7 @@ class InstallerBackendTests(unittest.TestCase):
                     return SimpleNamespace(stdout="test-uuid", returncode=code, stderr=stderr)
 
                 def configure(*args):
+                    self.assertEqual(list(target.glob(".mertensia-install-*")), [])
                     active_mounts.append(str(target / "ostree/deploy/default/deploy/test.0/sys"))
 
                 def emit(event, **kwargs):
@@ -343,13 +349,17 @@ class InstallerBackendTests(unittest.TestCase):
                     (hardware, "requirements"): {"ok": True},
                     (hardware, "resolve_selected_disk"): self.disk(),
                     (images, "load_config"): {"SOURCE_IMAGE": "test", "TARGET_IMAGE": "test", "BUILD_MODE": mode},
-                    (images, "check_scratch"): None,
+                    (images, "source_image_size"): 5 * 1024**3,
                     (recovery, "wait_for_confirmation"): None,
                     (hardware, "assert_disk_idle"): None,
                     (hardware, "assert_workspace_idle"): None,
                 }.items():
                     stack.enter_context(mock.patch.object(module, name, return_value=value))
                 stack.enter_context(mock.patch.object(images, "configure_installed_system", side_effect=configure))
+                stack.enter_context(mock.patch.object(images.Path, "is_mount", return_value=True))
+                stack.enter_context(mock.patch.object(images.shutil, "disk_usage", return_value=SimpleNamespace(
+                    free=0 if failure == "scratch-space" else 40 * 1024**3,
+                )))
                 stack.enter_context(mock.patch.object(constants, "MOUNTPOINT", target))
                 stack.enter_context(mock.patch.object(constants, "STATE_ROOT", state_root))
                 stack.enter_context(mock.patch.object(recovery.uuid, "uuid4", return_value="test-uuid"))
@@ -368,7 +378,7 @@ class InstallerBackendTests(unittest.TestCase):
                     self.assertFalse(any(call.args[0] == "complete" for call in events.call_args_list))
                     if failure in {"busy-root", "close"}:
                         self.assertIn("Device is still in use", str(error.exception))
-                    if failure not in {"bootc", "boot-mount"}:
+                    if failure not in {"bootc", "boot-mount", "scratch-space"}:
                         self.assertEqual(json.loads((work / "state.json").read_text())["phase"], "installed")
                 else:
                     backend.install("/dev/test")
@@ -377,7 +387,7 @@ class InstallerBackendTests(unittest.TestCase):
                     self.assertLess(commands.index(["cryptsetup", "close", constants.MAPPER_NAME]),
                                     next(i for i, argv in enumerate(commands) if "--test-passphrase" in argv))
                 self.assertFalse(any(argv[0] == "systemd-cryptsetup" for argv in commands))
-                if failure != "boot-mount":
+                if failure not in {"boot-mount", "scratch-space"}:
                     bootc = next(argv for argv in commands if argv[0] == "unshare")
                     self.assertIn("rd.luks.name=test-uuid=" + constants.MAPPER_NAME, bootc)
                     if mode == "production":
@@ -391,6 +401,7 @@ class InstallerBackendTests(unittest.TestCase):
                 self.assertEqual(active_mounts, [str(target), str(target / "ostree/deploy/default/deploy/test.0/sys")]
                                  if failure == "busy-root" else [])
                 self.assertEqual(mapping_open, failure in {"busy-root", "close"})
+                self.assertEqual(list(target.glob(".mertensia-install-*")), [])
 
     def test_setup_key_removal_check_rejects_token_unlock_and_other_errors(self):
         for code in (0, 1, 2, 3, 4, 5, -9):

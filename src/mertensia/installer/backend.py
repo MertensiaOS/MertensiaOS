@@ -23,7 +23,10 @@ def install(requested_disk: str) -> None:
         raise commands.InstallError("Installation requires x86_64 UEFI, enabled Secure Boot, and a usable TPM 2.0 device.")
     disk = devices.resolve_selected_disk(requested_disk)
     config = deployment.load_config()
-    deployment.check_scratch(config["SOURCE_IMAGE"])
+    image_size = deployment.source_image_size(config["SOURCE_IMAGE"])
+    # Reject clearly undersized disks before erasure. Recheck actual free
+    # space after formatting to account for LUKS and filesystem overhead.
+    deployment.check_target_space(image_size, disk["size"] - 3 * 1024**3)
     if config.get("BUILD_MODE", "development") == "production":
         # Fail before disk modification if the signed update target is unreachable.
         commands.run(["skopeo", "inspect", "docker://" + config["TARGET_IMAGE"]])
@@ -112,10 +115,7 @@ def install(requested_disk: str) -> None:
                 bootc_args[3:3] = ["--enforce-container-sigpolicy", "--run-fetch-check"]
             else:
                 bootc_args.insert(3, "--skip-fetch-check")
-            # bootc and its storage helpers create temporary bind/overlay mounts.
-            # Keep them private so they disappear when bootc exits and cannot keep
-            # the encrypted target busy during cleanup in the live session.
-            commands.run(["unshare", "--mount", "--propagation", "private", "--", *bootc_args])
+            deployment.install_image(constants.MOUNTPOINT, image_size, bootc_args)
             deployment.configure_installed_system(constants.MOUNTPOINT, luks_uuid)
             state["phase"] = "installed"
             recovery.save_state(work, state)

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 import shutil
-import subprocess
+import tempfile
 from pathlib import Path
 
 from . import commands, constants
@@ -69,20 +69,47 @@ def configure_installed_system(sysroot: Path, luks_uuid: str) -> None:
 
 
 def source_image_size(source: str) -> int:
+    value = commands.run(["podman", "image", "inspect", "--format", "{{.Size}}", source], capture=True).stdout.strip()
     try:
-        value = commands.run(["podman", "image", "inspect", "--format", "{{.Size}}", source], capture=True).stdout.strip()
-        return int(value)
-    except (ValueError, OSError, subprocess.CalledProcessError):
-        return 0
+        size = int(value)
+    except ValueError as error:
+        raise commands.InstallError("Could not determine the installation image size.") from error
+    if size <= 0:
+        raise commands.InstallError("Could not determine the installation image size.")
+    return size
 
 
-def check_scratch(source: str) -> None:
-    required = source_image_size(source) + 1024**3
-    available = shutil.disk_usage("/var/tmp").free
-    if required > 1024**3 and available < required:
+def check_target_space(image_size: int, available: int) -> None:
+    # Allow room for both the deployment and exported image layers, plus
+    # filesystem metadata. They now share the encrypted target volume.
+    required = 2 * image_size + 1024**3
+    if available < required:
         need = (required + 1024**3 - 1) // 1024**3
         have = available // 1024**3
         raise commands.InstallError(
-            f"The live installer needs about {need} GiB of temporary memory but only {have} GiB is available. "
-            "Close applications or boot this installer on a machine with more RAM."
+            f"Installation needs about {need} GiB of free disk space on the target system volume, "
+            f"including temporary image data, but only {have} GiB is available. Choose a larger disk."
         )
+
+
+def install_image(sysroot: Path, image_size: int, argv: list[str]) -> None:
+    if not sysroot.is_mount():
+        raise commands.InstallError("The encrypted target system volume is not mounted.")
+    check_target_space(image_size, shutil.disk_usage(sysroot).free)
+    with tempfile.TemporaryDirectory(prefix=".mertensia-install-", dir=sysroot) as scratch:
+        # containers/image uses /var/tmp for large exported layer files. A
+        # private bind mount redirects those files and TMPDIR to disk without
+        # changing the live desktop's mounts. Self-bind scratch so bootc's
+        # empty-root check sees an allowed mount point. The namespace disappears
+        # before scratch is removed and the encrypted target is unmounted.
+        # bootc mirrors /var/tmp from /proc/1/root during setup. Give it a PID
+        # namespace and matching /proc so that mirror preserves our disk bind.
+        # When its PID 1 exits, remaining storage helpers are killed too.
+        commands.run([
+            "unshare", "--mount", "--pid", "--fork", "--kill-child=SIGKILL",
+            "--mount-proc", "--propagation", "private", "--",
+            "sh", "-eu", "-c",
+            'mount --bind "$1" "$1"; mount --bind "$1" /var/tmp; '
+            'shift; export TMPDIR=/var/tmp; exec "$@"',
+            "mertensia-bootc", scratch, *argv,
+        ])

@@ -339,6 +339,13 @@ class HarnessTests(unittest.TestCase):
         self.assertEqual(known_secrets, ["private-key"])
         self.assertNotIn("private-key", str(printed.call_args_list))
 
+    def test_default_artifacts_do_not_follow_a_ram_backed_tmpdir(self):
+        with mock.patch.dict(os.environ, {"TMPDIR": "/dev/shm"}), mock.patch.object(
+            harness.tempfile, "mkdtemp", return_value="/var/tmp/mertensia-iso-new"
+        ) as create:
+            self.assertEqual(harness.make_work_dir(None), Path("/var/tmp/mertensia-iso-new"))
+        create.assert_called_once_with(prefix="mertensia-iso-", dir="/var/tmp")
+
     def test_final_cli_errors_redact_guest_secrets(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
