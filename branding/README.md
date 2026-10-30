@@ -1,5 +1,14 @@
 # Shared desktop and installer branding
 
+The [Quiet Bloom Plymouth theme](../docs/plymouth.md) reuses the same bloom and
+palette for system boot and the installer ISO. Regenerate its project-owned PNGs
+with `python3 scripts/generate-plymouth-assets.py` (requires `python3-cairo`,
+`python3-gobject`, and `librsvg2`). The SVG masters remain unchanged.
+`bash scripts/test-plymouth.sh localhost/mertensiaos:base /tmp/plymouth-preview`
+captures the real native theme and synthetic prompts in an isolated container,
+including small, HiDPI and mixed-resolution displays. The output directory must
+be new. The Plymouth guide distinguishes these previews from real VM boot tests.
+
 Quiet Bloom v1.0, from the supplied MertensiaOS brand identity kit (23 September 2026).
 The SVG masters, variable Figtree font, SIL Open Font License, and `brand-tokens.json`
 are copied unchanged from the kit. Soft Bloom B remains the kit's working master.

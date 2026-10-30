@@ -10,6 +10,9 @@ python3 tests/run_tests.py
 The GTK preview instructions in `branding/README.md` exercise layouts
 without creating users, changing settings or installing to disks. Unit tests and
 previews do not prove that an ISO boots or an installed encrypted system unlocks.
+The [Plymouth guide](plymouth.md) covers native renderer previews and the optional
+`--graphical-boot` ISO run, which retains production splash arguments and answers
+the actual encrypted-root recovery prompt through a private QMP keyboard.
 
 ## Automated ISO integration
 

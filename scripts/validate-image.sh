@@ -17,6 +17,11 @@ EXPECTED_BROWSER_RECOMMENDED="$(<"$ROOT_DIR/system/config/chromium/policies/reco
 podman run --rm --entrypoint /usr/bin/bash "$IMAGE" -euc "$(cat <<'BASH'
   set -o pipefail
   bootc container lint --fatal-warnings --no-truncate
+  test "$(plymouth-set-default-theme)" = mertensia
+  test "$(fc-match -f '%{file}' Figtree)" = /usr/share/fonts/mertensia/Figtree-Variable.ttf
+  for initrd in /usr/lib/modules/*/initramfs.img; do
+    /usr/libexec/mertensia-check-plymouth-initrd "$initrd"
+  done
   shopt -s nullglob
   for test_artifact in \
       /usr/lib/systemd/system/mertensia-integration* \

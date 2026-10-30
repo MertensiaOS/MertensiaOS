@@ -17,7 +17,7 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - name: Install test dependencies
-        run: dnf -y install python3 python3-gobject python3-dbus python3-pyyaml gtk4 libadwaita openssl libxcrypt bash systemd iso-codes xkeyboard-config kbd tzdata
+        run: dnf -y install python3 python3-gobject python3-cairo librsvg2 python3-dbus python3-pyyaml gtk4 libadwaita openssl libxcrypt bash systemd iso-codes xkeyboard-config kbd tzdata
       - run: python3 scripts/check-source.py
       - run: python3 tests/run_tests.py
         env:
@@ -33,5 +33,14 @@ jobs:
         run: |
           sudo podman build --pull -f Containerfile -t localhost/mertensiaos:ci .
           sudo bash scripts/validate-image.sh localhost/mertensiaos:ci
+      - name: Capture native Plymouth splash and recovery prompts
+        run: sudo bash scripts/test-plymouth.sh localhost/mertensiaos:ci "$RUNNER_TEMP/plymouth-preview"
+      - name: Collect Plymouth captures
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: plymouth-native-preview
+          path: ${{ runner.temp }}/plymouth-preview
+          if-no-files-found: warn
       - name: Verify native Flatpak update permission handling
         run: sudo bash scripts/test-flatpak-updates.sh localhost/mertensiaos:ci

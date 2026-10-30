@@ -1,0 +1,73 @@
+[Plymouth Theme]
+Name=MertensiaOS Quiet Bloom
+Description=A quiet bloom with native disk-unlock prompts.
+ModuleName=two-step
+
+[two-step]
+Font=Figtree 12
+TitleFont=Figtree 18
+ImageDir=/usr/share/plymouth/themes/mertensia
+HorizontalAlignment=.5
+VerticalAlignment=.58
+WatermarkHorizontalAlignment=.5
+WatermarkVerticalAlignment=.42
+DialogHorizontalAlignment=.5
+DialogVerticalAlignment=.58
+TitleHorizontalAlignment=.5
+TitleVerticalAlignment=.68
+Transition=none
+TransitionDuration=0.0
+BackgroundStartColor=0x21152f
+BackgroundEndColor=0x21152f
+ProgressBarBackgroundColor=0x30233f
+ProgressBarForegroundColor=0xe7ddf7
+# Native status messages otherwise overlap the recovery prompt below the entry.
+MessageBelowAnimation=false
+DialogClearsFirmwareBackground=false
+
+[boot-up]
+UseEndAnimation=false
+UseFirmwareBackground=false
+UseProgressBar=false
+
+[shutdown]
+UseEndAnimation=false
+UseFirmwareBackground=false
+UseProgressBar=false
+
+[reboot]
+UseEndAnimation=false
+UseFirmwareBackground=false
+UseProgressBar=false
+
+[updates]
+UseEndAnimation=false
+UseFirmwareBackground=false
+UseProgressBar=true
+ProgressBarShowPercentComplete=true
+Title=Installing updates…
+SubTitle=Do not turn off your computer
+
+[system-upgrade]
+UseEndAnimation=false
+UseFirmwareBackground=false
+UseProgressBar=true
+ProgressBarShowPercentComplete=true
+Title=Upgrading system…
+SubTitle=Do not turn off your computer
+
+[firmware-upgrade]
+UseEndAnimation=false
+UseFirmwareBackground=false
+UseProgressBar=true
+ProgressBarShowPercentComplete=true
+Title=Upgrading firmware…
+SubTitle=Do not turn off your computer
+
+[system-reset]
+UseEndAnimation=false
+UseFirmwareBackground=false
+UseProgressBar=true
+ProgressBarShowPercentComplete=true
+Title=Resetting system…
+SubTitle=Do not turn off your computer

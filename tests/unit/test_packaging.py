@@ -8,6 +8,7 @@ import shlex
 import shutil
 import subprocess
 import tempfile
+import tomllib
 import unittest
 
 
@@ -116,6 +117,26 @@ class ApplicationPackagingTests(unittest.TestCase):
         ):
             with self.subTest(path=name):
                 self.assertTrue((self.image / name).is_file())
+
+    def test_native_splash_and_install_defaults_are_shared_with_the_live_image(self):
+        theme = self.image / "usr/share/plymouth/themes/mertensia"
+        config = configparser.ConfigParser()
+        config.read(theme / "mertensia.plymouth")
+        self.assertEqual(config["Plymouth Theme"]["ModuleName"], "two-step")
+        self.assertEqual(config["two-step"]["ImageDir"], "/usr/share/plymouth/themes/mertensia")
+        for filename in ("entry.png", "watermark.png"):
+            self.assertEqual((theme / filename).read_bytes()[:8], b"\x89PNG\r\n\x1a\n")
+        daemon = self.image / "etc/plymouth/plymouthd.conf"
+        config.read(daemon)
+        self.assertEqual(config["Daemon"]["Theme"], "mertensia")
+        defaults = self.image / "usr/lib/bootc/install/20-mertensia-plymouth.toml"
+        self.assertEqual(tomllib.loads(defaults.read_text())["install"]["kargs"], ["quiet", "rhgb"])
+        self.assertFalse((self.image / "usr/lib/bootc/kargs.d/20-mertensia-plymouth.toml").exists())
+        before = {str(path.relative_to(theme)): path.read_bytes() for path in theme.iterdir()}
+        self.stage("Containerfile.installer")
+        self.assertEqual(before, {str(path.relative_to(theme)): path.read_bytes() for path in theme.iterdir()})
+        self.assertTrue((self.image / "usr/lib/dracut/dracut.conf.d/50-mertensia-plymouth.conf").is_file())
+        self.assertTrue((self.image / "usr/libexec/mertensia-check-plymouth-initrd").is_file())
 
     def test_updates_are_staged_without_reboots_and_disabled_in_disposable_images(self):
         units = ROOT / "system/config/systemd"

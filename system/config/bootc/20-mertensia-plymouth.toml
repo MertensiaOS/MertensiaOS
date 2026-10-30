@@ -1,0 +1,3 @@
+# Install-time defaults only: do not rewrite existing deployments' kernel args.
+[install]
+kargs = ["quiet", "rhgb"]

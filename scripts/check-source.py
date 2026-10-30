@@ -32,7 +32,7 @@ def check_source():
             if path.is_file() and "__pycache__" not in path.parts:
                 check_file(path)
 
-    for path in [*ROOT.glob("Containerfile*"), *(ROOT / "tests/integration").glob("Containerfile*")]:
+    for path in [*ROOT.glob("Containerfile*"), *(ROOT / "tests").rglob("Containerfile*")]:
         for line in path.read_text().splitlines():
             if not line.startswith("COPY "):
                 continue

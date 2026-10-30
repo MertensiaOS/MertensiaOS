@@ -27,6 +27,11 @@ import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from pathlib import Path
 
+try:
+    from .plymouth import GraphicalBoot
+except ImportError:  # Direct scripts/test-iso.sh entry point.
+    from plymouth import GraphicalBoot
+
 
 ROOT = Path(__file__).resolve().parents[2]
 CONTRACT = json.loads(Path(__file__).with_name("contract.json").read_text())
@@ -150,6 +155,8 @@ def qemu_command(args, work, firmware, *, live, recovery_console=False, boot_lab
         argv.extend(["-drive", f"file={safe_option_path(args.iso)},media=cdrom,readonly=on", "-boot", "order=d"])
     else:
         argv.extend(["-boot", "order=c"])
+    if args.graphical_boot:
+        argv.extend(["-qmp", f"unix:{safe_option_path(work / 'plymouth-qmp.sock')},server=on,wait=off"])
     return argv
 
 
@@ -183,6 +190,10 @@ def build_commands(args, work):
         "build", "--bootc-ref", installer, "--bootc-installer-payload-ref", payload,
         "--bootc-default-fs", "ext4", "--output-dir", "/output", "--output-name", "mertensiaos-integration", "bootc-generic-iso",
     ])
+    if args.graphical_boot:
+        for command in commands:
+            if command[:2] == ["podman", "build"] and str(ROOT / "tests/integration/Containerfile") in command:
+                command[2:2] = ["--build-arg", "INTEGRATION_GRAPHICAL_BOOT=1"]
     return commands, {"base": base, "payload": payload, "installer": installer, "target": target}
 
 
@@ -205,6 +216,7 @@ class Guest:
         self.stream = None
         self.log = None
         self.serial = None
+        self.graphics = None
         self.secret = None
         self.on_secret = on_secret
         self.redact = redact or (lambda value: value)
@@ -213,14 +225,20 @@ class Guest:
         channel = work / "agent.sock"
         channel.unlink(missing_ok=True)
         (work / "recovery.sock").unlink(missing_ok=True)
+        (work / "plymouth-qmp.sock").unlink(missing_ok=True)
         try:
             log_name = "qemu-live" if live else ("qemu-installed-" + boot_label if boot_label else "qemu-installed")
             self.log = (work / (log_name + ".log")).open("ab")
             self.process = subprocess.Popen(qemu_command(args, work, firmware, live=live,
-                                                        recovery_console=recovery_key is not None, boot_label=boot_label),
+                                                        recovery_console=recovery_key is not None and not args.graphical_boot,
+                                                        boot_label=boot_label),
                                             stdout=self.log, stderr=self.log)
             wait_path(channel, self.process, 30)
-            if recovery_key is not None:
+            if args.graphical_boot:
+                wait_path(work / "plymouth-qmp.sock", self.process, 30)
+                label = "live" if live else ("recovery" if recovery_key else "installed-" + (boot_label or "boot"))
+                self.graphics = GraphicalBoot(work, label, recovery_key)
+            elif recovery_key is not None:
                 wait_path(work / "recovery.sock", self.process, 30)
                 self.serial = SerialRecovery(work, recovery_key)
             self.socket = socket.socket(socket.AF_UNIX)
@@ -233,8 +251,11 @@ class Guest:
                 raise HarnessError(f"integration guest startup failed: {hello.get('error', 'unknown prerequisite failure')}")
             if hello != {"type": "hello", "protocol": CONTRACT["protocol"], "role": expected_role}:
                 raise HarnessError(f"guest handshake failed: {hello}")
-            if recovery_key is not None and not self.serial.prompt_answered:
+            if recovery_key is not None and not (self.graphics or self.serial).prompt_answered:
                 raise HarnessError("guest booted without answering the expected initramfs recovery prompt")
+            if self.graphics:
+                self.graphics.verify_handoff(args.boot_timeout)
+                self.graphics.close()
         except socket.timeout as error:
             if expect_reboot and self.process and self.process.poll() == 0:
                 self.close()
@@ -309,6 +330,8 @@ class Guest:
         return True
 
     def close(self):
+        if self.graphics:
+            self.graphics.close()
         if self.serial:
             self.serial.close()
         if self.stream:
@@ -511,6 +534,7 @@ def handoff_diagnostics(work, results=None):
         return
     files = [work / name for name in ("result.json", "images.json", "build.log", "qemu-live.log", "qemu-installed.log",
                                      "live.serial.log", "installed.serial.log", "recovery.serial.log", "swtpm.log")]
+    files.extend(work.glob("plymouth-*.ppm"))
     if results and results.junit:
         files.append(results.junit)
     for path in files:
@@ -754,7 +778,9 @@ def run_suite(args, work, firmware, results):
         def boot_recovery():
             nonlocal guest
             guest = Guest(args, work, firmware, False, recovery_key=recovery, on_secret=results.secrets.append, redact=results.redact)
-            return {"fresh_tpm_state": True, "initramfs_recovery_prompt_answered": guest.serial.prompt_answered}
+            return {"fresh_tpm_state": True,
+                    "initramfs_recovery_prompt_answered": (guest.graphics if args.graphical_boot else guest.serial).prompt_answered,
+                    "prompt_transport": "graphical" if args.graphical_boot else "serial"}
 
         results.step("Boot installed disk through actual initramfs recovery prompt", boot_recovery)
         results.step("Verify recovered root with original TPM token unusable", lambda: guest.command("root-checks", recovery_key=recovery, expect_tpm=False))
@@ -807,6 +833,8 @@ def parser():
     result.add_argument("--disk-gib", type=int, default=40)
     result.add_argument("--cpus", type=int, default=4)
     result.add_argument("--display", choices=("none", "gtk"), default="none")
+    result.add_argument("--graphical-boot", action="store_true",
+                        help="retain production splash arguments, capture native boot/handoff and answer graphical recovery via private QMP")
     result.add_argument("--boot-timeout", type=int, default=1800)
     result.add_argument("--operation-timeout", type=int, default=3600)
     return result

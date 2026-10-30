@@ -54,7 +54,7 @@ builds, signed payload requirements and build prerequisites.
 On Fedora, install the desktop libraries used by the UI and tests:
 
 ```sh
-sudo dnf install python3 python3-gobject python3-dbus python3-pyyaml gtk4 libadwaita openssl \
+sudo dnf install python3 python3-gobject python3-cairo librsvg2 python3-dbus python3-pyyaml gtk4 libadwaita openssl \
   libxcrypt systemd iso-codes xkeyboard-config kbd tzdata
 python3 scripts/check-source.py
 python3 tests/run_tests.py
@@ -64,6 +64,8 @@ The test runner fails if required tests are skipped. The CI workflow also builds
 and lints the payload. [VM integration tests](docs/testing.md) build and boot
 the actual installer with Secure Boot and a software TPM, using disposable
 virtual disks. UI previews are documented in [branding](branding/README.md).
+The shared Quiet Bloom boot splash, native unlock prompts, and graphical boot
+acceptance checks are documented in [Plymouth](docs/plymouth.md).
 
 ## Install, update and recover
 

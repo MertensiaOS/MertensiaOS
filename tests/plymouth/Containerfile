@@ -1,0 +1,6 @@
+# Native renderer preview only; never include this layer in a release image.
+ARG BASE_IMAGE=localhost/mertensiaos:base
+FROM ${BASE_IMAGE}
+RUN dnf -y install plymouth-devel xorg-x11-server-Xvfb python3-xlib python3-pillow && dnf clean all
+COPY scripts/previews/plymouth.py /usr/share/mertensia-plymouth-tests/preview.py
+ENTRYPOINT ["/usr/bin/python3", "/usr/share/mertensia-plymouth-tests/preview.py"]

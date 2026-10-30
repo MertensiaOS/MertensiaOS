@@ -1,6 +1,11 @@
 name: ISO installation smoke test
 on:
   workflow_dispatch:
+    inputs:
+      graphical_boot:
+        description: Exercise production Plymouth boot and graphical recovery instead of the serial fixture
+        type: boolean
+        default: false
   pull_request:
     paths:
       - 'Containerfile*'
@@ -29,7 +34,12 @@ jobs:
       - name: Install VM and container tools
         run: sudo apt-get update && sudo apt-get install -y podman qemu-system-x86 qemu-utils ovmf swtpm xorriso python3
       - name: Build and test the actual ISO
-        run: sudo bash scripts/test-iso.sh --build --work-dir "$RUNNER_TEMP/mertensia-iso-test" --junit "$RUNNER_TEMP/mertensia-iso-test/junit.xml"
+        env:
+          GRAPHICAL_BOOT: ${{ inputs.graphical_boot }}
+        run: |
+          args=(--build --work-dir "$RUNNER_TEMP/mertensia-iso-test" --junit "$RUNNER_TEMP/mertensia-iso-test/junit.xml")
+          if [[ "$GRAPHICAL_BOOT" == true ]]; then args+=(--graphical-boot); fi
+          sudo bash scripts/test-iso.sh "${args[@]}"
       - name: Collect diagnostics
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
@@ -39,4 +49,5 @@ jobs:
             ${{ runner.temp }}/mertensia-iso-test/result.json
             ${{ runner.temp }}/mertensia-iso-test/junit.xml
             ${{ runner.temp }}/mertensia-iso-test/*.log
+            ${{ runner.temp }}/mertensia-iso-test/plymouth-*.ppm
           if-no-files-found: warn

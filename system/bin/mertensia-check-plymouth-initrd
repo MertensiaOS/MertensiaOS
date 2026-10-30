@@ -1,0 +1,46 @@
+#!/usr/bin/python3 -I
+"""Fail image construction if its splash or native recovery UI is incomplete."""
+
+import configparser
+from pathlib import Path
+import subprocess
+import sys
+
+
+def check(image):
+    modules = subprocess.check_output(["lsinitrd", "-m", str(image)], text=True).splitlines()
+    for module in ("plymouth", "tpm2-tss"):
+        if module not in modules:
+            raise SystemExit(f"{image}: missing dracut module {module}")
+    listing = subprocess.check_output(["lsinitrd", str(image)], text=True)
+    # lsinitrd prints one archive entry per line, including symlink targets.
+    files = {line.split()[8].lstrip("./") for line in listing.splitlines()
+             if len(line.split()) >= 9 and line[:1] in ("-", "l", "d")}
+    theme = "usr/share/plymouth/themes/mertensia/"
+    required = [
+        "usr/bin/plymouth", "usr/bin/plymouthd", "etc/plymouth/plymouthd.conf",
+        "usr/lib64/plymouth/two-step.so", "usr/lib64/plymouth/label-freetype.so",
+        "usr/lib64/plymouth/label-pango.so", "etc/fonts/fonts.conf",
+        "usr/lib64/plymouth/renderers/drm.so", "usr/lib64/plymouth/renderers/frame-buffer.so",
+        "usr/lib64/plymouth/text.so", "usr/lib64/plymouth/details.so",
+        "usr/share/fonts/mertensia/Figtree-Variable.ttf",
+        *(theme + name for name in ("mertensia.plymouth", "watermark.png", "entry.png",
+                                   "bullet.png", "lock.png", "keyboard.png", "keymap-render.png", "capslock.png")),
+    ]
+    # Require every installed frame, not just the first frame of a broken loop.
+    required.extend(str(path).lstrip("/") for path in Path("/" + theme).glob("throbber-*.png"))
+    missing = sorted(set(required) - files)
+    if missing or not any(name.startswith(theme + "throbber-") for name in files):
+        raise SystemExit(f"{image}: incomplete Plymouth initramfs: {', '.join(missing) or 'no spinner frames'}")
+    config = configparser.ConfigParser()
+    config.read_string(subprocess.check_output(
+        ["lsinitrd", "-f", "/etc/plymouth/plymouthd.conf", str(image)], text=True))
+    if config.get("Daemon", "Theme", fallback="") != "mertensia":
+        raise SystemExit(f"{image}: Mertensia Plymouth theme is not selected")
+    print(f"{image}: Quiet Bloom, native unlock UI, renderers, font and TPM support verified")
+
+
+if __name__ == "__main__":
+    if len(sys.argv) != 2:
+        raise SystemExit("Usage: mertensia-check-plymouth-initrd INITRAMFS")
+    check(Path(sys.argv[1]))

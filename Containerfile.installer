@@ -75,9 +75,10 @@ RUN mkdir -p \
 RUN kernel="$(find /usr/lib/modules -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | sort -V | tail -n1)" && \
     test -n "$kernel" && \
     DRACUT_NO_XATTR=1 dracut --force --no-hostonly --zstd \
-      --add "dmsquash-live dmsquash-live-autooverlay crypt systemd systemd-cryptsetup tpm2-tss" \
+      --add "dmsquash-live dmsquash-live-autooverlay crypt systemd systemd-cryptsetup tpm2-tss plymouth" \
       "/usr/lib/modules/${kernel}/initramfs.img" "$kernel" && \
-    test -s "/usr/lib/modules/${kernel}/initramfs.img"
+    test -s "/usr/lib/modules/${kernel}/initramfs.img" && \
+    /usr/libexec/mertensia-check-plymouth-initrd "/usr/lib/modules/${kernel}/initramfs.img"
 
 RUN mkdir -p /boot/efi && \
     cp -a /usr/lib/efi/*/*/EFI /boot/efi/ && \

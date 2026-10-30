@@ -121,6 +121,10 @@ elif command == "gsettings":
     print("false" if args[-1] == "refresh-when-metered" else "true")
 elif command == "rpm":
     print("gnome-software-51.0-1.fc45.x86_64")
+elif command == "plymouth-set-default-theme":
+    print(os.environ.get("FAKE_PLYMOUTH_THEME", "mertensia"))
+elif command == "fc-match":
+    print(os.environ.get("FAKE_PAYLOAD_ROOT", "") + "/usr/share/fonts/mertensia/Figtree-Variable.ttf")
 '''
 
 
@@ -137,7 +141,8 @@ class ReleaseScriptTests(unittest.TestCase):
         self.bin = self.work / "bin"
         self.bin.mkdir()
         self.log = self.work / "commands.jsonl"
-        for name in ("podman", "cosign", "skopeo", "bootc", "getent", "rpm", "gsettings"):
+        for name in ("podman", "cosign", "skopeo", "bootc", "getent", "rpm", "gsettings",
+                     "plymouth-set-default-theme", "fc-match"):
             executable = self.bin / name
             executable.write_text(f"#!{sys.executable}\n" + FAKE_TOOL)
             executable.chmod(0o755)
@@ -198,7 +203,8 @@ class ReleaseScriptTests(unittest.TestCase):
         plugin.touch()
         browser_config = payload / "etc/chromium/chromium.conf"
         browser_config.write_text(". /etc/chromium/mertensia-wayland.conf\n")
-        for name in ("usr/bin/chromium-browser", "usr/lib64/chromium-browser/chrome-sandbox"):
+        for name in ("usr/bin/chromium-browser", "usr/lib64/chromium-browser/chrome-sandbox",
+                     "usr/libexec/mertensia-check-plymouth-initrd"):
             executable = payload / name
             executable.parent.mkdir(parents=True, exist_ok=True)
             executable.write_text("#!/bin/sh\nexit 0\n")
@@ -423,6 +429,12 @@ class ReleaseScriptTests(unittest.TestCase):
         self.payload_fixture()
         result = self.run_script("validate-image.sh", "localhost/mertensia:release")
         self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_payload_validation_rejects_the_wrong_default_plymouth_theme(self):
+        self.payload_fixture()
+        result = self.publish(FAKE_PLYMOUTH_THEME="bgrt")
+        self.assertNotEqual(result.returncode, 0)
+        self.assert_no_push_or_promotion()
 
     def test_release_build_refreshes_rpms_without_scheduling_publication(self):
         workflow = yaml.safe_load((ROOT / ".github/workflows/release.yml").read_text())

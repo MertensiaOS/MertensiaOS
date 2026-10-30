@@ -28,6 +28,12 @@ RUN dnf -y install \
     polkit \
     shadow-utils \
     dracut \
+    plymouth \
+    plymouth-scripts \
+    plymouth-graphics-libs \
+    plymouth-plugin-two-step \
+    plymouth-plugin-label \
+    plymouth-theme-spinner \
     && dnf clean all
 
 ## GNOME
@@ -152,6 +158,17 @@ COPY system/config/systemd/mertensia-firstboot-finish.service /usr/lib/systemd/s
 COPY system/bin/mertensia-firstboot /usr/bin/mertensia-firstboot
 COPY branding /usr/share/mertensia/branding
 COPY branding/fonts /usr/share/fonts/mertensia
+## One native splash, inherited by the live installer and development images.
+COPY branding/plymouth /usr/share/plymouth/themes/mertensia
+COPY system/config/plymouth/plymouthd.conf /etc/plymouth/plymouthd.conf
+COPY system/config/dracut/50-mertensia-plymouth.conf /usr/lib/dracut/dracut.conf.d/50-mertensia-plymouth.conf
+COPY system/config/bootc/20-mertensia-plymouth.toml /usr/lib/bootc/install/20-mertensia-plymouth.toml
+COPY system/bin/mertensia-check-plymouth-initrd /usr/libexec/mertensia-check-plymouth-initrd
+RUN cp --update=none /usr/share/plymouth/themes/spinner/*.png /usr/share/plymouth/themes/mertensia/ && \
+    fc-cache -f /usr/share/fonts/mertensia && \
+    test "$(fc-match -f '%{file}' 'Figtree')" = /usr/share/fonts/mertensia/Figtree-Variable.ttf && \
+    chmod 0755 /usr/libexec/mertensia-check-plymouth-initrd && \
+    test "$(plymouth-set-default-theme)" = mertensia
 COPY system/bin/mertensia-accounts-helper /usr/libexec/mertensia-accounts-helper
 COPY system/bin/mertensia-sync-login-users /usr/libexec/mertensia-sync-login-users
 COPY system/config/systemd/mertensia-login-users.service /usr/lib/systemd/system/mertensia-login-users.service
@@ -192,9 +209,9 @@ COPY system/config/containers/registries.yaml /etc/containers/registries.d/merte
 RUN kernel="$(find /usr/lib/modules -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | sort -V | tail -n1)" && \
     test -n "$kernel" && \
     mkdir -p "$(realpath /root)" && \
-    DRACUT_NO_XATTR=1 dracut --force --no-hostonly --zstd --add "crypt systemd systemd-cryptsetup tpm2-tss" \
+    DRACUT_NO_XATTR=1 dracut --force --no-hostonly --zstd --add "crypt systemd systemd-cryptsetup tpm2-tss plymouth" \
       "/usr/lib/modules/${kernel}/initramfs.img" "$kernel" && \
     test -s "/usr/lib/modules/${kernel}/initramfs.img" && \
-    lsinitrd -m "/usr/lib/modules/${kernel}/initramfs.img" | grep -Fx tpm2-tss
+    /usr/libexec/mertensia-check-plymouth-initrd "/usr/lib/modules/${kernel}/initramfs.img"
 
 RUN bootc container lint --fatal-warnings --no-truncate

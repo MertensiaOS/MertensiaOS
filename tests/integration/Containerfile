@@ -7,10 +7,12 @@ ARG INTEGRATION_REVISION=initial
 ARG INTEGRATION_UPGRADE_IMAGE=
 ARG INTEGRATION_PUBLIC_KEY_B64=
 ARG INTEGRATION_HEALTH_MODE=none
+ARG INTEGRATION_GRAPHICAL_BOOT=0
 COPY tests/integration/guest.py /usr/libexec/mertensia-integration-agent
 COPY tests/integration/chromium_probe.py /usr/share/mertensia-integration/chromium_probe.py
 COPY tests/integration/contract.json /usr/share/mertensia-integration/contract.json
 COPY tests/integration/iso.yaml /usr/share/mertensia-integration/iso.yaml
+COPY installer/config/iso.yaml /usr/share/mertensia-integration/graphical-iso.yaml
 COPY tests/integration/mertensia-integration.service /usr/lib/systemd/system/mertensia-integration.service
 COPY tests/integration/90-mertensia-integration.toml /usr/lib/bootc/install/90-mertensia-integration.toml
 COPY tests/integration/add_test_policy.py /usr/share/mertensia-integration/add_test_policy.py
@@ -31,6 +33,17 @@ RUN case "${INTEGRATION_HEALTH_MODE}" in none|always|transient) ;; *) exit 1 ;; 
     fi
 RUN if test "${INTEGRATION_ROLE}" = live; then \
       install -Dm0644 /usr/share/mertensia-integration/iso.yaml /usr/lib/image-builder/bootc/iso.yaml; \
+    fi
+## Opt-in graphical acceptance retains the production ISO/kernel arguments.
+## The default serial recovery fixture above stays unchanged.
+RUN case "${INTEGRATION_GRAPHICAL_BOOT}" in 0|1) ;; *) exit 1 ;; esac && \
+    if test "${INTEGRATION_GRAPHICAL_BOOT}" = 1; then \
+      rm /usr/lib/bootc/install/90-mertensia-integration.toml && \
+      if test "${INTEGRATION_ROLE}" = live; then \
+        install -Dm0644 /usr/share/mertensia-integration/graphical-iso.yaml /usr/lib/image-builder/bootc/iso.yaml; \
+      fi; \
+    else \
+      rm -f /usr/lib/bootc/install/20-mertensia-plymouth.toml; \
     fi
 RUN if test -n "${INTEGRATION_UPGRADE_IMAGE}"; then \
       test "${INTEGRATION_ROLE}" = payload && \
