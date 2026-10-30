@@ -28,11 +28,11 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - name: Install container tools
-        run: sudo apt-get update && sudo apt-get install -y podman
+        run: sudo apt-get update && sudo apt-get install -y podman skopeo
       - name: Build and lint production payload
         run: |
-          sudo podman build --pull -f Containerfile -t localhost/mertensiaos:ci .
-          sudo bash scripts/validate-image.sh localhost/mertensiaos:ci
+          sudo podman build --pull -f Containerfile -t localhost/mertensiaos:ci-unpacked .
+          sudo bash scripts/rechunk-image.sh localhost/mertensiaos:ci-unpacked localhost/mertensiaos:ci
       - name: Capture native Plymouth splash and recovery prompts
         run: sudo bash scripts/test-plymouth.sh localhost/mertensiaos:ci "$RUNNER_TEMP/plymouth-preview"
       - name: Collect Plymouth captures

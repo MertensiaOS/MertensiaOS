@@ -69,7 +69,9 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y podman skopeo qemu-system-x86 qemu-utils ovmf swtpm xorriso python3
       - name: Build clean release payload
         # Refresh RPMs even when the base image digest has not changed.
-        run: sudo podman build --pull --no-cache -f Containerfile -t localhost/mertensiaos:release .
+        run: sudo podman build --pull --no-cache -f Containerfile -t localhost/mertensiaos:release-unpacked .
+      - name: Rechunk and validate release payload
+        run: sudo bash scripts/rechunk-image.sh localhost/mertensiaos:release-unpacked localhost/mertensiaos:release
       - name: Authenticate registry
         env:
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
