@@ -30,6 +30,46 @@ class InstallerFailureTests(unittest.TestCase):
         show(window, "The installer stopped unexpectedly")
         window.failure_details.set_text.assert_called_once_with("Device mertensia-root is still in use")
 
+    def test_close_requests_keep_window_open_and_block_exit_during_installation(self):
+        for running in (True, False):
+            with self.subTest(running=running):
+                window = SimpleNamespace(
+                    process=mock.Mock(), _close_dialog=None, _close_response=mock.Mock(),
+                )
+                window.process.poll.return_value = None if running else 0
+                with mock.patch.object(self.ui.Adw, "AlertDialog") as alert:
+                    self.assertTrue(self.ui.InstallerWindow._close_requested(window))
+                dialog = alert.return_value
+                responses = [call.args[0] for call in dialog.add_response.call_args_list]
+                self.assertEqual(responses, ["return"] if running else ["return", "restart", "shutdown"])
+                dialog.set_default_response.assert_called_once_with("return")
+                dialog.set_close_response.assert_called_once_with("return")
+                dialog.present.assert_called_once_with(window)
+                # Repeated Alt+F4 must not stack dialogs or destroy the window.
+                with mock.patch.object(self.ui.Adw, "AlertDialog") as repeated:
+                    self.assertTrue(self.ui.InstallerWindow._close_requested(window))
+                    repeated.assert_not_called()
+
+    def test_close_before_installation_offers_a_way_back(self):
+        window = SimpleNamespace(process=None, _close_dialog=None, _close_response=mock.Mock())
+        with mock.patch.object(self.ui.Adw, "AlertDialog") as alert:
+            self.assertTrue(self.ui.InstallerWindow._close_requested(window))
+        alert.return_value.add_response.assert_any_call("return", "Return to installer")
+
+    def test_exit_choices_recheck_helper_and_only_explicit_choices_power_off(self):
+        for status in (None, 0):
+            for response in ("return", "restart", "shutdown"):
+                with self.subTest(status=status, response=response):
+                    window = SimpleNamespace(process=mock.Mock(), _close_dialog=mock.Mock())
+                    window.process.poll.return_value = status
+                    with mock.patch.object(self.ui.subprocess, "Popen") as launch:
+                        self.ui.InstallerWindow._close_response(window, None, response)
+                    if status is None or response == "return":
+                        launch.assert_not_called()
+                    else:
+                        launch.assert_called_once_with(["systemctl", "reboot" if response == "restart" else "poweroff"])
+                    self.assertIsNone(window._close_dialog)
+
     def test_recovery_continue_tracks_manual_confirmation(self):
         window = SimpleNamespace(recovery_continue=mock.Mock())
         for confirmed in (False, True, False):

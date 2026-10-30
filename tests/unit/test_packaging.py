@@ -146,6 +146,65 @@ class ApplicationPackagingTests(unittest.TestCase):
             with self.subTest(path=name):
                 self.assertTrue((self.image / name).is_file())
 
+    def test_only_live_installer_disables_locking_and_sleep(self):
+        override = "usr/share/glib-2.0/schemas/zz-mertensia-installer.gschema.override"
+        sleep_config = "etc/systemd/sleep.conf.d/90-mertensia-installer.conf"
+        self.assertFalse((self.image / override).exists())
+        self.assertFalse((self.image / sleep_config).exists())
+        self.stage("Containerfile.installer")
+
+        # Compile against real GNOME schemas and read the effective defaults.
+        schemas = Path(self.temporary.name) / "schemas"
+        schemas.mkdir()
+        for source in Path("/usr/share/glib-2.0/schemas").glob("*.xml"):
+            shutil.copy2(source, schemas / source.name)
+        shutil.copy2(self.image / override, schemas)
+        subprocess.run(["glib-compile-schemas", "--strict", str(schemas)], check=True)
+        for schema, key, expected in (
+            ("org.gnome.desktop.lockdown", "disable-lock-screen", "true"),
+            ("org.gnome.desktop.screensaver", "lock-enabled", "false"),
+        ):
+            with self.subTest(schema=schema, key=key):
+                result = subprocess.run(
+                    ["gsettings", "get", schema, key], check=True, text=True,
+                    capture_output=True,
+                    env=dict(os.environ, GSETTINGS_SCHEMA_DIR=str(schemas), GSETTINGS_BACKEND="memory"),
+                )
+                self.assertEqual(result.stdout.strip(), expected)
+        config = configparser.ConfigParser()
+        config.read(self.image / sleep_config)
+        for setting in ("AllowSuspend", "AllowHibernation", "AllowHybridSleep", "AllowSuspendThenHibernate"):
+            self.assertFalse(config.getboolean("Sleep", setting))
+
+    def test_setup_protections_are_limited_to_the_disposable_session(self):
+        shell = self.image / "usr/share/mertensia/setup-shell.conf"
+        commands = [shlex.split(line.split("=", 1)[1]) for line in shell.read_text().splitlines()
+                    if line.startswith("ExecStartPre=")]
+        # Exercise the actual pre-start commands in an isolated account store.
+        environment = dict(os.environ, GSETTINGS_BACKEND="keyfile",
+                           XDG_CONFIG_HOME=str(Path(self.temporary.name) / "setup-config"))
+        for command in commands:
+            subprocess.run(command, env=environment, check=True, capture_output=True)
+        for schema, key, expected in (
+            ("org.gnome.desktop.lockdown", "disable-lock-screen", "true"),
+            ("org.gnome.desktop.screensaver", "lock-enabled", "false"),
+        ):
+            result = subprocess.run(["gsettings", "get", schema, key], env=environment,
+                                    check=True, capture_output=True, text=True)
+            self.assertEqual(result.stdout.strip(), expected)
+        unit = configparser.ConfigParser()
+        unit.read(self.image / "usr/lib/systemd/user/mertensia-setup-awake.service")
+        self.assertEqual(unit["Unit"]["ConditionUser"], "mertensia-setup")
+        self.assertEqual(unit["Unit"]["PartOf"], "gnome-session.target")
+        self.assertEqual(unit["Install"]["WantedBy"], "gnome-session.target")
+        self.assertIn("--what=sleep:handle-lid-switch:handle-suspend-key:handle-hibernate-key", unit["Service"]["ExecStart"])
+        self.assertIn("--mode=block", unit["Service"]["ExecStart"])
+        for account in ("system/config/tmpfiles.d/mertensia-firstboot-tmpfiles.conf",
+                        "installer/config/tmpfiles.d/mertensia-installer-tmpfiles.conf"):
+            self.assertIn("/usr/share/mertensia/setup-shell.conf", (ROOT / account).read_text())
+        self.assertIn("systemctl --global enable mertensia-setup-awake.service",
+                      (ROOT / "scripts/configure-payload.sh").read_text())
+
     def test_native_splash_and_install_defaults_are_shared_with_the_live_image(self):
         theme = self.image / "usr/share/plymouth/themes/mertensia"
         config = configparser.ConfigParser()

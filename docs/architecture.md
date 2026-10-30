@@ -81,6 +81,12 @@ The live installer and direct development VM overlay mask recovery. See
 `Containerfile.installer` derives from that payload, adds only the live installer
 package and launchers, and overrides live-session configuration. It inherits
 shared branding from the payload. Installer code is absent from the clean payload.
+The disposable installer and first-boot accounts disable screen locking before
+GNOME Shell starts. The live image disables sleep; first boot instead holds a
+sleep and lid-switch inhibitor limited to the setup session, released when that
+session ends. Normal user sessions retain their lock and sleep settings. Both
+setup windows intercept close requests: active work cannot be closed, and idle
+windows offer return, restart or shutdown instead of leaving an empty desktop.
 `Containerfile.dev` adds the disposable testing account for direct VM images.
 The integration Containerfile adds a test-only agent and service to disposable
 payload/live overlays; release validation rejects these artifacts in production.

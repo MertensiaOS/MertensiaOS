@@ -100,6 +100,10 @@
     "/usr/share/mertensia/setup-shell.conf"
   ],
   [
+    "system/config/systemd/user/mertensia-setup-awake.service",
+    "/usr/lib/systemd/user/mertensia-setup-awake.service"
+  ],
+  [
     "system/config/sysusers.d/mertensia-firstboot-sysusers.conf",
     "/usr/lib/sysusers.d/mertensia-firstboot.conf"
   ],

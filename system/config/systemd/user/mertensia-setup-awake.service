@@ -1,0 +1,13 @@
+[Unit]
+Description=Keep first-boot setup awake until the setup session ends
+ConditionUser=mertensia-setup
+PartOf=gnome-session.target
+
+[Service]
+Type=exec
+ExecStart=/usr/bin/systemd-inhibit --what=sleep:handle-lid-switch:handle-suspend-key:handle-hibernate-key --mode=block --who=MertensiaOS --why="First-boot setup is in progress" /usr/bin/sleep infinity
+Restart=on-failure
+RestartSec=1s
+
+[Install]
+WantedBy=gnome-session.target

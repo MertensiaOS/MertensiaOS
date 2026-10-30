@@ -24,6 +24,10 @@ set -euo pipefail
 )
 
 (
+  glib-compile-schemas --strict /usr/share/glib-2.0/schemas
+)
+
+(
   fc-cache -f /usr/share/fonts/mertensia
 )
 

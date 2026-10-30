@@ -43,6 +43,7 @@ set -euo pipefail
 
 (
   systemd-sysusers /usr/lib/sysusers.d/mertensia-firstboot.conf
+  systemctl --global enable mertensia-setup-awake.service
 )
 
 (

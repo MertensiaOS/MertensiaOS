@@ -47,6 +47,8 @@ class InstallerWindow(Adw.ApplicationWindow):
         self.last_phase = "Starting installation"
         self.install_disk = ""
         self.failure_report = ""
+        self._close_dialog = None
+        self.connect("close-request", self._close_requested)
 
         self.style_manager = Adw.StyleManager.get_default()
         self.css_provider = None
@@ -75,6 +77,42 @@ class InstallerWindow(Adw.ApplicationWindow):
         self._build_finish()
         self._build_failure()
         self._update_brand_marks()
+
+    def _close_requested(self, *_args) -> bool:
+        # Fullscreen does not prevent Alt+F4. Keep the window and its pipes alive
+        # until the helper exits, including while it awaits recovery confirmation.
+        if self._close_dialog is not None:
+            return True
+        if self.process is not None and self.process.poll() is None:
+            dialog = Adw.AlertDialog(
+                heading="Installation is still running",
+                body="Keep the installer open until installation finishes. If a recovery key is shown, save it outside this live system and confirm it to continue.",
+            )
+            dialog.add_response("return", "Return to installer")
+        else:
+            dialog = Adw.AlertDialog(
+                heading="Leave the installer?",
+                body="You can return to the installer, restart, or shut down this computer. Restarting or shutting down loses any recovery keys retained only in this live session.",
+            )
+            dialog.add_response("return", "Return to installer")
+            dialog.add_response("restart", "Restart")
+            dialog.add_response("shutdown", "Shut down")
+            dialog.set_response_appearance("restart", Adw.ResponseAppearance.DESTRUCTIVE)
+            dialog.set_response_appearance("shutdown", Adw.ResponseAppearance.DESTRUCTIVE)
+        dialog.set_default_response("return")
+        dialog.set_close_response("return")
+        dialog.connect("response", self._close_response)
+        self._close_dialog = dialog
+        dialog.present(self)
+        return True
+
+    def _close_response(self, _dialog, response: str) -> None:
+        self._close_dialog = None
+        # Recheck at activation time so an old dialog cannot interrupt a helper.
+        if self.process is not None and self.process.poll() is None:
+            return
+        if response in {"restart", "shutdown"}:
+            subprocess.Popen(["systemctl", "reboot" if response == "restart" else "poweroff"])
 
     def _update_style(self, *_args) -> None:
         if self.css_provider:
@@ -264,7 +302,7 @@ class InstallerWindow(Adw.ApplicationWindow):
     def _build_finish(self) -> None:
         page, content = self._page("Installation complete", "Restart the computer and remove the installation media. On first boot, you’ll create your encrypted user account.", step="Ready for your first boot", icon="mertensia-check-symbolic")
         restart = Gtk.Button(label="Restart", css_classes=["suggested-action"])
-        restart.connect("clicked", lambda *_: subprocess.Popen(["systemctl", "reboot"]))
+        restart.connect("clicked", lambda *_: self._close_response(None, "restart"))
         close = Gtk.Button(label="Close installer", css_classes=["flat"])
         close.connect("clicked", lambda *_: self.close())
         content.append(self._buttons(close, restart))
@@ -299,7 +337,7 @@ class InstallerWindow(Adw.ApplicationWindow):
         close = Gtk.Button(label="Close installer", css_classes=["suggested-action"])
         close.connect("clicked", lambda *_: self.close())
         restart = Gtk.Button(label="Restart")
-        restart.connect("clicked", lambda *_: subprocess.Popen(["systemctl", "reboot"]))
+        restart.connect("clicked", lambda *_: self._close_response(None, "restart"))
         content.append(self._buttons(copy, close, restart))
         self.stack.add_named(page, "failure")
 

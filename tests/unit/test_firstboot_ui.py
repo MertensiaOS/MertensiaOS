@@ -66,6 +66,40 @@ class FirstbootTests(unittest.TestCase):
             self.ui.SetupWindow._submit(window)
         thread.assert_not_called()
 
+    def test_firstboot_close_keeps_setup_accessible_and_blocks_busy_exit(self):
+        for busy in (False, True):
+            with self.subTest(busy=busy):
+                window = SimpleNamespace(firstboot=True, busy=busy, _close_dialog=None,
+                                         _close_response=mock.Mock())
+                with mock.patch.object(self.ui.Adw, "AlertDialog") as alert:
+                    self.assertTrue(self.ui.SetupWindow._close_requested(window))
+                responses = [call.args[0] for call in alert.return_value.add_response.call_args_list]
+                self.assertEqual(responses, ["return"] if busy else ["return", "restart", "shutdown"])
+                alert.return_value.set_close_response.assert_called_once_with("return")
+                alert.return_value.set_default_response.assert_called_once_with("return")
+                alert.return_value.present.assert_called_once_with(window)
+                with mock.patch.object(self.ui.Adw, "AlertDialog") as repeated:
+                    self.assertTrue(self.ui.SetupWindow._close_requested(window))
+                    repeated.assert_not_called()
+
+    def test_add_user_window_can_close_unless_creating_an_account(self):
+        for busy in (False, True):
+            window = SimpleNamespace(firstboot=False, busy=busy)
+            self.assertEqual(self.ui.SetupWindow._close_requested(window), busy)
+
+    def test_firstboot_power_choices_recheck_account_creation(self):
+        for busy in (False, True):
+            for response in ("return", "restart", "shutdown"):
+                with self.subTest(busy=busy, response=response):
+                    window = SimpleNamespace(busy=busy, _close_dialog=mock.Mock())
+                    with mock.patch.object(self.ui.subprocess, "Popen") as launch:
+                        self.ui.SetupWindow._close_response(window, None, response)
+                    if busy or response == "return":
+                        launch.assert_not_called()
+                    else:
+                        launch.assert_called_once_with(["systemctl", "reboot" if response == "restart" else "poweroff"])
+                    self.assertIsNone(window._close_dialog)
+
     def test_invalid_input_does_not_launch_helper(self):
         window = SimpleNamespace(busy=False, entries={key: mock.Mock(get_text=lambda value=value: value)
                                  for key, value in self.values(confirm="wrong").items()}, message=mock.Mock())

@@ -1,0 +1,6 @@
+# The disposable live account has no password the user can enter on resume.
+[org.gnome.desktop.lockdown]
+disable-lock-screen=true
+
+[org.gnome.desktop.screensaver]
+lock-enabled=false

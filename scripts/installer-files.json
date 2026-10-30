@@ -12,6 +12,14 @@
     "/etc/gdm/custom.conf"
   ],
   [
+    "installer/config/gnome/90-mertensia-installer.gschema.override",
+    "/usr/share/glib-2.0/schemas/zz-mertensia-installer.gschema.override"
+  ],
+  [
+    "installer/config/systemd/sleep.conf.d/90-mertensia-installer.conf",
+    "/etc/systemd/sleep.conf.d/90-mertensia-installer.conf"
+  ],
+  [
     "installer/config/desktop/mertensia-installer.desktop",
     "/etc/xdg/autostart/mertensia-installer.desktop"
   ],

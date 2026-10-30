@@ -55,6 +55,7 @@ class SetupWindow(Adw.ApplicationWindow):
         super().__init__(application=app, title="MertensiaOS Setup" if firstboot else "Mertensia Accounts")
         self.firstboot = firstboot
         self.busy = False
+        self._close_dialog = None
         self.entries = {}
         self.selectors = {}
         self.region_choices = {}
@@ -68,7 +69,7 @@ class SetupWindow(Adw.ApplicationWindow):
         self._update_style()
         self.style_manager.connect("notify::dark", self._update_style)
         self.style_manager.connect("notify::high-contrast", self._update_style)
-        self.connect("close-request", lambda *_: self.busy)
+        self.connect("close-request", self._close_requested)
         if firstboot:
             self.fullscreen()
         toolbar = Adw.ToolbarView()
@@ -140,6 +141,42 @@ class SetupWindow(Adw.ApplicationWindow):
         if not firstboot:
             self._actions(box, ("Done", lambda *_: self.close(), "suggested-action"))
         self.stack.set_visible_child_name("device" if firstboot else "account")
+
+    def _close_requested(self, *_args) -> bool:
+        # Additional-account management remains a normal closable desktop app.
+        if not self.firstboot:
+            return self.busy
+        if self._close_dialog is not None:
+            return True
+        if self.busy:
+            dialog = Adw.AlertDialog(
+                heading="Your account is being created",
+                body="Keep setup open until your encrypted account is ready.",
+            )
+            dialog.add_response("return", "Return to setup")
+        else:
+            dialog = Adw.AlertDialog(
+                heading="Leave setup?",
+                body="You can return to setup, restart, or shut down this computer. Restarting or shutting down loses any unsaved setup choices.",
+            )
+            dialog.add_response("return", "Return to setup")
+            dialog.add_response("restart", "Restart")
+            dialog.add_response("shutdown", "Shut down")
+            dialog.set_response_appearance("restart", Adw.ResponseAppearance.DESTRUCTIVE)
+            dialog.set_response_appearance("shutdown", Adw.ResponseAppearance.DESTRUCTIVE)
+        dialog.set_default_response("return")
+        dialog.set_close_response("return")
+        dialog.connect("response", self._close_response)
+        self._close_dialog = dialog
+        dialog.present(self)
+        return True
+
+    def _close_response(self, _dialog, response: str) -> None:
+        self._close_dialog = None
+        if self.busy:
+            return
+        if response in {"restart", "shutdown"}:
+            subprocess.Popen(["systemctl", "reboot" if response == "restart" else "poweroff"])
 
     def _update_style(self, *_args):
         if self.css_provider:
