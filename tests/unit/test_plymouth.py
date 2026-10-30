@@ -68,6 +68,11 @@ class PlymouthTests(unittest.TestCase):
             self.assertIn("watermark.png", str(raised.exception))
             self.assertIn("label-pango.so", str(raised.exception))
             self.assertIn("Figtree-Variable.ttf", str(raised.exception))
+            self.assertIn("etc/fonts/conf.d/57-google-noto-sans-mono.conf", str(raised.exception))
+            self.assertIn("usr/share/fontconfig/conf.avail/57-google-noto-sans-mono.conf",
+                          str(raised.exception))
+            self.assertIn("NotoSansMono-Regular.ttf", str(raised.exception))
+            self.assertIn("NotoSansMono-Bold.ttf", str(raised.exception))
 
 
 if __name__ == "__main__":

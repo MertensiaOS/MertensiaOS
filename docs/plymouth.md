@@ -16,8 +16,11 @@ system prompt, keyboard-layout indicator and Caps Lock indicator. It returns to
 the splash after successful unlock. Enter the saved root recovery key, rather
 than an account password. This theme does not change encryption or recovery policy.
 
-Prompts use Figtree through Pango, including in the initramfs. Native labels are
-white; the unmasked question-entry text is black and cannot be themed through
+Prompts use Figtree through Pango, including in the initramfs. The graphical
+console shown with Escape uses Noto Sans Mono, with regular and bold weights.
+The initramfs includes its fontconfig alias rule as well as the fonts: without
+the rule, Pango's generic `monospace` request can select proportional Noto Sans.
+Native labels are white; the unmasked question-entry text is black and cannot be themed through
 `two-step`. The entry therefore has a warm canvas interior, dark-surface frame,
 and ink password bullets. The key icon derives from the shared symbolic master.
 Native keyboard and Caps Lock assets remain Fedora's. Caps Lock state requires
@@ -48,8 +51,9 @@ their package licenses. No preview renderer or X server ships in the payload.
 The live installer inherits the directory, daemon configuration and dracut policy.
 Both builds explicitly include the Plymouth module, Pango, font configuration
 and Figtree. `mertensia-check-plymouth-initrd` rejects missing modules, renderers,
-native entry assets, spinner frames, theme selection or font files. Production
-image validation repeats the check.
+native entry assets, spinner frames, theme selection, font files or the console's
+monospace alias rule (including its symlink target). Production image validation
+repeats the check.
 
 `/usr/lib/bootc/install/20-mertensia-plymouth.toml` supplies `quiet rhgb` at install
 time. No `kargs.d` migration is shipped, so updates do not rewrite existing
