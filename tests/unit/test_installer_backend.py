@@ -516,7 +516,7 @@ class InstallerBackendTests(unittest.TestCase):
         self.assertNotIn("selinux=0", config.lower())
 
     def test_live_image_disables_gnome_tour(self):
-        containerfile = (ROOT / "Containerfile.installer").read_text(encoding="utf-8")
+        containerfile = (ROOT / "scripts/configure-installer.sh").read_text(encoding="utf-8")
         self.assertIn("/usr/share/applications/org.gnome.Tour.desktop", containerfile)
         self.assertIn("/usr/share/dbus-1/services/org.gnome.Tour.service", containerfile)
 

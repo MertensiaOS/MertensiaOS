@@ -1,9 +1,9 @@
 # Building MertensiaOS
 
-Build on Linux x86_64 using rootful Podman. The container build installs packages
+Build on Linux x86_64 using Python 3.11 or newer and rootful Podman. The container build installs packages
 from Fedora repositories, and the ISO builder needs networking, privileged
 container execution, loop devices and access to `/var/lib/containers/storage`.
-Install Podman with `sudo dnf install podman`. Build artifacts belong under
+Install host tools with `sudo dnf install podman python3`. Build artifacts belong under
 `output/`; they are ignored by Git. Reserve ample space for image layers and
 the ISO; 30 GiB free is a practical starting point.
 
@@ -39,10 +39,44 @@ and remove this patch once Fedora ships the corrected enumeration check.
 | `MERTENSIA_INSTALLER_IMAGE` | `localhost/mertensiaos:installer` |
 | `MERTENSIA_TARGET_IMAGE` | Development: payload reference; production: `ghcr.io/mertensiaos/mertensiaos:latest` |
 | `MERTENSIA_SKIP_BASE_BUILD` | `1` reuses an existing development payload |
+| `MERTENSIA_BUILD_JOBS` | `4` independent container build stages in parallel; use `1` on memory-constrained builders |
 | `MERTENSIA_BUILDER_IMAGE` | Digest-pinned osbuild image-builder in `scripts/iso-image.sh` |
+| `MERTENSIA_ISO_CACHE_DIR` | Persistent builder store and RPM metadata; defaults to `.build/image-builder` (use an absolute path for overrides) |
+| `MERTENSIA_FORCE_ISO_BUILD` | `1` assembles the ISO even when a verified identical output exists |
 
 Pass overrides through `sudo env`, because sudo may remove shell environment
 variables. The ISO script invokes the installer-container build automatically.
+
+The ISO script prints separate payload, installer, assembly and total times.
+Image-builder also reports stage durations and exports its build log and manifest
+beside the ISO. Its store and repository metadata survive container removal.
+The store can be removed when disk space is needed; the next build recreates it.
+
+When the payload, installer and builder image IDs, image references and ISO build
+recipe are unchanged, the script reuses the existing ISO after verifying its full
+SHA-256 checksum against `mertensiaos-installer.iso-cache.json`. Changed or corrupt
+inputs rebuild automatically. Production still verifies the signed payload before
+this check. To measure assembly without deleting container caches, run:
+
+```sh
+sudo env MERTENSIA_FORCE_ISO_BUILD=1 bash scripts/iso-image.sh
+```
+
+Python application modules are copied after initramfs generation in both images,
+so application-only edits reuse the boot assets. The installer package transaction
+uses a persistent Podman DNF cache to reuse metadata and RPMs when its parent
+payload changes; this cache is mounted during the build and is not shipped.
+
+Configuration inputs are collected in small `FROM scratch` stages and installed
+together using the mappings in `scripts/payload-files.json` and
+`scripts/installer-files.json`. Configuration commands run through `scripts/configure-payload.sh`
+and `scripts/configure-installer.sh`, mounted only during construction. This avoids
+committing and scanning the entire OS for each small file on storage drivers
+without native overlay diffs. Keep these stages separate from the application
+modules to preserve the cache during UI development.
+
+See [local performance measurements](build-performance.md) for timings and the
+storage costs behind this layout.
 
 ## Production
 

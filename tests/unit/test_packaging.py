@@ -1,6 +1,7 @@
 """Exercise the application files assembled by the image COPY instructions."""
 
 import configparser
+import importlib.util
 import json
 import os
 from pathlib import Path
@@ -14,6 +15,9 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
 MODULE_ROOT = "/usr/lib/mertensia/python"
+SPEC = importlib.util.spec_from_file_location("install_image_files", ROOT / "scripts/install-image-files.py")
+image_files = importlib.util.module_from_spec(SPEC)
+SPEC.loader.exec_module(image_files)
 
 
 class ApplicationPackagingTests(unittest.TestCase):
@@ -25,22 +29,44 @@ class ApplicationPackagingTests(unittest.TestCase):
         self.stage("Containerfile")
 
     def stage(self, filename):
-        # The application/configuration COPYs have literal paths. RPM outputs
-        # from the upstream build stage are outside this source-layout check.
+        # Follow scratch staging and final COPY --from instructions. RPM outputs
+        # are built externally, but all source application/config files are real.
+        stages = {}
+        image = self.image
         for line in (ROOT / filename).read_text().splitlines():
+            if line.startswith("FROM "):
+                fields = shlex.split(line)
+                if "AS" in fields:
+                    name = fields[fields.index("AS") + 1]
+                    image = Path(self.temporary.name) / (filename + "-" + name)
+                    image.mkdir(exist_ok=True)
+                    stages[name] = image
+                else:
+                    image = self.image
+                continue
+            if line.startswith("RUN --mount=type=bind,from=") and "-files,target=" in line:
+                role = "payload" if filename == "Containerfile" else "installer"
+                image_files.install(ROOT / f"scripts/{role}-files.json", stages[f"{role}-files"], image)
             if not line.startswith("COPY "):
                 continue
             fields = shlex.split(line)
-            if any(field.startswith("--from=") for field in fields):
-                continue
-            self.assertEqual(len(fields), 3, line)
-            source = ROOT / fields[1]
-            target = self.image / fields[2].lstrip("/")
-            target.parent.mkdir(parents=True, exist_ok=True)
-            if source.is_dir():
-                shutil.copytree(source, target, dirs_exist_ok=True)
+            if fields[1].startswith("--from="):
+                name = fields.pop(1).split("=", 1)[1]
+                if name == "accountsservice-build":
+                    continue  # Compiled RPMs, not source application files.
+                source_root = stages[name]
             else:
-                shutil.copy2(source, target)
+                source_root = ROOT
+            for source_name in fields[1:-1]:
+                source = source_root / source_name.lstrip("/")
+                target = image / fields[-1].lstrip("/")
+                if len(fields) > 3:
+                    target /= source.name
+                target.parent.mkdir(parents=True, exist_ok=True)
+                if source.is_dir():
+                    shutil.copytree(source, target, dirs_exist_ok=True)
+                else:
+                    shutil.copy2(source, target)
 
     def launcher(self, installed_path, *arguments, input_text=None):
         executable = self.image / installed_path.lstrip("/")
@@ -60,6 +86,8 @@ class ApplicationPackagingTests(unittest.TestCase):
         )
 
     def test_payload_launchers_import_the_installed_packages_in_isolated_mode(self):
+        self.assertFalse((self.image / "build").exists())
+        self.assertFalse((self.image / "configure-payload.sh").exists())
         result = self.launcher("/usr/bin/mertensia-firstboot", "--help")
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertIn("--add-user", result.stdout)
@@ -148,19 +176,23 @@ class ApplicationPackagingTests(unittest.TestCase):
             self.assertIn(setting, timer)
         for name in ("Containerfile.installer", "Containerfile.dev"):
             text = (ROOT / name).read_text()
+            if name == "Containerfile.installer":
+                text += (ROOT / "scripts/configure-installer.sh").read_text()
             self.assertIn("bootc-fetch-apply-updates.timer bootc-fetch-apply-updates.service mertensia-update-status.service", text)
         session = (units / "user/gnome-software.service.d/50-mertensia-session.conf").read_text()
         self.assertIn("WantedBy=gnome-session.target", session)
         self.assertIn("ConditionUser=!mertensia-setup", session)
-        self.assertIn("systemctl --global mask gnome-software.service", (ROOT / "Containerfile.installer").read_text())
+        self.assertIn("systemctl --global mask gnome-software.service", (ROOT / "scripts/configure-installer.sh").read_text())
 
     def test_only_supported_installed_payload_enables_recovery(self):
-        payload = (ROOT / "Containerfile").read_text()
+        payload = (ROOT / "scripts/configure-payload.sh").read_text()
         self.assertIn("systemctl enable greenboot-healthcheck.service mertensia-boot-health-status.service", payload)
         self.assertIn("systemctl --global mask grub-boot-success.timer grub-boot-success.service", payload)
         self.assertIn("! rpm -q greenboot-default-health-checks", payload)
         for name in ("Containerfile.installer", "Containerfile.dev"):
             text = (ROOT / name).read_text()
+            if name == "Containerfile.installer":
+                text += (ROOT / "scripts/configure-installer.sh").read_text()
             self.assertIn("systemctl mask greenboot-healthcheck.service greenboot-set-rollback-trigger.service", text)
             self.assertIn("/etc/xdg/autostart/org.mertensia.BootHealth.desktop", text)
         self.stage("Containerfile.installer")

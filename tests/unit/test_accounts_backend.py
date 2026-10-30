@@ -166,7 +166,7 @@ class AccountBackendStaticTests(unittest.TestCase):
         self.assertIn("polkit.Result.NO", rule)
 
     def test_retirement_recovery_is_enabled_in_the_image(self):
-        containerfile = (ROOT / "Containerfile").read_text(encoding="utf-8")
+        containerfile = (ROOT / "scripts/configure-payload.sh").read_text(encoding="utf-8")
         self.assertIn("systemctl enable mertensia-firstboot-retire.path", containerfile)
         service = (ROOT / "system/config/systemd/mertensia-firstboot-retire.service").read_text(
             encoding="utf-8"
