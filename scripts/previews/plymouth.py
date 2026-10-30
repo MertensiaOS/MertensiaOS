@@ -89,7 +89,9 @@ def preview(output, name, width, height, *, scale=1, multihead=False):
                                       stdout=xlog, stderr=xlog)
             wait_for(lambda: Path("/tmp/.X11-unix/X77").exists(), "private X server")
             connection = display.Display(":77")
-            daemon = subprocess.Popen(["plymouthd", "--no-daemon", "--debug", "--no-boot-log",
+            # The container inherits the host's consoles; CI may have a serial
+            # console, which otherwise makes Plymouth skip graphical renderers.
+            daemon = subprocess.Popen(["plymouthd", "--no-daemon", "--debug", "--no-boot-log", "--graphical-boot",
                                        "--kernel-command-line=quiet rhgb", "--tty=/dev/tty1"],
                                       env=environment, stdout=plog, stderr=plog)
             wait_for(lambda: subprocess.run(["plymouth", "--ping"], capture_output=True).returncode == 0,
