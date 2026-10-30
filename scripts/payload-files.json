@@ -124,6 +124,10 @@
     "/usr/share/applications/org.mertensia.Accounts.desktop"
   ],
   [
+    "branding/icons/org.mertensia.Accounts.svg",
+    "/usr/share/icons/hicolor/scalable/apps/org.mertensia.Accounts.svg"
+  ],
+  [
     "system/config/polkit/org.mertensia.Accounts.policy",
     "/usr/share/polkit-1/actions/org.mertensia.Accounts.policy"
   ],

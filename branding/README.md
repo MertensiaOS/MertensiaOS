@@ -31,6 +31,10 @@ Keep strokes expanded to paths: GTK's symbolic recoloring can discard SVG stroke
 attributes and fill their interiors instead. Check icons in GTK, not just an SVG
 viewer, after editing them.
 
+Accounts uses the project-owned `icons/org.mertensia.Accounts.svg` launcher icon,
+installed in the hicolor scalable app directory. Its purple tile and two user
+silhouettes stay sharp at desktop and HiDPI sizes without a bitmap dependency.
+
 ## Visual preview
 
 Run `gtk4-broadwayd --address=127.0.0.1 --port=8087 :7`, open

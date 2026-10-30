@@ -118,6 +118,23 @@ class FirstbootTests(unittest.TestCase):
         window.stack.set_visible_child_name.assert_called_once_with("account")
         window.entries["password"].set_text.assert_not_called()
 
+    def test_helper_authentication_failures_have_actionable_messages(self):
+        for code, message in ((126, "Authentication was cancelled"),
+                              (127, "Authorization failed"),
+                              (1, "returned no response")):
+            with self.subTest(code=code), mock.patch.object(
+                self.ui.subprocess, "run", return_value=SimpleNamespace(returncode=code, stdout="")
+            ):
+                with self.assertRaisesRegex(ValueError, message):
+                    self.ui.SetupWindow._create_account(SimpleNamespace(), {})
+
+    def test_helper_error_response_is_preserved(self):
+        with mock.patch.object(self.ui.subprocess, "run", return_value=SimpleNamespace(
+            returncode=1, stdout='{"event":"error","message":"Username already exists"}\n'
+        )):
+            result = self.ui.SetupWindow._create_account(SimpleNamespace(), {})
+        self.assertEqual(result, {"event": "error", "message": "Username already exists"})
+
     def test_success_clears_both_password_fields(self):
         window = SimpleNamespace(busy=True, spinner=mock.Mock(), stack=mock.Mock(),
                                  entries={"password": mock.Mock(), "confirm": mock.Mock()})

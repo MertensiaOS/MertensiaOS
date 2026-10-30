@@ -280,7 +280,9 @@ use a visible display and the normal production ISO for these checks.
    the UI and check regional settings, keyboard input and timezone.
 3. Log in through GDM, log out, and log in again. Check the encrypted home is
    usable, the initial account has administrator access, and setup is no longer
-   offered. Verify the account UI's real polkit prompt and denial behavior.
+   offered. In the Accounts app, verify the polkit prompt identifies the signed-in
+   administrator and accepts that account's login password. Cancel a prompt and
+   check that the form shows a useful message and allows another attempt.
 4. Add a non-administrator, log in as that account, and confirm it cannot create
    administrators. Check both users remain visible after reboot.
 5. On a disposable disk, test root recovery after changing Secure Boot/TPM state,

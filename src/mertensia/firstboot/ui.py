@@ -32,7 +32,7 @@ MAX_PASSWORD_BYTES = 256
 
 def account_error(values: dict) -> tuple[str, str] | None:
     if not values["real_name"].strip() or len(values["real_name"].strip()) > 128:
-        return "real_name", "Enter your full name (up to 128 characters)."
+        return "real_name", "Enter a full name (up to 128 characters)."
     username = values["username"].strip()
     if not re.fullmatch(r"[a-z_][a-z0-9_-]{0,30}", username) or username == "mertensia-setup":
         return "username", "Use up to 31 lowercase letters, numbers, underscores or hyphens. Start with a letter or underscore."
@@ -44,7 +44,7 @@ def account_error(values: dict) -> tuple[str, str] | None:
     if len(password) < 8 or any(c in password for c in "\x00\n\r"):
         return "password", "Choose a password with at least 8 characters and no line breaks."
     if password_bytes > MAX_PASSWORD_BYTES:
-        return "password", "Shorten your password to at most 256 bytes. Some characters use more than one byte."
+        return "password", "Shorten the password to at most 256 bytes. Some characters use more than one byte."
     if password != values["confirm"]:
         return "confirm", "The passwords do not match. Enter the same password again."
     return None
@@ -64,6 +64,8 @@ class SetupWindow(Adw.ApplicationWindow):
         self.add_css_class("installer")
         self.add_css_class("firstboot")
         Gtk.IconTheme.get_for_display(self.get_display()).add_search_path(str(BRANDING / "icons"))
+        if not firstboot:
+            self.set_icon_name("org.mertensia.Accounts")
         self.style_manager = Adw.StyleManager.get_default()
         self.css_provider = None
         self._update_style()
@@ -110,13 +112,19 @@ class SetupWindow(Adw.ApplicationWindow):
             self._load_regions()
             self.clock_source = GLib.timeout_add_seconds(30, self._update_time_preview)
             self.connect("unrealize", lambda *_: GLib.source_remove(self.clock_source))
-        box = self._page("account", "Create your account", "Your password protects your personal files and unlocks your encrypted home.",
+        box = self._page("account", "Create your account" if firstboot else "Create an account",
+                         "Your password protects your personal files and unlocks your encrypted home." if firstboot else
+                         "Create an account for another person. Their password protects their personal files and unlocks their encrypted home.",
                          "Step 2 of 2 · Your account" if firstboot else "A private space of their own", "mertensia-key-symbolic")
-        group = Adw.PreferencesGroup(title="About you")
+        group = Adw.PreferencesGroup(title="About you" if firstboot else "About the new user")
         self._entry(group, "real_name", "Full name")
         self._entry(group, "username", "Username")
         box.append(group)
-        group = Adw.PreferencesGroup(title="Protect your files", description="Use at least 8 characters. There is no separate recovery key for your home; keep your password somewhere safe.")
+        group = Adw.PreferencesGroup(
+            title="Protect your files" if firstboot else "Protect their files",
+            description="Use at least 8 characters. There is no separate recovery key for your home; keep your password somewhere safe." if firstboot else
+            "Use at least 8 characters. Their encrypted home has no separate recovery key. Make sure they keep the password somewhere safe.",
+        )
         self._entry(group, "password", "Password", password=True)
         self._entry(group, "confirm", "Confirm password", password=True)
         box.append(group)
@@ -129,13 +137,17 @@ class SetupWindow(Adw.ApplicationWindow):
         actions = [("Back", lambda *_: self.stack.set_visible_child_name("device"), "flat")] if firstboot else []
         actions.append(("Create account", self._submit, "suggested-action"))
         self.submit = self._actions(box, *actions)[-1]
-        box = self._page("working", "Creating your account", "Setting up your encrypted home. This may take a little while.",
-                         "Finishing setup", "mertensia-install-symbolic")
+        box = self._page("working", "Creating your account" if firstboot else "Creating the account",
+                         "Setting up your encrypted home. This may take a little while." if firstboot else
+                         "Setting up their encrypted home. This may take a little while.",
+                         "Finishing setup" if firstboot else "Creating a private space", "mertensia-install-symbolic")
         self.spinner = Gtk.Spinner(spinning=False, halign=Gtk.Align.START, width_request=32, height_request=32)
         box.append(self.spinner)
-        box = self._page("complete", "You’re all set", "Your encrypted account is ready. Use your new password to sign in.",
-                         "Welcome to MertensiaOS", "mertensia-check-symbolic")
-        self.completion_message = Gtk.Label(label="Opening the sign-in screen…" if firstboot else "The account is ready to use.",
+        box = self._page("complete", "You’re all set" if firstboot else "Account created",
+                         "Your encrypted account is ready. Use your new password to sign in." if firstboot else
+                         "Their encrypted account is ready. They can sign in with the password set here.",
+                         "Welcome to MertensiaOS" if firstboot else "Ready to sign in", "mertensia-check-symbolic")
+        self.completion_message = Gtk.Label(label="Opening the sign-in screen…" if firstboot else "This user will appear on the sign-in screen.",
                                             wrap=True, xalign=0, css_classes=["secondary-text"])
         box.append(self.completion_message)
         if not firstboot:
@@ -347,7 +359,14 @@ class SetupWindow(Adw.ApplicationWindow):
     def _create_account(self, values):
         result = subprocess.run(["pkexec", HELPER], input=json.dumps(values) + "\n", text=True,
                                 stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, check=False)
-        return json.loads(result.stdout.splitlines()[-1])
+        responses = result.stdout.splitlines()
+        if responses:
+            return json.loads(responses[-1])
+        if result.returncode == 126:
+            raise ValueError("Authentication was cancelled. Try again to create the account.")
+        if result.returncode == 127:
+            raise ValueError("Authorization failed. Sign in as an administrator and try again.")
+        raise ValueError("The account service returned no response. Please try again.")
 
     def _done(self, data: dict) -> bool:
         self.busy = False

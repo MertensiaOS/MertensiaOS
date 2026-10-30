@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+  <title>Mertensia Accounts</title>
+  <defs>
+    <linearGradient id="tile" x1="0" y1="0" x2="0" y2="1">
+      <stop stop-color="#8962CB"/>
+      <stop offset="1" stop-color="#6941B5"/>
+    </linearGradient>
+  </defs>
+  <rect x="8" y="12" width="112" height="108" rx="24" fill="#4D2C89"/>
+  <rect x="8" y="8" width="112" height="108" rx="24" fill="url(#tile)"/>
+  <path d="M32 9h64a23 23 0 0 1 23 23v1a24 24 0 0 0-24-23H33A24 24 0 0 0 9 33v-1A23 23 0 0 1 32 9Z" fill="#FFF" opacity=".18"/>
+  <circle cx="84" cy="47" r="12" fill="#D3BFF2"/>
+  <path d="M84 64c13 0 23 9 23 22v3a5 5 0 0 1-5 5H66a5 5 0 0 1-5-5v-3c0-13 10-22 23-22Z" fill="#D3BFF2"/>
+  <circle cx="53" cy="44" r="16" fill="#FFF"/>
+  <path d="M53 66c16 0 29 11 29 27v5a6 6 0 0 1-6 6H30a6 6 0 0 1-6-6v-5c0-16 13-27 29-27Z" fill="#FFF"/>
+</svg>

@@ -12,6 +12,15 @@ polkit.addRule(function(action, subject) {
             return polkit.Result.NO;
         }
     }
+    if (action.id == "org.mertensia.accounts.manage") {
+        // Authenticate the caller directly: group-based admin enumeration may
+        // omit homed users and fall back to an unrelated administrator.
+        // The helper independently checks wheel membership and setup state.
+        if (subject.active && subject.local && subject.isInGroup("wheel")) {
+            return polkit.Result.AUTH_SELF_KEEP;
+        }
+        return polkit.Result.NO;
+    }
     if (action.id == "org.freedesktop.accounts.user-administration") {
         return polkit.Result.NO;
     }

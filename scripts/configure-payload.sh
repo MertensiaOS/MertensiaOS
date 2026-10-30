@@ -47,6 +47,11 @@ set -euo pipefail
 )
 
 (
+  # Source-installed icons do not trigger RPM's icon-cache update hooks.
+  gtk-update-icon-cache --force /usr/share/icons/hicolor
+)
+
+(
   cp --update=none /usr/share/plymouth/themes/spinner/*.png /usr/share/plymouth/themes/mertensia/ && \
       fc-cache -f /usr/share/fonts/mertensia && \
       test "$(fc-match -f '%{file}' 'Figtree')" = /usr/share/fonts/mertensia/Figtree-Variable.ttf && \

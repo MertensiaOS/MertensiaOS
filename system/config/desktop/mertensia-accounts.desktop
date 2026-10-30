@@ -3,5 +3,5 @@ Type=Application
 Name=Mertensia Accounts
 Comment=Create encrypted user accounts
 Exec=/usr/bin/mertensia-firstboot --add-user
-Icon=system-users
+Icon=org.mertensia.Accounts
 Categories=Settings;System;

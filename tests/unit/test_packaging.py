@@ -112,6 +112,46 @@ class ApplicationPackagingTests(unittest.TestCase):
         self.assertTrue((self.image / "usr/share/mertensia/branding/firstboot.css").is_file())
         self.assertFalse((self.image / "usr/share/mertensia-installer/branding").exists())
 
+    def test_accounts_icon_is_discoverable_after_rebuilding_inherited_cache(self):
+        import gi
+        gi.require_version("Gtk", "4.0")
+        from gi.repository import Gtk
+
+        desktop = configparser.ConfigParser(interpolation=None)
+        desktop.read(self.image / "usr/share/applications/org.mertensia.Accounts.desktop")
+        icon_name = desktop["Desktop Entry"]["Icon"]
+        icon_root = self.image / "usr/share/icons"
+        theme = icon_root / "hicolor"
+        apps = theme / "scalable/apps"
+        icon = apps / f"{icon_name}.svg"
+        artwork = icon.read_bytes()
+        shutil.copy2("/usr/share/icons/hicolor/index.theme", theme / "index.theme")
+        # Model an inherited RPM cache that predates our source-installed icon.
+        icon.unlink()
+        (apps / "existing-app.svg").write_bytes(artwork)
+        subprocess.run(["gtk-update-icon-cache", "--force", str(theme)],
+                       check=True, capture_output=True)
+        directory_stat = apps.stat()
+        icon.write_bytes(artwork)
+        # Image layers may retain directory timestamps older than the cache.
+        os.utime(apps, ns=(directory_stat.st_atime_ns, directory_stat.st_mtime_ns))
+
+        def lookup():
+            icons = Gtk.IconTheme.new()
+            icons.set_search_path([str(icon_root)])
+            icons.set_theme_name("hicolor")
+            return icons.has_icon(icon_name)
+
+        self.assertFalse(lookup())
+        configuration = (ROOT / "scripts/configure-payload.sh").read_text()
+        command = next(line.strip() for line in configuration.splitlines()
+                       if line.strip().startswith("gtk-update-icon-cache "))
+        arguments = shlex.split(command)
+        self.assertEqual(arguments[-1], "/usr/share/icons/hicolor")
+        arguments[-1] = str(theme)
+        subprocess.run(arguments, check=True, capture_output=True)
+        self.assertTrue(lookup())
+
     def test_configuration_keeps_the_system_paths_used_by_services_and_policies(self):
         for name in (
             "usr/lib/tmpfiles.d/mertensia.conf",
