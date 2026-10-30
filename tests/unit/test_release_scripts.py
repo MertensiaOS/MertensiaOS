@@ -611,6 +611,30 @@ class ReleaseScriptTests(unittest.TestCase):
         self.assertIn("Could not check", result.stderr)
         self.assert_no_push_or_promotion()
 
+    def test_release_gates_and_publishes_the_rechunked_payload(self):
+        workflow = yaml.safe_load((ROOT / ".github/workflows/release.yml").read_text())
+        steps = workflow["jobs"]["release"]["steps"]
+        build = next(step for step in steps if "podman build --pull --no-cache" in step.get("run", ""))
+        rechunk = next(step for step in steps if "scripts/rechunk-image.sh" in step.get("run", ""))
+        fixture = next(step for step in steps if step.get("id") == "fixture")
+        gate = next(step for step in steps if "scripts/test-iso.sh" in step.get("run", ""))
+        publish = next(step for step in steps if step.get("id") == "publish")
+        self.assertIn("-t localhost/mertensiaos:release-unpacked", build["run"])
+        self.assertEqual(shlex.split(rechunk["run"])[-2:],
+                         ["localhost/mertensiaos:release-unpacked", "localhost/mertensiaos:release"])
+        self.assertIn("BASE_IMAGE=localhost/mertensiaos:release", fixture["run"])
+        self.assertIn("--base-image localhost/mertensiaos:release", gate["run"])
+        self.assertIn("scripts/publish-image.sh localhost/mertensiaos:release ", publish["run"])
+        order = [steps.index(step) for step in (build, rechunk, fixture, gate, publish)]
+        self.assertEqual(order, sorted(order))
+        for step in (rechunk, gate):
+            self.assertNotIn("continue-on-error", step)
+            self.assertNotIn("if", step)
+        for step in steps:
+            if "run" in step:
+                checked = subprocess.run(["bash", "-n"], input=step["run"], capture_output=True, text=True)
+                self.assertEqual(checked.returncode, 0, checked.stderr)
+
     def test_release_signs_all_health_fixtures_and_requires_automatic_recovery(self):
         workflow = yaml.safe_load((ROOT / ".github/workflows/release.yml").read_text())
         steps = workflow["jobs"]["release"]["steps"]

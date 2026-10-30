@@ -43,6 +43,11 @@ def check_source():
             for source in sources:
                 if not (ROOT / source).exists():
                     raise SystemExit(f"{path.name}: missing build input {source}")
+    for role in ("payload", "installer"):
+        manifest = ROOT / f"scripts/{role}-files.json"
+        for source, destination in json.loads(manifest.read_text()):
+            if not (ROOT / source).exists() or not destination.startswith("/"):
+                raise SystemExit(f"{manifest.name}: invalid image file mapping {source} -> {destination}")
     print("Python, shell and JSON syntax and container build inputs are valid.")
 
 
