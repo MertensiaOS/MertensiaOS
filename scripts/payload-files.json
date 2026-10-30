@@ -16,6 +16,10 @@
     "/usr/share/flatpak/remotes.d/flathub.flatpakrepo"
   ],
   [
+    "system/config/gnome/50-mertensia-gdm.gschema.override",
+    "/usr/share/glib-2.0/schemas/zz-mertensia-gdm.gschema.override"
+  ],
+  [
     "system/config/gnome/50-mertensia-software.gschema.override",
     "/usr/share/glib-2.0/schemas/zz-mertensia-software.gschema.override"
   ],

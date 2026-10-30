@@ -1,5 +1,9 @@
 # Shared desktop and installer branding
 
+GDM shows no distribution logo. The payload installs a GSettings schema override
+with an empty `org.gnome.login-screen.logo`, compiled with the other GNOME
+defaults during the image build. The live installer inherits this setting.
+
 The [Quiet Bloom Plymouth theme](../docs/plymouth.md) reuses the same bloom and
 palette for system boot and the installer ISO. Regenerate its project-owned PNGs
 with `python3 scripts/generate-plymouth-assets.py` (requires `python3-cairo`,
