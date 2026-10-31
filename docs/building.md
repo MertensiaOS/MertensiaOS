@@ -12,6 +12,13 @@ initramfs encryption support and the release signature policy. The live image
 in `Containerfile.installer` adds the installer and image-builder contract.
 `Containerfile.dev` adds a testing account and must never be published.
 
+The payload selects authselect's `local` profile with `with-systemd-homed`
+and `with-group-merging`. Group merging combines `/etc/group` with homed's
+NSS memberships so polkit can enumerate encrypted-home administrators in
+`wheel`. The image check validates the generated NSS configuration; VM tests
+check the administrator and non-administrator through the same group lookup
+used by polkit.
+
 ## Development
 
 ```sh
@@ -29,8 +36,11 @@ stage with `system/patches/accountsservice-homed-enumeration.patch`. Upstream 26
 counts system accounts in `/etc/shadow` toward the 50-user homed enumeration
 limit, hiding all encrypted-home users on this image. The patch counts the
 enumerated users instead. Both daemon and client RPMs retain Fedora's packaging
-with a `.mertensia1` release suffix; build tools stay in the build stage. Review
-and remove this patch once Fedora ships the corrected enumeration check.
+with a `.mertensia2` release suffix. A second hunk rejects AccountsService's
+traditional `CreateUser` operation when the image's
+`/usr/share/mertensia/homed-accounts-only` marker exists. This prevents callers
+from bypassing encrypted-home creation after unlocking GNOME Settings. Review
+the enumeration hunk once Fedora ships that fix; retain the creation guard.
 
 | Variable | Default / meaning |
 | --- | --- |

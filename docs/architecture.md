@@ -118,6 +118,25 @@ do not modify the import path themselves.
 
 ## Application boundaries
 
+The desktop Accounts app is `mertensia.accounts.ui`, launched by
+`/usr/bin/mertensia-accounts`. The `--add-user` compatibility option on
+`mertensia-firstboot` opens its creation form; first-boot setup retains its
+separate lifecycle. GTK runs unprivileged, with blocking IPC in worker threads.
+The client lists home1 records and login1 sessions, uses AccountsService's
+homed-aware profile/avatar methods, and changes its own password through
+home1 `ChangePasswordHome`. Passwords travel in D-Bus messages or helper stdin,
+never argv. This direct password operation does not synchronize a separate
+saved-password keyring; keyring integration remains separate work.
+
+Administrative account creation, role changes, sign-in disabling and removal
+use the existing pkexec helper. It validates the original caller, setup state,
+target and operation under the lifecycle lock. It protects the last enabled
+administrator, prevents disabling/removing the caller, and refuses removal of
+an in-use home. Role changes preserve unrelated group memberships. Signed
+offline homed updates reconcile with the encrypted home on the next login;
+group changes require a fresh session. The app does not enable automatic login
+for encrypted homes or offer administrator password resets for other users.
+
 The GTK UIs launch their respective privileged helpers through `pkexec`.
 UI code does not import privileged helper modules. Helpers validate requests and
 system state independently of client-side validation.
@@ -125,8 +144,8 @@ system state independently of client-side validation.
 The account helper's `backend.py` identifies the caller and controls account
 lifecycle transitions. `validation.py` checks untrusted requests, `state.py`
 provides durable writes and the exclusive lifecycle lock, and `operations.py`
-implements D-Bus and system command operations. Firstboot and the additional
-account window share the same UI; regional metadata stays in GTK-free
+implements D-Bus and system command operations. Firstboot and the Accounts
+manager share account validation; regional metadata stays in GTK-free
 `regions.py`, while the search dialog lives in `picker.py`.
 
 The installer helper's `backend.py` orchestrates installation and its CLI.

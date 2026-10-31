@@ -21,7 +21,14 @@ polkit.addRule(function(action, subject) {
         }
         return polkit.Result.NO;
     }
-    if (action.id == "org.freedesktop.accounts.user-administration") {
+    // Unlock supported GNOME/AccountsService operations as the signed-in
+    // administrator. AccountsService separately rejects traditional account
+    // creation; use Mertensia Accounts to create encrypted homes.
+    if (action.id == "org.freedesktop.accounts.user-administration" ||
+        action.id == "org.gnome.controlcenter.user-accounts.administration") {
+        if (subject.active && subject.local && subject.isInGroup("wheel")) {
+            return polkit.Result.AUTH_SELF_KEEP;
+        }
         return polkit.Result.NO;
     }
 });

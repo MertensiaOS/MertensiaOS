@@ -74,6 +74,14 @@ Install from the ISO, save the root recovery key outside the live system, then
 restart and create your first administrator account. The account password
 unlocks its encrypted home; the root recovery key does not unlock that home.
 
+Use **Mertensia Accounts** to create additional encrypted accounts. Traditional
+account creation through AccountsService is blocked to keep user homes encrypted.
+Accounts also lists existing users and provides profile pictures, names,
+languages and password changes. Administrators can change account types,
+disable sign-in and remove signed-out users. Password changes require the
+account holder's current password; administrators cannot reset a forgotten
+encrypted-home password. Removal permanently deletes that user's home and files.
+
 See [recovery](docs/recovery.md) for interrupted installation, root unlock,
 TPM resealing and home backups. See [releases and updates](docs/releases.md)
 for signing credentials, signature verification, upgrades and rollback.

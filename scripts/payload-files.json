@@ -12,6 +12,10 @@
     "/usr/share/applications/gnome-mimeapps.list"
   ],
   [
+    "system/config/accountsservice/homed-accounts-only",
+    "/usr/share/mertensia/homed-accounts-only"
+  ],
+  [
     "system/config/flatpak/flathub.flatpakrepo",
     "/usr/share/flatpak/remotes.d/flathub.flatpakrepo"
   ],
@@ -182,6 +186,10 @@
   [
     "system/bin/mertensia-firstboot",
     "/usr/bin/mertensia-firstboot"
+  ],
+  [
+    "system/bin/mertensia-accounts",
+    "/usr/bin/mertensia-accounts"
   ],
   [
     "branding",

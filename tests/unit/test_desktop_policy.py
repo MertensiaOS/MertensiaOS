@@ -3,6 +3,7 @@
 import importlib.util
 from pathlib import Path
 import subprocess
+import tempfile
 import unittest
 from unittest.mock import patch
 
@@ -11,9 +12,113 @@ ROOT = Path(__file__).resolve().parents[2]
 SPEC = importlib.util.spec_from_file_location("desktop_policy", ROOT / "scripts/clean-desktop.py")
 policy = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(policy)
+CHECK_SPEC = importlib.util.spec_from_file_location("check_desktop_policy", ROOT / "scripts/check-desktop-policy.py")
+checks = importlib.util.module_from_spec(CHECK_SPEC)
+CHECK_SPEC.loader.exec_module(checks)
 
 
 class DesktopPolicyTests(unittest.TestCase):
+    def test_nss_group_merging_accepts_authselect_output_and_rejects_hidden_homed_members(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            nsswitch = Path(temporary) / "nsswitch.conf"
+            for entry, valid in (
+                ("group: files [SUCCESS=merge] systemd [SUCCESS=merge]\n", True),
+                ("group:\tfiles [SUCCESS=merge] systemd\n", True),
+                ("group:      files [SUCCESS=merge] altfiles [SUCCESS=merge] systemd [SUCCESS=merge]\n", True),
+                ("group: files [SUCCESS=merge] altfiles [SUCCESS=merge] systemd # bootc\n", True),
+                ("group: files [SUCCESS=merge] altfiles systemd\n", False),
+                ("group: files altfiles [SUCCESS=merge] systemd\n", False),
+                ("group: files [SUCCESS=merge] altfiles [SUCCESS=return] systemd\n", False),
+                ("group: files [SUCCESS=merge] altfiles [SUCCESS=merge]\n", False),
+                ("group: files systemd\n", False),
+                ("# group: files [SUCCESS=merge] systemd\n", False),
+                ("passwd: files [SUCCESS=merge] systemd\n", False),
+                ("group: files [SUCCESS=return] systemd\n", False),
+                ("group: files systemd [SUCCESS=merge]\n", False),
+            ):
+                with self.subTest(entry=entry):
+                    nsswitch.write_text(entry)
+                    if valid:
+                        checks.check_group_merging(nsswitch)
+                    else:
+                        with self.assertRaisesRegex(SystemExit, "Missing files/systemd group merging"):
+                            checks.check_group_merging(nsswitch)
+
+    def check_password_pam(self, system_auth, passwd="password substack system-auth\n"):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            system_auth_path = root / "system-auth"
+            passwd_path = root / "passwd"
+            system_auth_path.write_text(system_auth)
+            passwd_path.write_text(passwd)
+            checks.check_password_pam(system_auth_path, passwd_path)
+
+    def test_password_pam_accepts_current_and_older_authselect_syntax(self):
+        for prefix in ("password", "-password", "  -password"):
+            for control in ("sufficient", "[success=done default=ignore]"):
+                for delegation in ("password substack system-auth\n", "-password include system-auth\n"):
+                    with self.subTest(prefix=prefix, control=control, delegation=delegation):
+                        self.check_password_pam(f"{prefix}\t{control}\tpam_systemd_home.so\n", delegation)
+
+    def test_password_pam_rejects_missing_or_inactive_homed_password_module(self):
+        for system_auth in (
+            "password sufficient pam_unix.so\n",
+            "# -password sufficient pam_systemd_home.so\n",
+            "auth sufficient pam_systemd_home.so\n",
+            "password sufficient pam_unix.so pam_systemd_home.so\n",
+            "password sufficient pam_systemd_home.so.disabled\n",
+            "password sufficient\nauth sufficient pam_systemd_home.so\n",
+        ):
+            with self.subTest(system_auth=system_auth):
+                with self.assertRaisesRegex(SystemExit, "Missing homed password support"):
+                    self.check_password_pam(system_auth)
+
+    def test_password_pam_rejects_missing_password_delegation(self):
+        for passwd in (
+            "# password substack system-auth\n",
+            "auth include system-auth\n",
+            "password include password-auth\n",
+            "password include system-auth-other\n",
+            "password\ninclude system-auth\n",
+        ):
+            with self.subTest(passwd=passwd):
+                with self.assertRaisesRegex(SystemExit, "Missing system-auth password delegation"):
+                    self.check_password_pam("-password sufficient pam_systemd_home.so\n", passwd)
+
+    def test_accounts_policy_authenticates_admin_unlock_and_preserves_self_service(self):
+        rule = (ROOT / "system/config/polkit/49-mertensia-accounts.rules").read_text()
+        script = '''let callback;
+const polkit = {
+    Result: {NO: "no", YES: "yes", AUTH_SELF_KEEP: "auth_self_keep"},
+    addRule: rule => { callback = rule; },
+    spawn: () => { throw Error("Setup authorization must not be used"); }
+};
+''' + rule + '''
+for (let active of [false, true]) {
+    for (let local of [false, true]) {
+        for (let admin of [false, true]) {
+            let subject = {user: "alice", active, local, isInGroup: group => admin && group === "wheel"};
+            for (let id of ["org.freedesktop.accounts.user-administration",
+                            "org.gnome.controlcenter.user-accounts.administration"]) {
+                let expected = active && local && admin ? "auth_self_keep" : "no";
+                if (callback({id}, subject) !== expected) throw Error(id);
+            }
+            for (let id of ["org.freedesktop.accounts.change-own-password",
+                            "org.freedesktop.accounts.change-own-user-data",
+                            "org.freedesktop.home1.passwd-home",
+                            "org.freedesktop.NetworkManager.settings.modify.system"]) {
+                if (callback({id}, subject) !== undefined) throw Error(id);
+            }
+            let result = callback({id: "org.mertensia.accounts.manage"}, subject);
+            if (result !== (active && local && admin ? "auth_self_keep" : "no"))
+                throw Error("Encrypted account creation authorization changed");
+        }
+    }
+}
+'''
+        result = subprocess.run(["gjs", "-c", script], text=True, capture_output=True, timeout=10)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
     def test_failed_dependency_preflight_never_invokes_dnf(self):
         with patch.object(policy, "inventory", return_value={"openssh-server", "bootc"}), \
                 patch.object(policy.subprocess, "run", side_effect=subprocess.CalledProcessError(1, "rpm")) as run:

@@ -69,6 +69,7 @@ python3 /run/mertensia-build/check-desktop-policy.py
 (
   chmod 0755 \
         /usr/bin/mertensia-firstboot \
+        /usr/bin/mertensia-accounts \
         /usr/bin/mertensia-reseal-root \
         /usr/libexec/mertensia-sync-login-users \
         /usr/libexec/mertensia-setup-authorized \

@@ -7,6 +7,7 @@ import ctypes
 import ctypes.util
 import configparser
 from contextlib import contextmanager
+import grp
 import json
 import os
 import pwd
@@ -465,6 +466,15 @@ def login_checks(password, *, check_wrong_password=False):
     run(["systemctl", "start", "mertensia-login-users.service"])
     bus = dbus.SystemBus()
     manager = dbus.Interface(bus.get_object("org.freedesktop.Accounts", "/org/freedesktop/Accounts"), "org.freedesktop.Accounts")
+    # Even privileged callers must use the encrypted-home account helper.
+    # GNOME's Unlock meta-action implies AccountsService administration.
+    try:
+        manager.CreateUser("integration_unencrypted", "Must Not Be Created", dbus.Int32(0))
+    except dbus.DBusException as error:
+        require(error.get_dbus_name() == "org.freedesktop.Accounts.Error.NotSupported",
+                "AccountsService rejected traditional creation for an unexpected reason")
+    else:
+        raise RuntimeError("AccountsService allowed traditional unencrypted account creation")
     cached = set()
     for path in manager.ListCachedUsers():
         props = dbus.Interface(bus.get_object("org.freedesktop.Accounts", path), "org.freedesktop.DBus.Properties")
@@ -480,11 +490,17 @@ def login_checks(password, *, check_wrong_password=False):
         require(public.get("storage") == "luks", f"{user} does not have an encrypted home")
         require(public.get("fileSystemType") == "ext4", f"{user} home filesystem is unexpected")
         require(("wheel" in public.get("memberOf", [])) == (user == ACCOUNT), "account privileges are wrong")
+        # Match polkit's administrator enumeration, not only homed's record or
+        # initgroups(). Without NSS group merging, wheel can appear empty here.
+        require((user in grp.getgrnam("wheel").gr_mem) == (user == ACCOUNT),
+                f"NSS wheel enumeration is wrong for {user}")
         pam_authenticate(user, password)
         if check_wrong_password:
             pam_authenticate(user, password + "-incorrect", expect_success=False)
             # Clear any failure tally before later reboot/update checks.
             pam_authenticate(user, password)
+    if check_wrong_password:
+        password_change_checks(SECOND_ACCOUNT, password)
     # A setup caller must no longer be able to create an administrator.
     environment = os.environ.copy()
     environment["PKEXEC_UID"] = str(pwd.getpwnam("mertensia-setup").pw_uid)
@@ -503,6 +519,33 @@ def login_checks(password, *, check_wrong_password=False):
     return {"encrypted_homes": True, "admin_and_user_privileges": True, "gdm_pam_authentication": True,
             "incorrect_password_check": check_wrong_password,
             "login_users_cached": True, "setup_retired": True, "gdm_active": True}
+
+
+def password_change_checks(username, password):
+    """Run the desktop client as a standard user, then restore fixture credentials."""
+    import secrets
+    changed = secrets.token_urlsafe(32)
+    code = """import json, sys
+sys.path.insert(0, '/usr/lib/mertensia/python')
+from mertensia.accounts.client import AccountsClient
+request = json.load(sys.stdin)
+AccountsClient().change_password(request['username'], request['current'], request['new'])
+"""
+    def change(current, new):
+        result = subprocess.run(
+            ["runuser", "--user", username, "--", "/usr/bin/python3", "-I", "-c", code],
+            input=json.dumps({"username": username, "current": current, "new": new}),
+            text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=180,
+        )
+        # Never echo service diagnostics or the secret input into the report.
+        require(result.returncode == 0, "standard-user encrypted-home password change failed")
+    change(password, changed)
+    try:
+        pam_authenticate(username, password, expect_success=False)
+        pam_authenticate(username, changed)
+    finally:
+        change(changed, password)
+    pam_authenticate(username, password)
 
 
 def stage_upgrade(image):

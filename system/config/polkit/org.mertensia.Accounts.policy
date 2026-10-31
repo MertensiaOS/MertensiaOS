@@ -3,7 +3,7 @@
   "http://www.freedesktop.org/standards/PolicyKit/1/policyconfig.dtd">
 <policyconfig>
   <action id="org.mertensia.accounts.manage">
-    <description>Create an encrypted MertensiaOS account</description>
+    <description>Manage encrypted MertensiaOS accounts</description>
     <message>Authentication is required to manage encrypted accounts</message>
     <defaults>
       <allow_any>no</allow_any>

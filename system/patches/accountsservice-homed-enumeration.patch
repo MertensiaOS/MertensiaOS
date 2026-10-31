@@ -13,3 +13,18 @@ passwd and requested-user generators.
 -        if (g_hash_table_size (local_users) < MAX_LOCAL_USERS) {
 +        if (g_hash_table_size (users) < MAX_LOCAL_USERS) {
                  g_autofree char *status = NULL;
+@@ -1922,6 +1922,14 @@
+         Daemon *daemon = (Daemon *) accounts;
+         CreateUserData *data;
+ 
++        /* GNOME's CreateUser + SetPassword sequence creates traditional UNIX
++         * accounts. This image requires a password at encrypted-home creation. */
++        if (g_file_test ("/usr/share/mertensia/homed-accounts-only", G_FILE_TEST_EXISTS)) {
++                throw_error (context, ERROR_NOT_SUPPORTED,
++                             "Create encrypted accounts with Mertensia Accounts.");
++                return TRUE;
++        }
++
+         data = g_new0 (CreateUserData, 1);
+         data->user_name = g_strdup (user_name);
+         data->real_name = g_strdup (real_name);

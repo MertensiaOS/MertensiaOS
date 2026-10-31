@@ -117,3 +117,16 @@ GDK_BACKEND=broadway BROADWAY_DISPLAY=:7 GSETTINGS_BACKEND=memory \
 subprocesses. Omit it for portable sample data. Captures also include all three
 pickers and the no-results state. Repeat with `--theme dark --width 800 --height 600`
 to check the smaller layout. The preview never creates an account or applies settings.
+
+The full Accounts manager has its own fixture-backed preview. It renders the
+real GTK widgets and exercises password rejection/retry/change, creation,
+typed deletion confirmation and non-administrator access without connecting
+to host account services. With the Broadway display connected, run:
+
+```sh
+GDK_BACKEND=broadway BROADWAY_DISPLAY=:7 GSK_RENDERER=broadway GTK_A11Y=none \
+  /usr/bin/python3 scripts/previews/accounts.py --capture /tmp/accounts-preview
+```
+
+Repeat with `--theme dark` to check dark mode. Run without `--capture` to explore
+the simulated manager interactively. These users exist only in process memory.

@@ -22,6 +22,7 @@ import dbus
 
 from . import state as storage
 from .operations import SystemOperations
+from .management import manage_account
 from .state import DEFAULT_PATHS, LifecyclePaths
 from .validation import RequestError, SETUP_USER, validate_request
 
@@ -208,6 +209,10 @@ def process_request(
         if isinstance(request, dict) and request.get("firstboot") is True:
             raise RequestError("initial setup may only be performed by the setup account")
 
+        if isinstance(request, dict) and request.get("operation", "create") != "create":
+            username = manage_account(request, caller, operations)
+            return RequestResult(username, False)
+
         data = validate_request(request, False)
         if operations.home_record(data["username"]) is not None:
             raise RequestError("the requested account already exists")
@@ -301,7 +306,7 @@ def main() -> int:
             {
                 "event": "error",
                 "ok": False,
-                "message": f"account creation failed: {error}",
+                "message": "The account operation failed. Refresh and try again.",
             }
         )
         return 1

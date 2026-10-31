@@ -70,7 +70,7 @@ RUN dnf -y install \
     xdg-desktop-portal-gnome \
     && rm -rf /tmp/mertensia-accountsservice && dnf clean all
 
-RUN authselect select local with-systemd-homed --force --nobackup && \
+RUN authselect select local with-systemd-homed with-group-merging --force --nobackup && \
     authselect check && \
     install -Dm0600 /var/lib/authselect/checksum /usr/share/mertensia/authselect/checksum && \
     rm -f /var/lib/authselect/checksum && \

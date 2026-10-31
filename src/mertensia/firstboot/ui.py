@@ -405,7 +405,10 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--add-user", action="store_true")
     args = parser.parse_args()
-    return SetupApp(not args.add_user).run()
+    if args.add_user:
+        from mertensia.accounts.ui import main as accounts_main
+        return accounts_main(["--add-user"])
+    return SetupApp(True).run()
 
 
 if __name__ == "__main__":

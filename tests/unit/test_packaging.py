@@ -92,6 +92,9 @@ class ApplicationPackagingTests(unittest.TestCase):
         result = self.launcher("/usr/bin/mertensia-firstboot", "--help")
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertIn("--add-user", result.stdout)
+        result = self.launcher("/usr/bin/mertensia-accounts", "--help")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("Manage encrypted MertensiaOS user accounts", result.stdout)
         result = self.launcher("/usr/libexec/mertensia-boot-health", "--help")
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertIn("collect", result.stdout)
@@ -218,6 +221,7 @@ class ApplicationPackagingTests(unittest.TestCase):
             "usr/share/applications/org.mertensia.BootHealth.desktop",
             "usr/share/flatpak/remotes.d/flathub.flatpakrepo",
             "usr/share/polkit-1/actions/org.mertensia.Accounts.policy",
+            "usr/share/mertensia/homed-accounts-only",
             "etc/containers/policy.json",
             "usr/lib/os-release",
         ):

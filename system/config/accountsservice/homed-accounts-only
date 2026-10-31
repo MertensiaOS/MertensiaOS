@@ -1,0 +1,2 @@
+# AccountsService must not create traditional UNIX accounts on this image.
+# GNOME Settings opens Mertensia Accounts to create encrypted homed accounts.

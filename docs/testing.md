@@ -122,6 +122,12 @@ The core run asserts:
    non-administrator with LUKS/ext4 homes. Both authenticate through the actual
    `gdm-password` PAM stack, reject incorrect passwords and appear in
    AccountsService's login cache.
+   The standard user changes their own password through the same unprivileged
+   home1 client as the Accounts app. The old password must fail and the new
+   one must authenticate through GDM's PAM stack; fixture credentials are then
+   restored for subsequent reboot checks.
+   NSS `wheel` enumeration must include the homed administrator and exclude
+   the non-administrator, covering polkit's administrator identity lookup.
    Enumeration is also checked after restarting AccountsService with at least
    64 shadow entries, including system accounts, to cover the homed user-limit
    regression and GDM's system-account/locked-account filters.
@@ -293,11 +299,29 @@ use a visible display and the normal production ISO for these checks.
    the UI and check regional settings, keyboard input and timezone.
 3. Log in through GDM, log out, and log in again. Check the encrypted home is
    usable, the initial account has administrator access, and setup is no longer
-   offered. In the Accounts app, verify the polkit prompt identifies the signed-in
-   administrator and accepts that account's login password. Cancel a prompt and
-   check that the form shows a useful message and allows another attempt.
+   offered. Open Mertensia Accounts and check both the account list and the
+   signed-in user's profile. Verify name, picture and language changes persist
+   after restarting Accounts. From Add User, verify the polkit prompt identifies
+   the signed-in administrator and accepts that account's login password.
+   Cancel a prompt and check that the form retains its values and allows retry.
+   In Settings → System → Users, confirm Unlock identifies the signed-in
+   administrator and accepts their password. Use Mertensia Accounts to create
+   encrypted accounts; AccountsService must reject traditional account creation.
+   In Mertensia Accounts, open your own Password dialog.
+   Check that an incorrect current password is rejected, then change the
+   password. Log out, reboot, and verify that the new password unlocks the
+   encrypted home and the old password fails. If a login keyring is configured,
+   check that it unlocks with the new password as well.
 4. Add a non-administrator, log in as that account, and confirm it cannot create
    administrators. Check both users remain visible after reboot.
+   In Accounts, verify the non-administrator can edit their own profile and
+   password but cannot add users, change roles, disable sign-in or remove users.
+   As an administrator, verify role changes preserve unrelated groups and take
+   effect after a fresh sign-in. Confirm the last enabled administrator cannot
+   be demoted or disabled, and that the current user cannot be removed or
+   disabled. Removal must require the exact username and reject signed-in
+   accounts; perform deletion only on disposable test accounts and verify the
+   encrypted home is removed. Automatic login remains unavailable for homed.
 5. On a disposable disk, test root recovery after changing Secure Boot/TPM state,
    reseal the root volume, and verify automatic unlock on the next boot. Test
    suspend/resume and encrypted-home recovery separately on supported hardware.

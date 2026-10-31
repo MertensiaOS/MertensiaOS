@@ -93,6 +93,26 @@ class SystemOperations:
                 continue
             raise RequestError("the requested username is already in use")
 
+    def home_names(self) -> list[str]:
+        return [str(home[0]) for home in self.manager.ListHomes() if int(home[1]) >= 1000]
+
+    def home_in_use(self, username: str) -> bool:
+        home = self.manager.GetHomeByName(username)
+        if str(home[1]) not in {"inactive", "absent", "unfixated"}:
+            return True
+        bus = dbus.SystemBus()
+        login = dbus.Interface(bus.get_object("org.freedesktop.login1", "/org/freedesktop/login1"),
+                               "org.freedesktop.login1.Manager")
+        return any(str(session[2]) == username for session in login.ListSessions())
+
+    def update_properties(self, username: str, options: list[str]) -> None:
+        # homectl preserves per-machine fields and existing avatar blobs. The
+        # offline update also works when another user's home is locked; homed
+        # reconciles the signed record on their next login.
+        subprocess.run(["/usr/bin/homectl", "update", "--offline", *options, username],
+                       stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+                       stderr=subprocess.PIPE, check=True, timeout=120)
+
     def authenticate_home(self, username: str, password: str) -> None:
         """Verify recovery credentials against an existing homed account."""
 
