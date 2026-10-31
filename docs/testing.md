@@ -36,6 +36,18 @@ The live installer uses the encrypted target disk for bulk image-export scratch
 data and checks target capacity for both the deployment and temporary data.
 Scratch files are removed before the target is unmounted. Guest RAM is used by
 the live desktop and installation processes; adjust it with `--memory-mib`.
+The installer requires 3 GiB of installed RAM and recommends 4 GiB. KVM trials
+on 31 October 2026 passed installation at 3 GiB three times, including installed
+boot, TPM/recovery unlock and encrypted-account checks on the latest ISO.
+2 GiB and 2.25 GiB ran out of memory during LUKS setup. At 2.5 GiB, installation
+completed with only 87–104 MiB available; the latest-ISO run then timed out
+during shutdown, without establishing the cause.
+The check uses kernel `MemTotal`, with a 512 MiB allowance for firmware/kernel
+reservations: 2.5 GiB usable is the blocking threshold and 3.5 GiB usable is the
+recommendation threshold. The tested 3 GiB guest exposed 2.74 GiB usable and
+passes with a recommendation warning; the tested 2.5 GiB guest exposed 2.31 GiB
+and is blocked. Swap does not count toward either threshold. The privileged
+helper repeats the memory check before selecting or modifying a disk.
 Allow substantial free disk space for images, containers and artifacts.
 VM artifacts default to `/var/tmp`; choose a disk-backed `--work-dir` rather
 than a RAM-backed temporary filesystem for large ISOs and virtual disks.

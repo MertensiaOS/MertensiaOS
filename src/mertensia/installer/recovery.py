@@ -120,7 +120,7 @@ def read_state(requested_disk: str, *, verify_volume: bool = True) -> tuple[Path
             or not isinstance(state.get("disk"), dict)):
         raise commands.InstallError("Installer recovery state is invalid or belongs to another boot.")
     disk = state["disk"]
-    required = {"path", "stable_path", "size", "serial", "device_id"}
+    required = {"path", "stable_path", "size", "serial", "device_id", "disk_sequence"}
     if (not required.issubset(disk) or disk["device_id"] != info.st_rdev
             or os.path.realpath(requested_disk) != os.path.realpath(disk["path"])
             or not isinstance(state.get("root_part"), str)

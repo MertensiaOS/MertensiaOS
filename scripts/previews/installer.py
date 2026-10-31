@@ -21,7 +21,8 @@ KEY = "ABCDEF-GHJKLM-NPQRST-UVWXYZ-234567-89ABCD-EFGHJK-LMNPQR"
 class PreviewWindow(ui.InstallerWindow):
     def _helper_once(self, command, callback):
         data = ({"ok": True, "architecture_ok": True, "uefi": True,
-                 "secure_boot": True, "tpm2": True} if command == "probe"
+                 "secure_boot": True, "tpm2": True, "memory_bytes": 3907680 * 1024,
+                 "memory_ok": True, "memory_recommended": True} if command == "probe"
                 else {"event": "disks", "disks": DISKS})
         GLib.idle_add(callback, data)
 
@@ -67,7 +68,8 @@ def main():
             assert icon.is_symbolic(), f"Not symbolic: {path.stem}"
             assert icon.get_file().get_basename() == path.name, f"Substituted icon: {path.stem}"
         window._probe_done({"ok": True, "architecture_ok": True, "uefi": True,
-                            "secure_boot": True, "tpm2": True})
+                            "secure_boot": True, "tpm2": True, "memory_bytes": 3907680 * 1024,
+                            "memory_ok": True, "memory_recommended": True})
         window._disks_done({"event": "disks", "disks": DISKS})
         window.disk_list.select_row(window.disk_list.get_row_at_index(0))
         window._show_confirmation()

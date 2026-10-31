@@ -136,6 +136,13 @@ checks; `deployment.py` handles image configuration and installed-system setup;
 key confirmation. `commands.py` owns subprocess errors and JSON events;
 `constants.py` holds installer paths and policy constants.
 
+The confirmation screen snapshots the selected disk. The helper's `install`
+command requires that snapshot as JSON in `--expected-disk`, alongside `--disk`.
+It compares the path, stable path, size, serial and kernel disk sequence before
+proceeding, and rechecks the attachment sequence immediately before erasure.
+A missing sequence or changed identity stops installation; even disks without
+serial numbers cannot silently replace the confirmed disk at the same path.
+
 Installer helpers emit newline-delimited JSON events. Installation retains its
 temporary LUKS key until the UI sends `confirm-recovery` on stdin and unlock/key
 removal checks succeed. The account helper accepts one JSON request on stdin and

@@ -17,11 +17,17 @@ from typing import Any
 from . import commands, constants, deployment, devices, recovery
 
 
-def install(requested_disk: str) -> None:
+def install(requested_disk: str, expected_disk: Any) -> None:
     check = devices.requirements()
     if not check["ok"]:
+        if check.get("memory_ok") is False:
+            raise commands.InstallError(
+                "Installation requires at least 3 GiB of RAM; 4 GiB is recommended. "
+                f"This computer has {check['memory_bytes'] / 1024**3:.1f} GiB of usable memory."
+            )
         raise commands.InstallError("Installation requires x86_64 UEFI, enabled Secure Boot, and a usable TPM 2.0 device.")
     disk = devices.resolve_selected_disk(requested_disk)
+    devices.assert_confirmed_disk(disk, expected_disk)
     config = deployment.load_config()
     image_size = deployment.source_image_size(config["SOURCE_IMAGE"])
     # Reject clearly undersized disks before erasure. Recheck actual free
@@ -135,6 +141,7 @@ def main() -> int:
     sub.add_parser("list-disks")
     install_parser = sub.add_parser("install")
     install_parser.add_argument("--disk", required=True)
+    install_parser.add_argument("--expected-disk", required=True, type=json.loads)
     for command in ("resume", "recover", "discard-prepared"):
         recovery_parser = sub.add_parser(command)
         recovery_parser.add_argument("--disk", required=True)
@@ -150,7 +157,7 @@ def main() -> int:
         else:
             with recovery.installer_lock():
                 if args.command == "install":
-                    install(args.disk)
+                    install(args.disk, args.expected_disk)
                 elif args.command == "discard-prepared":
                     recovery.discard_prepared(args.disk)
                 else:

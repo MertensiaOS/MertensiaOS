@@ -1,4 +1,5 @@
 import io
+import json
 import unittest
 from types import SimpleNamespace
 from unittest import mock
@@ -12,6 +13,50 @@ class InstallerFailureTests(unittest.TestCase):
             cls.ui = ui
         except (ImportError, ValueError) as error:
             raise unittest.SkipTest(f"GTK/Adwaita unavailable: {error}")
+
+    def test_install_uses_the_confirmation_snapshot_even_if_selection_changes(self):
+        disk = {"path": "/dev/test", "stable_path": "/dev/test", "model": "Original",
+                "serial": "", "size": 40 * 1024**3, "disk_sequence": 1}
+        confirmed = disk.copy()
+        window = SimpleNamespace(
+            _selected_disk=mock.Mock(return_value=disk), confirm_disk=mock.Mock(),
+            erase_entry=mock.Mock(), stack=mock.Mock(), _read_events=mock.Mock(),
+        )
+        self.ui.InstallerWindow._show_confirmation(window)
+        disk.update(model="Replacement", disk_sequence=2)
+        window._selected_disk.return_value = {"stable_path": "/dev/other"}
+        with mock.patch.object(self.ui.subprocess, "Popen") as launch, mock.patch.object(
+            self.ui.threading, "Thread"
+        ):
+            self.ui.InstallerWindow._install(window)
+        argv = launch.call_args.args[0]
+        self.assertEqual(argv[argv.index("--disk") + 1], confirmed["stable_path"])
+        self.assertEqual(json.loads(argv[argv.index("--expected-disk") + 1]), confirmed)
+        self.assertIn("Original", window.install_disk)
+
+    def test_memory_warning_allows_installation_but_below_minimum_blocks_it(self):
+        for allowed, recommended in ((False, False), (True, False), (True, True)):
+            with self.subTest(allowed=allowed, recommended=recommended):
+                icon, status = mock.Mock(), mock.Mock()
+                window = SimpleNamespace(
+                    requirement_rows={"memory_ok": (icon, status)},
+                    requirements_heading=mock.Mock(), requirements_label=mock.Mock(),
+                    requirements_next=mock.Mock(), _refresh_disks=mock.Mock(),
+                )
+                self.ui.InstallerWindow._probe_done(window, {
+                    "event": "requirements", "ok": allowed, "memory_ok": allowed,
+                    "memory_recommended": recommended, "memory_bytes": 2875476 * 1024,
+                })
+                window.requirements_next.set_sensitive.assert_called_once_with(allowed)
+                self.assertEqual(window._refresh_disks.call_count, int(allowed))
+                icon.set_from_icon_name.assert_called_once_with(
+                    "mertensia-check-symbolic" if recommended else "mertensia-warning-symbolic"
+                )
+                self.assertIn("usable", status.set_text.call_args.args[0])
+                if allowed and not recommended:
+                    self.assertIn("4 GiB recommended", status.set_text.call_args.args[0])
+                if not allowed:
+                    self.assertIn("Add memory", window.requirements_label.set_text.call_args.args[0])
 
     def test_failure_is_persistent_and_preserves_original_details(self):
         window = SimpleNamespace(

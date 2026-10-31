@@ -24,7 +24,7 @@ ROOT = Path(__file__).resolve().parents[2]
 class InstallerBackendTests(unittest.TestCase):
     def disk(self):
         return {"path": "/dev/test", "stable_path": "/dev/test", "device_id": 123,
-                "size": 40 * 1024**3, "serial": "test"}
+                "size": 40 * 1024**3, "serial": "test", "disk_sequence": 1}
 
     @contextmanager
     def retained_state(self, phase="installed"):
@@ -53,7 +53,7 @@ class InstallerBackendTests(unittest.TestCase):
             {"path": "/dev/readonly", "type": "disk", "ro": True,
              "size": 40 * 1024**3},
             {"path": "/dev/target", "type": "disk", "size": 40 * 1024**3,
-             "model": " Test disk ", "serial": " serial-1 "},
+             "model": " Test disk ", "serial": " serial-1 ", "disk-seq": 1},
         ]
         with mock.patch.object(protocol, "run", return_value=SimpleNamespace(
             stdout=json.dumps({"blockdevices": devices})
@@ -81,7 +81,7 @@ class InstallerBackendTests(unittest.TestCase):
     def test_disk_list_excludes_small_mounted_swap_and_held_disks(self):
         def disk(name, **values):
             return {"path": "/dev/" + name, "kname": name, "type": "disk",
-                    "size": 40 * 1024**3, **values}
+                    "size": 40 * 1024**3, "disk-seq": 1, **values}
         devices = [disk("small", size=1024),
                    disk("mounted", children=[{"path": "/dev/mounted1", "type": "part", "mountpoints": ["/mnt/files"]}]),
                    disk("swap", children=[{"path": "/dev/swap1", "type": "part"}]),
@@ -112,10 +112,13 @@ class InstallerBackendTests(unittest.TestCase):
                     hardware.assert_disk_idle(self.disk())
 
     def test_identity_changes_are_rejected_before_erasure(self):
-        for changed in ("device", "size", "serial", "read-only", "stable-path"):
+        for changed in ("device", "size", "serial", "read-only", "stable-path", "sequence"):
             disk = self.disk()
-            node = {"path": disk["path"], "type": "disk", "size": disk["size"], "serial": disk["serial"], "ro": False}
-            if changed == "size":
+            node = {"path": disk["path"], "type": "disk", "size": disk["size"],
+                    "serial": disk["serial"], "ro": False, "disk-seq": disk["disk_sequence"]}
+            if changed == "sequence":
+                node["disk-seq"] += 1
+            elif changed == "size":
                 node["size"] -= 1
             elif changed == "serial":
                 node["serial"] = "replacement"
@@ -145,10 +148,57 @@ class InstallerBackendTests(unittest.TestCase):
                 check = stack.enter_context(mock.patch.object(hardware, "assert_disk_idle", side_effect=protocol.InstallError("disk busy")))
                 commands = stack.enter_context(mock.patch.object(protocol, "run", side_effect=protocol.InstallError("fetch failed") if failure == "fetch" else None))
                 with self.assertRaises(protocol.InstallError):
-                    backend.install("/dev/test")
+                    backend.install("/dev/test", self.disk())
                 self.assertFalse(any(call.args[0][0] in {"wipefs", "sgdisk", "cryptsetup"} for call in commands.call_args_list))
                 if failure == "fetch":
                     check.assert_not_called()
+
+    def test_confirmation_mismatch_never_modifies_a_disk(self):
+        # Same path, device number, size and empty serial: only the attachment
+        # sequence distinguishes a replacement disk from the confirmed disk.
+        for changed in ("disk_sequence", "serial", "size", "path", "stable_path",
+                        "missing-sequence", "invalid-sequence", "not-an-object"):
+            confirmed = {**self.disk(), "serial": ""}
+            current = confirmed.copy()
+            if changed == "disk_sequence":
+                current[changed] += 1
+            elif changed == "size":
+                current[changed] += 1024
+            elif changed in {"path", "stable_path", "serial"}:
+                current[changed] = "replacement"
+            elif changed == "missing-sequence":
+                confirmed.pop("disk_sequence")
+            elif changed == "invalid-sequence":
+                confirmed["disk_sequence"] = True
+            else:
+                confirmed = None
+            with self.subTest(changed=changed), mock.patch.object(
+                hardware, "requirements", return_value={"ok": True}
+            ), mock.patch.object(hardware, "resolve_selected_disk", return_value=current), mock.patch.object(
+                protocol, "run"
+            ) as run, mock.patch.object(images, "load_config") as config:
+                with self.assertRaisesRegex(protocol.InstallError, "changed since confirmation"):
+                    backend.install("/dev/test", confirmed)
+                run.assert_not_called()
+                config.assert_not_called()
+
+    def test_install_cli_requires_confirmed_identity(self):
+        with mock.patch("sys.argv", ["helper", "install", "--disk", "/dev/test"]), mock.patch(
+            "sys.stderr", io.StringIO()
+        ), mock.patch.object(backend, "install") as install:
+            with self.assertRaises(SystemExit) as error:
+                backend.main()
+            self.assertEqual(error.exception.code, 2)
+            install.assert_not_called()
+
+    def test_missing_disk_sequence_fails_closed_during_listing(self):
+        disk = {"path": "/dev/test", "type": "disk", "size": 40 * 1024**3}
+        with mock.patch.object(hardware, "block_devices", return_value=[disk]), mock.patch.object(
+            hardware, "live_backing_devices", return_value=set()
+        ), mock.patch.object(hardware, "swap_devices", return_value=set()), mock.patch.object(
+            hardware, "disk_busy_reason", return_value=None
+        ), self.assertRaisesRegex(protocol.InstallError, "sequence number"):
+            hardware.list_disks()
 
     def test_previous_mapping_or_target_mount_blocks_new_disk_before_erasure(self):
         for busy in ("mapping", "mount", "submount", "symlink"):
@@ -172,7 +222,7 @@ class InstallerBackendTests(unittest.TestCase):
                 stack.enter_context(mock.patch.object(protocol, "emit"))
                 commands = stack.enter_context(mock.patch.object(protocol, "run"))
                 with self.assertRaises(protocol.InstallError):
-                    backend.install("/dev/test")
+                    backend.install("/dev/test", self.disk())
                 commands.assert_not_called()
 
     def test_prepared_format_failure_explains_safe_disposition(self):
@@ -200,7 +250,7 @@ class InstallerBackendTests(unittest.TestCase):
 
                 stack.enter_context(mock.patch.object(protocol, "run", side_effect=command))
                 with self.assertRaisesRegex(protocol.InstallError, "format failed") as error:
-                    backend.install("/dev/test")
+                    backend.install("/dev/test", self.disk())
                 work = state_root / "disk-123"
                 self.assertTrue((work / "setup.key").exists())
                 self.assertEqual(json.loads((work / "state.json").read_text())["phase"], "prepared")
@@ -267,6 +317,46 @@ class InstallerBackendTests(unittest.TestCase):
                 protocol, "run", side_effect=protocol.InstallError("probe failed")
         ):
             self.assertFalse(hardware.tpm_available())
+
+    def test_memory_inventory_requires_a_positive_memtotal_in_kib(self):
+        for value in ("", "MemAvailable: 1000000 kB", "MemTotal: 0 kB",
+                      "MemTotal: -1 kB", "MemTotal: unknown kB", "MemTotal: 3072 MB"):
+            with self.subTest(value=value), mock.patch.object(hardware.Path, "read_text", return_value=value):
+                with self.assertRaisesRegex(protocol.InstallError, "usable system memory"):
+                    hardware.memory_bytes()
+        with mock.patch.object(hardware.Path, "read_text", return_value="MemTotal:       2875476 kB\n"):
+            self.assertEqual(hardware.memory_bytes(), 2875476 * 1024)
+
+    def test_memory_cutoffs_cover_measured_guests_and_exact_boundaries(self):
+        cases = [(2425688 * 1024, False, False),  # tested 2.5 GiB guest
+                 (2875476 * 1024, True, False),   # tested 3 GiB guest
+                 (3907680 * 1024, True, True),    # tested 4 GiB guest
+                 (constants.MINIMUM_MEMORY_BYTES - 1, False, False),
+                 (constants.MINIMUM_MEMORY_BYTES, True, False),
+                 (constants.RECOMMENDED_MEMORY_BYTES - 1, True, False),
+                 (constants.RECOMMENDED_MEMORY_BYTES, True, True)]
+        for memory, allowed, recommended in cases:
+            with self.subTest(memory=memory), mock.patch.object(
+                hardware, "memory_bytes", return_value=memory
+            ), mock.patch.object(hardware.os, "uname", return_value=SimpleNamespace(machine="x86_64")), mock.patch.object(
+                hardware.Path, "is_dir", return_value=True
+            ), mock.patch.object(hardware, "secure_boot_enabled", return_value=True), mock.patch.object(
+                hardware, "tpm_available", return_value=True
+            ):
+                result = hardware.requirements()
+            self.assertEqual(result["memory_bytes"], memory)
+            self.assertEqual(result["memory_ok"], allowed)
+            self.assertEqual(result["memory_recommended"], recommended)
+            self.assertEqual(result["ok"], allowed)
+
+    def test_low_memory_stops_before_disk_selection_or_modification(self):
+        with mock.patch.object(hardware, "requirements", return_value={
+            "ok": False, "memory_ok": False, "memory_bytes": 2425688 * 1024
+        }), mock.patch.object(hardware, "resolve_selected_disk") as select, mock.patch.object(protocol, "run") as run:
+            with self.assertRaisesRegex(protocol.InstallError, "at least 3 GiB of RAM; 4 GiB is recommended"):
+                backend.install("/dev/test", self.disk())
+            select.assert_not_called()
+            run.assert_not_called()
 
     def test_install_checks_cleanup_before_completing(self):
         for failure, mode in ((None, "development"), (None, "production"),
@@ -371,7 +461,7 @@ class InstallerBackendTests(unittest.TestCase):
 
                 if failure:
                     with self.assertRaises(protocol.InstallError) as error:
-                        backend.install("/dev/test")
+                        backend.install("/dev/test", self.disk())
                     self.assertIn("Recovery state retained", str(error.exception))
                     self.assertTrue((work / "setup.key").exists())
                     self.assertTrue((work / "recovery.key").exists())
@@ -381,7 +471,7 @@ class InstallerBackendTests(unittest.TestCase):
                     if failure not in {"bootc", "boot-mount", "scratch-space"}:
                         self.assertEqual(json.loads((work / "state.json").read_text())["phase"], "installed")
                 else:
-                    backend.install("/dev/test")
+                    backend.install("/dev/test", self.disk())
                     self.assertEqual(sum(call.args[0] == "complete" for call in events.call_args_list), 1)
                     self.assertEqual(sum("--token-only" in argv for argv in commands), 1)
                     self.assertLess(commands.index(["cryptsetup", "close", constants.MAPPER_NAME]),

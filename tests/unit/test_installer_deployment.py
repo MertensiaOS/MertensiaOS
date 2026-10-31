@@ -33,14 +33,16 @@ class InstallerDeploymentTests(unittest.TestCase):
         self.assertNotIn("RAM", str(error.exception))
 
     def test_missing_image_or_insufficient_capacity_never_erases_a_disk(self):
+        disk = {"path": "/dev/test", "stable_path": "/dev/test", "size": 24 * GIB,
+                "serial": "", "disk_sequence": 1}
         for image_size in ("invalid", str(12 * GIB)):
             with self.subTest(image_size=image_size), mock.patch.object(
                 devices, "requirements", return_value={"ok": True}
-            ), mock.patch.object(devices, "resolve_selected_disk", return_value={"size": 24 * GIB}), mock.patch.object(
+            ), mock.patch.object(devices, "resolve_selected_disk", return_value=disk), mock.patch.object(
                 deployment, "load_config", return_value={"SOURCE_IMAGE": "source", "TARGET_IMAGE": "target"}
             ), mock.patch.object(commands, "run", return_value=SimpleNamespace(stdout=image_size)) as run:
                 with self.assertRaises(commands.InstallError):
-                    backend.install("/dev/test")
+                    backend.install("/dev/test", disk.copy())
                 self.assertEqual([call.args[0][0] for call in run.call_args_list], ["podman"])
 
     def test_unmounted_or_full_target_never_starts_image_installation(self):

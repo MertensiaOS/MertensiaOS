@@ -216,7 +216,7 @@ class InstallerWindow(Adw.ApplicationWindow):
         self.stack.add_named(page, "welcome")
 
     def _build_requirements(self) -> None:
-        page, content = self._page("Checking this computer", "MertensiaOS requires an x86-64 UEFI system with Secure Boot and TPM 2.0 enabled.", step="Step 1 of 5 · Check your computer", icon="mertensia-computer-symbolic")
+        page, content = self._page("Checking this computer", "MertensiaOS requires an x86-64 UEFI system with Secure Boot, TPM 2.0 and at least 3 GiB of RAM. 4 GiB of RAM is recommended.", step="Step 1 of 5 · Check your computer", icon="mertensia-computer-symbolic")
         self.requirements_heading = page.heading
         self.requirements_label = Gtk.Label(wrap=True, justify=Gtk.Justification.LEFT, xalign=0)
         self.requirements_label.add_css_class("secondary-text")
@@ -224,7 +224,8 @@ class InstallerWindow(Adw.ApplicationWindow):
         self.requirement_rows = {}
         checks = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, css_classes=["overview-card"])
         for key, name in (("architecture_ok", "x86-64 processor"), ("uefi", "UEFI boot"),
-                          ("secure_boot", "Secure Boot"), ("tpm2", "TPM 2.0")):
+                          ("secure_boot", "Secure Boot"), ("tpm2", "TPM 2.0"),
+                          ("memory_ok", "Memory · 3 GiB minimum")):
             row = self._info_row("mertensia-pending-symbolic", name, "Waiting for check")
             self.requirement_rows[key] = (row.get_first_child(), row.get_last_child().get_last_child())
             checks.append(row)
@@ -397,15 +398,21 @@ class InstallerWindow(Adw.ApplicationWindow):
             return False
         for key, (icon, status) in self.requirement_rows.items():
             ok = bool(data.get(key))
+            warning = not ok or (key == "memory_ok" and not data.get("memory_recommended"))
             icon.remove_css_class("success-icon")
             icon.remove_css_class("warning-icon")
-            icon.add_css_class("success-icon" if ok else "warning-icon")
-            icon.set_from_icon_name("mertensia-check-symbolic" if ok else "mertensia-warning-symbolic")
+            icon.add_css_class("warning-icon" if warning else "success-icon")
+            icon.set_from_icon_name("mertensia-warning-symbolic" if warning else "mertensia-check-symbolic")
             status.set_text("Ready" if ok else "Requirement not met")
+            if key == "memory_ok":
+                detail = "Ready" if not warning else ("4 GiB recommended" if ok else "3 GiB required")
+                status.set_text(f"{human_size(data['memory_bytes'])} usable · {detail}")
         self.requirements_heading.set_text("Your computer is ready" if data.get("ok") else "Check your computer settings")
         self.requirements_label.set_text(
             "Your computer is ready. Continue to choose an installation disk." if data.get("ok")
-            else "Some requirements are not met. Check your firmware settings before trying again."
+            else ("At least 3 GiB of RAM is required; 4 GiB is recommended. Add memory or increase the virtual machine’s RAM before trying again."
+                  if not data.get("memory_ok") else
+                  "Some requirements are not met. Check your firmware settings before trying again.")
         )
         self.requirements_next.set_sensitive(bool(data.get("ok")))
         if data.get("ok"):
@@ -443,18 +450,20 @@ class InstallerWindow(Adw.ApplicationWindow):
         return self.disks[row.disk_index]
 
     def _show_confirmation(self) -> None:
-        disk = self._selected_disk()
+        disk = self._selected_disk().copy()
+        self.confirmed_disk = disk
         self.confirm_disk.set_text(f"Erase {disk['model']} ({human_size(disk['size'])}) at {disk['stable_path']}")
         self.erase_entry.set_text("")
         self.stack.set_visible_child_name("confirm")
 
     def _install(self) -> None:
-        disk = self._selected_disk()
+        disk = self.confirmed_disk
         self.install_disk = f"{disk['model']} ({human_size(disk['size'])}) at {disk['stable_path']}"
         self.last_phase = "Starting installation"
         self.failure_report = ""
         self.stack.set_visible_child_name("progress")
-        argv = ["pkexec", HELPER, "install", "--disk", disk["stable_path"]]
+        argv = ["pkexec", HELPER, "install", "--disk", disk["stable_path"],
+                "--expected-disk", json.dumps(disk)]
         try:
             self.process = subprocess.Popen(argv, text=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, bufsize=1)
         except OSError as error:

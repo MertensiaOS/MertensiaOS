@@ -120,8 +120,11 @@ def live_probe():
 
 def install(send):
     live_probe()
+    listed = json.loads(run(["/usr/libexec/mertensia-installer-helper", "list-disks"]).splitlines()[-1])
+    disk = next(disk for disk in listed["disks"] if disk["path"] == DISK)
     process = subprocess.Popen(
-        ["/usr/libexec/mertensia-installer-helper", "install", "--disk", DISK],
+        ["/usr/libexec/mertensia-installer-helper", "install", "--disk", DISK,
+         "--expected-disk", json.dumps(disk)],
         stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
         text=True, bufsize=1,
     )

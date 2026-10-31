@@ -22,7 +22,8 @@ work offline, and users receive a desktop notification after automatic recovery.
 See [boot health](docs/boot-health.md) for checks, limits and diagnosis.
 
 The installer erases a whole disk. Supported targets are x86_64 computers with
-UEFI, Secure Boot enabled, a usable TPM 2.0, and a disk of at least 24 GiB.
+UEFI, Secure Boot enabled, a usable TPM 2.0, at least 3 GiB of RAM (4 GiB
+recommended), and a disk of at least 24 GiB.
 The project is under development; a passing unit suite does not establish that
 a particular image boots on your hardware.
 

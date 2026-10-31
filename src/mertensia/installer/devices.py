@@ -33,18 +33,31 @@ def tpm_available() -> bool:
         return False
 
 
+def memory_bytes() -> int:
+    for line in Path("/proc/meminfo").read_text(encoding="ascii").splitlines():
+        match = re.fullmatch(r"MemTotal:\s+([0-9]+)\s+kB", line)
+        if match and int(match[1]) > 0:
+            return int(match[1]) * 1024
+    raise commands.InstallError("Could not determine usable system memory safely.")
+
+
 def requirements() -> dict[str, Any]:
     arch = os.uname().machine
     uefi = Path("/sys/firmware/efi").is_dir()
     secure_boot = secure_boot_enabled()
     tpm = tpm_available()
+    memory = memory_bytes()
+    memory_ok = memory >= constants.MINIMUM_MEMORY_BYTES
     return {
         "architecture": arch,
         "architecture_ok": arch == "x86_64",
         "uefi": uefi,
         "secure_boot": secure_boot,
         "tpm2": tpm,
-        "ok": arch == "x86_64" and uefi and secure_boot and tpm,
+        "memory_bytes": memory,
+        "memory_ok": memory_ok,
+        "memory_recommended": memory >= constants.RECOMMENDED_MEMORY_BYTES,
+        "ok": arch == "x86_64" and uefi and secure_boot and tpm and memory_ok,
     }
 
 
@@ -128,6 +141,9 @@ def list_disks() -> list[dict[str, Any]]:
             continue
         if disk_busy_reason(item, swaps):
             continue
+        sequence = item.get("disk-seq")
+        if type(sequence) is not int or sequence <= 0:
+            raise commands.InstallError("Could not determine the disk's kernel sequence number safely.")
         stable = ""
         if by_id.is_dir():
             candidates = []
@@ -148,11 +164,26 @@ def list_disks() -> list[dict[str, Any]]:
                 "size": int(item.get("size") or 0),
                 "model": (item.get("model") or "Unknown disk").strip(),
                 "serial": (item.get("serial") or "").strip(),
+                "disk_sequence": sequence,
                 "transport": item.get("tran") or "",
                 "removable": bool(item.get("rm")),
             }
         )
     return disks
+
+
+def assert_confirmed_disk(disk: dict[str, Any], expected: Any) -> None:
+    # A sequence identifies this attachment, including disks without serials.
+    # Unlike a path or major/minor number it changes when a disk is replaced.
+    fields = {"path": str, "stable_path": str, "size": int,
+              "serial": str, "disk_sequence": int}
+    if (not isinstance(expected, dict)
+            or any(type(expected.get(key)) is not kind for key, kind in fields.items())
+            or expected["disk_sequence"] <= 0
+            or any(disk.get(key) != expected[key] for key in fields)):
+        raise commands.InstallError(
+            "The selected disk changed since confirmation. Select the disk and confirm erasure again."
+        )
 
 
 def resolve_selected_disk(requested: str) -> dict[str, Any]:
@@ -182,7 +213,8 @@ def assert_disk_identity(disk: dict[str, Any]) -> dict[str, Any]:
         raise commands.InstallError("Could not identify the selected whole disk safely.")
     item = candidates[0]
     if (item.get("ro") or int(item.get("size") or 0) != disk["size"]
-            or (item.get("serial") or "").strip() != disk["serial"]):
+            or (item.get("serial") or "").strip() != disk["serial"]
+            or item.get("disk-seq") != disk["disk_sequence"]):
         raise commands.InstallError("The selected disk's properties changed.")
     return item
 
