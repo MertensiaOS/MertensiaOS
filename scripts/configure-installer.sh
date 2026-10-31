@@ -12,6 +12,9 @@ set -euo pipefail
       /usr/share/dbus-1/services/org.gnome.Tour.service
 )
 
+python3 /run/mertensia-build/clean-desktop.py
+python3 /run/mertensia-build/check-desktop-policy.py
+
 (
   systemctl mask greenboot-healthcheck.service greenboot-set-rollback-trigger.service \
         greenboot-success.target mertensia-boot-health-status.service \

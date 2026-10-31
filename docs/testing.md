@@ -180,6 +180,7 @@ unchanged, reduced and expanded permissions, and checks the actual GNOME
 Software Flatpak plugin's `new-permissions` classification. It verifies declining
 an expanded-permission update leaves the installed commit unchanged, then applies
 the unrelated updates without installing the held app. CI requires this check.
+The fixture also checks that a private system D-Bus cannot activate the DNF daemon.
 The container's test files are rejected by production image validation.
 
 These checks do not run the real logged-in user's GNOME background scheduler or

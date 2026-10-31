@@ -54,7 +54,7 @@ builds, signed payload requirements and build prerequisites.
 On Fedora, install the desktop libraries used by the UI and tests:
 
 ```sh
-sudo dnf install python3 python3-gobject python3-cairo librsvg2 python3-dbus python3-pyyaml gtk4 libadwaita openssl \
+sudo dnf install python3 python3-gobject python3-cairo librsvg2 python3-dbus python3-pyyaml gjs gtk4 libadwaita openssl \
   libxcrypt systemd iso-codes xkeyboard-config kbd tzdata
 python3 scripts/check-source.py
 python3 tests/run_tests.py

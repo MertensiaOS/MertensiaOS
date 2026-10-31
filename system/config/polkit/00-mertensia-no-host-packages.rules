@@ -1,0 +1,6 @@
+// Host software changes belong to signed bootc images; apps belong to Flatpak.
+polkit.addRule(function(action, subject) {
+    if (action.id.indexOf("org.rpm.dnf.v0.") === 0) {
+        return polkit.Result.NO;
+    }
+});

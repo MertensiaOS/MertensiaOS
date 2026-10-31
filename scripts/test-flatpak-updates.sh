@@ -6,3 +6,5 @@ IMAGE="${1:?Usage: test-flatpak-updates.sh LOCAL_PAYLOAD_IMAGE}"
 TEST_IMAGE=localhost/mertensiaos:flatpak-update-tests
 podman build --build-arg "BASE_IMAGE=$IMAGE" -f "$ROOT_DIR/tests/flatpak/Containerfile" -t "$TEST_IMAGE" "$ROOT_DIR"
 podman run --rm --network none "$TEST_IMAGE"
+podman run --rm --network none --entrypoint /usr/bin/python3 "$TEST_IMAGE" \
+  /usr/share/mertensia-flatpak-tests/check_desktop_activation.py

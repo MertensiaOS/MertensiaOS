@@ -242,5 +242,9 @@
   [
     "system/config/containers/registries.yaml",
     "/etc/containers/registries.d/mertensia.yaml"
+  ],
+  [
+    "system/config/polkit/00-mertensia-no-host-packages.rules",
+    "/usr/share/polkit-1/rules.d/00-mertensia-no-host-packages.rules"
   ]
 ]

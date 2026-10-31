@@ -10,6 +10,9 @@ set -euo pipefail
       printf '\n# MertensiaOS native Wayland default\n. /etc/chromium/mertensia-wayland.conf\n' >> /etc/chromium/chromium.conf
 )
 
+python3 /run/mertensia-build/clean-desktop.py
+python3 /run/mertensia-build/check-desktop-policy.py
+
 (
   find /usr/lib64/gnome-software -type f \
         \( -name 'libgs_plugin_packagekit.so' -o -name 'libgs_plugin_dnf5.so' \

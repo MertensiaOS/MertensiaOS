@@ -10,7 +10,7 @@ FROM scratch AS installer-applications
 COPY src/mertensia/installer /usr/lib/mertensia/python/mertensia/installer
 
 FROM scratch AS installer-build-scripts
-COPY scripts/configure-installer.sh scripts/install-image-files.py scripts/installer-files.json /
+COPY scripts/configure-installer.sh scripts/install-image-files.py scripts/clean-desktop.py scripts/check-desktop-policy.py scripts/installer-files.json /
 
 FROM ${BASE_IMAGE}
 

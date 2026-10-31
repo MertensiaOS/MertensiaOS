@@ -5,4 +5,5 @@ RUN dnf -y --setopt=install_weak_deps=False install xorg-x11-server-Xvfb dbus-da
     dnf clean all && \
     rm /usr/share/flatpak/remotes.d/flathub.flatpakrepo
 COPY tests/flatpak/check_updates.py /usr/share/mertensia-flatpak-tests/check_updates.py
+COPY tests/flatpak/check_desktop_activation.py /usr/share/mertensia-flatpak-tests/check_desktop_activation.py
 ENTRYPOINT ["dbus-run-session", "--", "/usr/bin/python3", "/usr/share/mertensia-flatpak-tests/check_updates.py"]

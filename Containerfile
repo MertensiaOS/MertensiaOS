@@ -23,7 +23,7 @@ COPY src/mertensia/boot_health /usr/lib/mertensia/python/mertensia/boot_health
 COPY src/mertensia/updates /usr/lib/mertensia/python/mertensia/updates
 
 FROM scratch AS payload-build-scripts
-COPY scripts/configure-payload.sh scripts/install-image-files.py scripts/payload-files.json /
+COPY scripts/configure-payload.sh scripts/install-image-files.py scripts/clean-desktop.py scripts/check-desktop-policy.py scripts/payload-files.json /
 
 FROM quay.io/fedora/fedora-bootc:45
 
