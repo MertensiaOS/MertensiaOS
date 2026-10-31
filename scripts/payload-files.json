@@ -20,6 +20,18 @@
     "/usr/share/glib-2.0/schemas/zz-mertensia-gdm.gschema.override"
   ],
   [
+    "system/config/gnome/50-mertensia-background.gschema.override",
+    "/usr/share/glib-2.0/schemas/zz-mertensia-background.gschema.override"
+  ],
+  [
+    "system/config/gnome/mertensia-wallpapers.xml",
+    "/usr/share/gnome-background-properties/mertensia-wallpapers.xml"
+  ],
+  [
+    "system/backgrounds/mertensia",
+    "/usr/share/backgrounds/mertensia"
+  ],
+  [
     "system/config/gnome/50-mertensia-software.gschema.override",
     "/usr/share/glib-2.0/schemas/zz-mertensia-software.gschema.override"
   ],

@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE wallpapers SYSTEM "gnome-wp-list.dtd">
+<wallpapers>
+  <wallpaper deleted="false">
+    <name>MertensiaOS — Quiet Bloom</name>
+    <filename>/usr/share/backgrounds/mertensia/quiet-bloom-light.png</filename>
+    <filename-dark>/usr/share/backgrounds/mertensia/quiet-bloom-dark.png</filename-dark>
+    <options>zoom</options>
+    <shade_type>solid</shade_type>
+    <pcolor>#21152F</pcolor>
+    <scolor>#21152F</scolor>
+  </wallpaper>
+  <wallpaper deleted="false">
+    <name>MertensiaOS — Petal Contours</name>
+    <filename>/usr/share/backgrounds/mertensia/petal-contours-light.png</filename>
+    <filename-dark>/usr/share/backgrounds/mertensia/petal-contours-dark.png</filename-dark>
+    <options>zoom</options>
+    <shade_type>solid</shade_type>
+    <pcolor>#21152F</pcolor>
+    <scolor>#21152F</scolor>
+  </wallpaper>
+  <wallpaper deleted="false">
+    <name>MertensiaOS — Violet Hour</name>
+    <filename>/usr/share/backgrounds/mertensia/violet-hour-light.png</filename>
+    <filename-dark>/usr/share/backgrounds/mertensia/violet-hour-dark.png</filename-dark>
+    <options>zoom</options>
+    <shade_type>solid</shade_type>
+    <pcolor>#21152F</pcolor>
+    <scolor>#21152F</scolor>
+  </wallpaper>
+</wallpapers>

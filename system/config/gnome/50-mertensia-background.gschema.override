@@ -1,0 +1,7 @@
+[org.gnome.desktop.background]
+picture-uri='file:///usr/share/backgrounds/mertensia/quiet-bloom-light.png'
+picture-uri-dark='file:///usr/share/backgrounds/mertensia/quiet-bloom-dark.png'
+picture-options='zoom'
+primary-color='#21152F'
+secondary-color='#21152F'
+color-shading-type='solid'

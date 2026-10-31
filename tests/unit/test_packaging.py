@@ -11,6 +11,7 @@ import subprocess
 import tempfile
 import tomllib
 import unittest
+import xml.etree.ElementTree as ET
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -111,6 +112,43 @@ class ApplicationPackagingTests(unittest.TestCase):
         self.assertTrue((self.image / "usr/share/mertensia/branding/installer.css").is_file())
         self.assertTrue((self.image / "usr/share/mertensia/branding/firstboot.css").is_file())
         self.assertFalse((self.image / "usr/share/mertensia-installer/branding").exists())
+
+    def test_wallpaper_catalogue_and_theme_defaults_resolve_to_installed_images(self):
+        import cairo
+
+        catalogue = ET.parse(self.image / "usr/share/gnome-background-properties/mertensia-wallpapers.xml")
+        wallpapers = catalogue.findall("wallpaper")
+        self.assertEqual(len(wallpapers), 3)
+        installed = set()
+        for wallpaper in wallpapers:
+            self.assertEqual(wallpaper.get("deleted"), "false")
+            self.assertEqual(wallpaper.findtext("options"), "zoom")
+            for tag in ("filename", "filename-dark"):
+                path = wallpaper.findtext(tag)
+                with self.subTest(wallpaper=wallpaper.findtext("name"), theme=tag):
+                    image = cairo.ImageSurface.create_from_png(str(self.image / path.lstrip("/")))
+                    self.assertEqual((image.get_width(), image.get_height()), (3840, 2160))
+                    self.assertEqual(image.get_format(), cairo.FORMAT_RGB24)
+                    installed.add(path)
+        self.assertEqual(len(installed), 6)
+
+        schemas = Path(self.temporary.name) / "wallpaper-schemas"
+        schemas.mkdir()
+        for source in Path("/usr/share/glib-2.0/schemas").glob("*.xml"):
+            shutil.copy2(source, schemas / source.name)
+        for source in (self.image / "usr/share/glib-2.0/schemas").glob("*.gschema.override"):
+            shutil.copy2(source, schemas / source.name)
+        subprocess.run(["glib-compile-schemas", "--strict", str(schemas)], check=True)
+        for key, filename in (("picture-uri", "quiet-bloom-light.png"),
+                              ("picture-uri-dark", "quiet-bloom-dark.png")):
+            result = subprocess.run(
+                ["gsettings", "get", "org.gnome.desktop.background", key],
+                check=True, text=True, capture_output=True,
+                env=dict(os.environ, GSETTINGS_SCHEMA_DIR=str(schemas), GSETTINGS_BACKEND="memory"),
+            )
+            path = f"/usr/share/backgrounds/mertensia/{filename}"
+            self.assertEqual(result.stdout.strip(), f"'file://{path}'")
+            self.assertIn(path, installed)
 
     def test_accounts_icon_is_discoverable_after_rebuilding_inherited_cache(self):
         import gi

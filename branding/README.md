@@ -4,6 +4,30 @@ GDM shows no distribution logo. The payload installs a GSettings schema override
 with an empty `org.gnome.login-screen.logo`, compiled with the other GNOME
 defaults during the image build. The live installer inherits this setting.
 
+## Desktop wallpapers
+
+Settings → Appearance includes Quiet Bloom, Petal Contours and Violet Hour,
+each with a matching light/dark pair of 3840 × 2160 PNGs. Quiet Bloom is the
+desktop default for both themes. These are ordinary GSettings defaults, so an
+existing user's chosen background takes precedence. The live installer inherits
+the same artwork and defaults from the system image.
+
+The original light Quiet Bloom, dark Petal Contours and dark Violet Hour SVGs
+come from the supplied `MertensiaOS-wallpaper-proposals-4K.zip` (23 September
+2026). `wallpapers/` keeps those three masters unchanged alongside their
+complementary theme variants. The variants change the artwork palette while
+retaining the original geometry; the contour flower remains decorative artwork.
+
+Regenerate the checked-in PNGs with `python3 scripts/generate-wallpapers.py`
+(requires `python3-cairo`, `python3-gobject`, and `librsvg2`). Image builds use the
+PNGs directly and need no artwork rendering dependencies. The payload manifest
+installs them in `/usr/share/backgrounds/mertensia`, registers the pairs through
+`/usr/share/gnome-background-properties/mertensia-wallpapers.xml`, and installs
+the background schema override with the other GNOME defaults. The paired XML
+follows [GNOME's background guidance](https://developer.gnome.org/hig/reference/backgrounds.html).
+
+## Shared artwork
+
 The [Quiet Bloom Plymouth theme](../docs/plymouth.md) reuses the same bloom and
 palette for system boot and the installer ISO. Regenerate its project-owned PNGs
 with `python3 scripts/generate-plymouth-assets.py` (requires `python3-cairo`,
