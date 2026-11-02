@@ -1,0 +1,7 @@
+# Disposable oo7 acceptance image; never a release payload.
+ARG BASE_IMAGE
+FROM ${BASE_IMAGE}
+RUN dnf -y --setopt=install_weak_deps=False install dbus-daemon && dnf clean all && \
+    useradd --uid 54321 --no-create-home --shell /usr/sbin/nologin keyring-probe
+COPY tests/keyring/check_password_changes.py /usr/share/mertensia-keyring-tests/check_password_changes.py
+ENTRYPOINT ["/bin/sh", "-ec", "mkdir -p /run/user/54321; chown 54321:54321 /run/user/54321; chmod 0700 /run/user/54321; exec runuser -u keyring-probe -- dbus-run-session -- /usr/bin/python3 /usr/share/mertensia-keyring-tests/check_password_changes.py"]

@@ -1,12 +1,25 @@
 FROM quay.io/fedora/fedora-bootc:45 AS accountsservice-build
 
-RUN dnf -y install dnf5-plugins rpm-build
+RUN dnf -y install dnf5-plugins rpm-build gcc pam-devel
 
 COPY system/patches/accountsservice-homed-enumeration.patch /build/accountsservice-homed-enumeration.patch
 
 COPY scripts/build-accountsservice.sh /build/build-accountsservice.sh
 
 RUN bash /build/build-accountsservice.sh
+
+COPY system/pam/pam_mertensia_password.c /build/pam_mertensia_password.c
+RUN mkdir -p /pam-out && gcc -std=c11 -O2 -Wall -Wextra -Werror -fPIC -shared \
+    -Wl,-z,relro,-z,now,-z,noexecstack -o /pam-out/pam_mertensia_password.so \
+    /build/pam_mertensia_password.c -lpam
+
+FROM quay.io/fedora/fedora-bootc:45 AS gnome-control-center-build
+
+RUN dnf -y install dnf5-plugins rpm-build
+COPY system/patches/gnome-control-center-mertensia-accounts.patch /build/gnome-control-center-mertensia-accounts.patch
+COPY system/gnome /build/gnome
+COPY scripts/build-gnome-control-center.sh /build/build-gnome-control-center.sh
+RUN bash /build/build-gnome-control-center.sh
 
 ## Stage file inputs on an empty filesystem to avoid diffing the full OS for each COPY.
 FROM scratch AS payload-files
@@ -38,6 +51,8 @@ RUN dnf -y install \
     systemd-cryptsetup \
     systemd-pam \
     authselect \
+    oo7-daemon \
+    pam_oo7 \
     cryptsetup \
     tpm2-tools \
     greenboot \
@@ -57,18 +72,20 @@ RUN dnf -y install \
     && dnf clean all
 
 COPY --from=accountsservice-build /out/ /tmp/mertensia-accountsservice/
+COPY --from=gnome-control-center-build /out/ /tmp/mertensia-gnome-control-center/
+COPY --from=accountsservice-build /pam-out/pam_mertensia_password.so /usr/lib64/security/pam_mertensia_password.so
 
 RUN dnf -y install \
     gdm \
     /tmp/mertensia-accountsservice/*.rpm \
     gnome-shell \
     gnome-session \
-    gnome-control-center \
+    /tmp/mertensia-gnome-control-center/*.rpm \
     nautilus \
     NetworkManager \
     xdg-desktop-portal \
     xdg-desktop-portal-gnome \
-    && rm -rf /tmp/mertensia-accountsservice && dnf clean all
+    && rm -rf /tmp/mertensia-accountsservice /tmp/mertensia-gnome-control-center && dnf clean all
 
 RUN authselect select local with-systemd-homed with-group-merging --force --nobackup && \
     authselect check && \

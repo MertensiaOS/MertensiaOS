@@ -1,5 +1,9 @@
 [
   [
+    "system/config/pam.d/mertensia-password",
+    "/usr/lib/pam.d/mertensia-password"
+  ],
+  [
     "system/config/chromium/policies",
     "/etc/chromium/policies"
   ],

@@ -1,0 +1,50 @@
+name: Bug report
+description: Report a reproducible problem with MertensiaOS.
+body:
+  - type: markdown
+    attributes:
+      value: |
+        For security vulnerabilities, use [private reporting](https://github.com/MertensiaOS/MertensiaOS/security/advisories/new).
+        Remove passwords, recovery keys, signing material, access tokens and personal data from reports and logs.
+  - type: input
+    id: version
+    attributes:
+      label: Image digest or source commit
+      description: Include how you built or obtained the image. Use bootc status for an installed deployment or git rev-parse HEAD for source.
+    validations:
+      required: true
+  - type: dropdown
+    id: environment
+    attributes:
+      label: Where does it happen?
+      options:
+        - Installed system
+        - Live installer ISO
+        - Development VM
+        - Build or test host
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: hardware
+    attributes:
+      label: Hardware or VM configuration
+      description: If relevant, include CPU architecture, RAM, disk size, firmware, Secure Boot and TPM state. Omit serial numbers and other private identifiers.
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to reproduce
+      description: Include the commands or UI actions and whether the problem repeats.
+    validations:
+      required: true
+  - type: textarea
+    id: behavior
+    attributes:
+      label: Expected and actual behavior
+    validations:
+      required: true
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Relevant logs or screenshots
+      description: Include the failing command or test result where applicable. Share only diagnostics you have reviewed for secrets and personal data.

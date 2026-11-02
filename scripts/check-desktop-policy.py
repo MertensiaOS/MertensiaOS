@@ -2,6 +2,7 @@
 """Read-only image checks; run inside either built payload or live container."""
 
 from pathlib import Path
+import configparser
 import re
 import subprocess
 
@@ -30,6 +31,16 @@ def check_password_pam(system_auth: Path, passwd: Path) -> None:
         raise SystemExit(f"Missing system-auth password delegation in {passwd}")
 
 
+def check_accounts_redirect(desktop: Path, release: str) -> None:
+    if not release.endswith(".mertensia1"):
+        raise SystemExit(f"Missing Mertensia Accounts redirect in GNOME Settings: {release}")
+    entry = configparser.ConfigParser(interpolation=None)
+    entry.read_string(desktop.read_text())
+    if (entry["Desktop Entry"].get("Exec") != "/usr/bin/mertensia-accounts" or
+            entry["Desktop Entry"].get("Name") != "Mertensia Accounts"):
+        raise SystemExit(f"GNOME Users desktop entry does not redirect to Mertensia Accounts: {desktop}")
+
+
 def main() -> None:
     packages = set(subprocess.check_output(["rpm", "-qa", "--qf", "%{NAME}\\n"], text=True).splitlines())
     for name in packages:
@@ -41,7 +52,8 @@ def main() -> None:
                 "dnf5daemon-server", "dnf5daemon-server-polkit", "NetworkManager", "NetworkManager-wifi",
                 "google-noto-fonts-all", "glibc-all-langpacks", "fwupd", "gnome-firmware", "gdm",
                 "chromium", "systemd-pam", "systemd-udev", "cryptsetup", "tpm2-tools", "greenboot",
-                "nfs-client-utils", "nfsv3-client-utils", "nfsv4-client-utils", "rpcbind", "avahi"}
+                "nfs-client-utils", "nfsv3-client-utils", "nfsv4-client-utils", "rpcbind", "avahi",
+                "oo7-daemon", "pam_oo7"}
     if required - packages:
         raise SystemExit(f"Missing retained packages: {sorted(required - packages)}")
     masked = {"sshd.service", "sshd.socket", "sshd@.service", "sssd.service", "nfs-server.service",
@@ -70,16 +82,27 @@ def main() -> None:
     release = subprocess.check_output(["rpm", "-q", "--qf", "%{RELEASE}", "accountsservice"], text=True).strip()
     if not release.endswith(".mertensia2"):
         raise SystemExit(f"Missing encrypted-account integration in accountsservice: {release}")
+    settings_release = subprocess.check_output(
+        ["rpm", "-q", "--qf", "%{RELEASE}", "gnome-control-center"], text=True).strip()
+    check_accounts_redirect(Path("/usr/share/applications/gnome-users-panel.desktop"), settings_release)
     assert not Path("/usr/share/applications/org.gnome.Tour.desktop").exists()
     assert not Path("/usr/share/dbus-1/services/org.gnome.Tour.service").exists()
     assert Path("/usr/lib/systemd/systemd-cryptsetup").is_file()
     assert Path("/usr/lib64/cryptsetup/libcryptsetup-token-systemd-tpm2.so").is_file()
     subprocess.run(["authselect", "check"], check=True)
     check_group_merging(Path("/etc/nsswitch.conf"))
-    # GNOME's own-password dialog invokes passwd, which must reach homed through
-    # PAM to update the encrypted home as well as its authentication credential.
+    # Console password changes must still reach homed through PAM; Settings
+    # redirects password management to Mertensia Accounts.
     assert Path("/usr/bin/passwd").is_file()
     check_password_pam(Path("/etc/pam.d/system-auth"), Path("/etc/pam.d/passwd"))
+    for module in ("pam_mertensia_password.so", "pam_systemd_home.so", "pam_oo7.so"):
+        assert (Path("/usr/lib64/security") / module).is_file()
+    service = Path("/usr/lib/pam.d/mertensia-password")
+    assert [line.split() for line in service.read_text().splitlines() if line and not line.startswith("#")] == [
+        ["password", "requisite", "pam_mertensia_password.so"],
+        ["password", "[success=ok", "default=die]", "pam_systemd_home.so"],
+        ["password", "optional", "pam_oo7.so", "use_authtok"],
+    ]
     print(f"Desktop policy verified: {len(packages)} packages; masks, boot links, D-Bus, Polkit and authselect checked.")
 
 

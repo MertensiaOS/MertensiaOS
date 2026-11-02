@@ -338,7 +338,8 @@ class AccountsWindow(Adw.ApplicationWindow):
         form.entry("current", "Current password", password=True)
         form.entry("password", "New password", password=True)
         form.entry("confirm", "Confirm new password", password=True)
-        keyring = Adw.PreferencesGroup(description="A separate saved-password keyring may still need your previous password.")
+        keyring = Adw.PreferencesGroup(description="Your login keyring will be updated when available. "
+                                      "If a saved-password keyring stays locked, unlock it with your previous password.")
         form.page.add(keyring)
 
         def submit(*_args):
@@ -354,10 +355,18 @@ class AccountsWindow(Adw.ApplicationWindow):
                 return
             def work():
                 try:
-                    self.client_factory().change_password(account.username, values["current"], values["password"])
+                    return self.client_factory().change_password(account.username, values["current"], values["password"])
                 finally:
                     values.clear()
-            self._run(work, lambda _: self._changed("Password changed. Use your new password to sign in.", form), form=form)
+            def done(warning):
+                for entry in form.fields.values():
+                    entry.set_text("")
+                self._changed("Password changed. Use your new password to sign in.", form)
+                if warning:
+                    dialog = Adw.AlertDialog(heading="Password changed", body=warning)
+                    dialog.add_response("close", "Close")
+                    dialog.present(self)
+            self._run(work, done, form=form)
         form.submit.connect("clicked", submit)
         self._present(form)
 

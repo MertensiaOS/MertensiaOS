@@ -17,7 +17,7 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - name: Install test dependencies
-        run: dnf -y install python3 python3-gobject python3-cairo librsvg2 python3-dbus python3-pyyaml gjs gtk4 libadwaita openssl libxcrypt bash systemd iso-codes xkeyboard-config kbd tzdata
+        run: dnf -y install python3 python3-gobject python3-cairo librsvg2 python3-dbus python3-pyyaml gjs gtk4 libadwaita openssl libxcrypt bash systemd iso-codes xkeyboard-config kbd tzdata gcc pam-devel pkgconf-pkg-config gtk4-devel libadwaita-devel
       - run: python3 scripts/check-source.py
       - run: python3 tests/run_tests.py
         env:
@@ -44,3 +44,5 @@ jobs:
           if-no-files-found: warn
       - name: Verify native Flatpak update permission handling
         run: sudo bash scripts/test-flatpak-updates.sh localhost/mertensiaos:ci
+      - name: Verify oo7 password changes preserve saved secrets
+        run: sudo bash scripts/test-keyring.sh localhost/mertensiaos:ci

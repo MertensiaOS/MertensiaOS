@@ -6,11 +6,14 @@ import grp
 import json
 import os
 import pwd
+from pathlib import Path
+import stat
 import subprocess
 
 import dbus
 
 from .validation import RequestError, validate_password
+from . import passwords
 
 
 @dataclass(frozen=True)
@@ -92,15 +95,50 @@ class AccountsClient:
         identity = current_identity()
         return sorted(result, key=lambda account: (account.uid != identity.uid, account.name.casefold()))
 
-    def change_password(self, username: str, current: str, password: str) -> None:
+    def change_password(self, username: str, current: str, password: str) -> str | None:
         if username != current_identity().username:
             raise RequestError("Sign in to this account to change its password.")
         if not current or "\x00" in current:
             raise RequestError("Enter your current password.")
         validate_password(password)
-        self.home.ChangePasswordHome(username,
-                                     json.dumps({"password": [password]}, separators=(",", ":")),
-                                     json.dumps({"password": [current]}, separators=(",", ":")), timeout=120)
+        if password == current:
+            raise RequestError("Choose a password different from your current password.")
+        self._authenticate_password(username, current)
+        try:
+            passwords.change_password(username, current, password)
+        except passwords.PamError as error:
+            # PAM is not transactional. Never encourage retrying an already
+            # committed home change because a later module returned an error.
+            try:
+                self._authenticate_password(username, password)
+            except dbus.DBusException as verification:
+                if verification.get_dbus_name() not in {
+                    "org.freedesktop.home1.BadPassword", "org.freedesktop.home1.BadPasswordAndNoToken",
+                }:
+                    raise RequestError("Could not confirm whether your password changed. Check which password "
+                                       "unlocks your home before trying another change.") from None
+                try:
+                    self._authenticate_password(username, current)
+                except dbus.DBusException:
+                    raise RequestError("Could not confirm whether your password changed. Check which password "
+                                       "unlocks your home before trying another change.") from None
+                raise RequestError("The password was not changed. Check the password service and try again.") from error
+            return ("Your login password changed, but the remaining password updates could not be confirmed. "
+                    "Use your new password to sign in. A saved-password keyring may still need your previous password.")
+        # The optional oo7 hook cannot acknowledge re-encryption to PAM. Report
+        # a known unavailable listener; retain the general caveat in the form.
+        try:
+            listener = Path(f"/run/user/{os.getuid()}/oo7-pam.sock").lstat()
+            ready = stat.S_ISSOCK(listener.st_mode) and listener.st_uid == os.getuid()
+        except OSError:
+            ready = False
+        if not ready:
+            return ("Your login password changed. The login keyring service was unavailable, so saved passwords "
+                    "may still need your previous password. Keep it until you have checked your saved passwords.")
+        return None
+
+    def _authenticate_password(self, username: str, password: str) -> None:
+        self.home.AuthenticateHome(username, json.dumps({"password": [password]}, separators=(",", ":")), timeout=120)
 
     def set_profile(self, username: str, field: str, value: str) -> None:
         # AccountsService already supports homed metadata and avatar blobs.

@@ -15,8 +15,9 @@ repository's pinned image-builder. Podman used overlay storage on Btrfs with
 | Payload rebuild after a one-file Python UI edit | 14 s |
 
 The package installation and AccountsService source-RPM stages were cached in
-these measurements. These are development rebuild timings, not fresh-machine
-download and package-install benchmarks. The original approximately 13-minute
+these measurements, which predate the GNOME Settings source-RPM build stage.
+These are development rebuild timings, not fresh-machine download and
+package-install benchmarks. The original approximately 13-minute
 build was user reported and was not captured with stage timings. Results vary
 with upstream base changes, repository downloads, storage and CPU load.
 
@@ -49,19 +50,22 @@ remain unchanged.
 
 ## Validation and reproducing measurements
 
-All 267 unit and host integration tests passed. Source syntax and build inputs,
-payload validation, initramfs contents, BIOS and UEFI ISO boot entries were
-checked. A comparison with the original Containerfiles confirmed that all 64
-payload and 12 installer source-file mappings, and all 13 payload and seven
-installer configuration command blocks, were preserved.
+At the time of this measurement, all 267 unit and host integration tests passed.
+Source syntax and build inputs, payload validation, initramfs contents, and
+BIOS and UEFI ISO boot entries were checked. A comparison with the original
+Containerfiles confirmed that all 64 payload and 12 installer source-file
+mappings, and all 13 payload and seven installer configuration command blocks,
+were preserved.
 
 The real VM installation suite also passed with Secure Boot and TPM enabled:
 encrypted installation, boot without installation media, enforcing SELinux, GDM,
 Chromium sandboxing, encrypted accounts and PAM authentication, offline reboot,
 forced initramfs recovery-key unlock and restoration of automatic TPM unlock.
-The local report is `.build/build-optimization-integration/result.json`.
-Signed update/rollback fixtures and visual acceptance checks are separate suites
-and were not exercised by this run.
+This historical run covered the checks listed above. Signed update/rollback
+fixtures and visual acceptance checks are separate suites outside its scope;
+use the [current testing guide](testing.md) and matching release workflow
+reports to assess a release. These measurements are not a current test count
+or a certification of later source changes.
 
 The scripts print payload, installer, assembly and total elapsed times. To measure
 an unchanged repeat, run the normal ISO command twice. To measure assembly every
@@ -72,5 +76,7 @@ sudo env MERTENSIA_FORCE_ISO_BUILD=1 bash scripts/iso-image.sh
 ```
 
 Image-builder exports its detailed stage log and manifest beside the ISO.
-Local measurement logs are under `.build/iso-final-build.log`,
-`.build/iso-final-repeat.log`, and `.build/payload-source-edit.log`.
+The original measurement logs and VM report were local `.build/` outputs and
+are not included in a checkout. When reporting new measurements, retain the
+source revision, image digests, host configuration, commands and logs with the
+matching workflow or issue so others can assess and reproduce them.

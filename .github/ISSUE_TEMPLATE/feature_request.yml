@@ -1,0 +1,22 @@
+name: Feature request
+description: Propose a change to MertensiaOS.
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem would this solve?
+      description: Describe the task or user need and any current workaround.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior
+      description: Explain what the user would experience and which part of the OS would change.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives and tradeoffs
+      description: Include compatibility, accessibility, recovery or maintenance considerations when relevant.

@@ -118,15 +118,34 @@ do not modify the import path themselves.
 
 ## Application boundaries
 
+GNOME Settings delegates local user management to Mertensia Accounts. The
+System page has an external Accounts launcher, and Users search results and
+direct panel links open the same app. The native GNOME Users page is not
+registered. GNOME Online Accounts remains a separate cloud-service settings
+panel. AccountsService remains installed for user enumeration, profiles and GDM.
+
 The desktop Accounts app is `mertensia.accounts.ui`, launched by
 `/usr/bin/mertensia-accounts`. The `--add-user` compatibility option on
 `mertensia-firstboot` opens its creation form; first-boot setup retains its
 separate lifecycle. GTK runs unprivileged, with blocking IPC in worker threads.
 The client lists home1 records and login1 sessions, uses AccountsService's
-homed-aware profile/avatar methods, and changes its own password through
-home1 `ChangePasswordHome`. Passwords travel in D-Bus messages or helper stdin,
-never argv. This direct password operation does not synchronize a separate
-saved-password keyring; keyring integration remains separate work.
+homed-aware profile/avatar methods, and changes its own password through the
+dedicated `mertensia-password` PAM service. The unprivileged client verifies the
+current password through home1 before starting PAM. `pam_mertensia_password`
+collects and caches both old/new PAM tokens; requisite `pam_systemd_home` updates
+the encrypted home, then optional `pam_oo7` requests login-keyring re-encryption.
+There is no shadow-account fallback, and a homed failure stops before oo7.
+The token module has no authentication authority: homed validates the credentials.
+Passwords travel in PAM conversations, D-Bus messages or helper stdin, never argv.
+
+PAM is not transactional, and oo7's optional hook does not acknowledge completed
+re-encryption to the client. An unavailable listener produces a post-change
+warning; a separately protected keyring may still require its previous password.
+If PAM reports an error, the client checks whether the new home password already
+works and reports a committed change separately from failure or an unknown result.
+It never automatically rolls back or repeats a password change. Native PAM tests
+verify token handling and failure ordering; the private oo7 acceptance test checks
+saved-secret preservation and old/new password behavior after daemon restarts.
 
 Administrative account creation, role changes, sign-in disabling and removal
 use the existing pkexec helper. It validates the original caller, setup state,

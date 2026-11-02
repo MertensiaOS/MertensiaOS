@@ -27,7 +27,8 @@ recommended), and a disk of at least 24 GiB.
 The project is under development; a passing unit suite does not establish that
 a particular image boots on your hardware.
 
-See [codebase architecture](docs/architecture.md) for the source layout, image
+See the [documentation index](docs/README.md) for user and developer guides,
+and [codebase architecture](docs/architecture.md) for the source layout, image
 roles and application boundaries.
 
 ## Build a development image
@@ -56,7 +57,7 @@ On Fedora, install the desktop libraries used by the UI and tests:
 
 ```sh
 sudo dnf install python3 python3-gobject python3-cairo librsvg2 python3-dbus python3-pyyaml gjs gtk4 libadwaita openssl \
-  libxcrypt systemd iso-codes xkeyboard-config kbd tzdata
+  libxcrypt systemd iso-codes xkeyboard-config kbd tzdata gcc pam-devel pkgconf-pkg-config gtk4-devel libadwaita-devel
 python3 scripts/check-source.py
 python3 tests/run_tests.py
 ```
@@ -74,20 +75,33 @@ Install from the ISO, save the root recovery key outside the live system, then
 restart and create your first administrator account. The account password
 unlocks its encrypted home; the root recovery key does not unlock that home.
 
-Use **Mertensia Accounts** to create additional encrypted accounts. Traditional
-account creation through AccountsService is blocked to keep user homes encrypted.
+Open **Mertensia Accounts** from the app launcher or Settings → System →
+Mertensia Accounts to manage users and create additional encrypted accounts.
+Traditional account creation through AccountsService is blocked to keep user
+homes encrypted.
 Accounts also lists existing users and provides profile pictures, names,
 languages and password changes. Administrators can change account types,
 disable sign-in and remove signed-out users. Password changes require the
 account holder's current password; administrators cannot reset a forgotten
 encrypted-home password. Removal permanently deletes that user's home and files.
+Password changes also request an oo7 login-keyring update. If a saved-password
+keyring stays locked, it may still need the previous password; Accounts explains
+when the keyring service is unavailable.
 
 See [recovery](docs/recovery.md) for interrupted installation, root unlock,
 TPM resealing and home backups. See [releases and updates](docs/releases.md)
 for signing credentials, signature verification, upgrades and rollback.
 
+## Help and contributions
+
+Use [support channels](SUPPORT.md) for questions and bug reports, and read
+[contributing](CONTRIBUTING.md) before opening a pull request. Report
+vulnerabilities through the [private security reporting channel](SECURITY.md).
+
 ## License
 
-MertensiaOS's own source code is [MIT licensed](LICENSE). Fedora packages and
-other bundled components retain their own licenses; the Figtree font is
-covered by its [SIL Open Font License](branding/fonts/OFL.txt).
+MertensiaOS-authored source is [MIT licensed](LICENSE) unless a file states
+otherwise. The GNOME Settings integration has GPL-licensed files; upstream
+patches, packaged components and the Figtree font retain their own licenses.
+See [licensing and third-party components](THIRD_PARTY.md) for the exceptions
+and included license texts.

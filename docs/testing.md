@@ -7,7 +7,47 @@ PyGObject and D-Bus:
 python3 tests/run_tests.py
 ```
 
-The GTK preview instructions in `branding/README.md` exercise layouts
+Native password-service tests require `gcc` and `pam-devel` in addition to the
+desktop dependencies listed in the README. They compile the real token module
+and exercise private PAM services with non-mutating home/keyring stand-ins.
+They verify Unicode credentials, requisite failure ordering, missing optional
+keyring modules, and rejection of unexpected or repeated password prompts.
+
+The native GNOME Settings redirect test also needs `pkgconf-pkg-config`,
+`gtk4-devel` and `libadwaita-devel`. It compiles the actual downstream launcher
+and verifies Users routes, unrelated panels, unprivileged execution and launch
+errors without opening a desktop window.
+
+Check the packaged token module, Accounts conversation and actual oo7 daemon:
+
+```sh
+sudo bash scripts/test-keyring.sh localhost/mertensiaos:base
+```
+
+This builds a disposable test overlay with a private D-Bus, home, runtime directory
+and dummy passwords. It stores a secret, changes the keyring password through
+the real PAM conversation and oo7 module, restarts oo7 and verifies the new
+password unlocks the saved secret while the old password is rejected. It has no
+host mounts or runtime network access. Only homed is replaced with `pam_permit`
+in a private test service; real encrypted-home changes remain covered by the
+VM suite below. CI requires both native tests and this oo7 acceptance check.
+
+## Interpreting test results
+
+A test result applies to the source revision, image digest, environment and
+options used for that run. Record those details alongside commands, pass/fail
+results and any skipped coverage. A skipped test is not a pass; a manual check
+is established only when its result is recorded for the tested image.
+
+The unit runner rejects skipped required tests. The ISO harness separately
+reports capabilities that need optional fixtures or interactive sessions as
+skipped. Required release fixtures make their corresponding checks mandatory;
+see [releases](releases.md). Workflow artifacts contain the run's diagnostics;
+local `.build/` reports and benchmark logs are ignored developer outputs and are
+not available from a fresh checkout. Dated benchmark reports do not certify a
+later image.
+
+The [GTK preview instructions](../branding/README.md) exercise layouts
 without creating users, changing settings or installing to disks. Unit tests and
 previews do not prove that an ISO boots or an installed encrypted system unlocks.
 The [Plymouth guide](plymouth.md) covers native renderer previews and the optional
@@ -123,7 +163,7 @@ The core run asserts:
    `gdm-password` PAM stack, reject incorrect passwords and appear in
    AccountsService's login cache.
    The standard user changes their own password through the same unprivileged
-   home1 client as the Accounts app. The old password must fail and the new
+   PAM client as the Accounts app. The old password must fail and the new
    one must authenticate through GDM's PAM stack; fixture credentials are then
    restored for subsequent reboot checks.
    NSS `wheel` enumeration must include the homed administrator and exclude
@@ -304,14 +344,21 @@ use a visible display and the normal production ISO for these checks.
    after restarting Accounts. From Add User, verify the polkit prompt identifies
    the signed-in administrator and accepts that account's login password.
    Cancel a prompt and check that the form retains its values and allows retry.
-   In Settings → System → Users, confirm Unlock identifies the signed-in
-   administrator and accepts their password. Use Mertensia Accounts to create
-   encrypted accounts; AccountsService must reject traditional account creation.
+   In Settings → System, open Mertensia Accounts and confirm it launches our
+   app rather than GNOME's native Users page. Check Users search results and
+   `gnome-control-center system users` (also legacy `users` links) open the same
+   app, including while Settings already shows System. Account authorization
+   happens in Mertensia Accounts; AccountsService must still reject traditional
+   account creation.
    In Mertensia Accounts, open your own Password dialog.
    Check that an incorrect current password is rejected, then change the
    password. Log out, reboot, and verify that the new password unlocks the
    encrypted home and the old password fails. If a login keyring is configured,
-   check that it unlocks with the new password as well.
+   store a disposable secret before changing the password and check that it
+   unlocks with the new password after reboot, with the secret preserved.
+   A keyring protected by a different password may still require that password.
+   If oo7 is unavailable, verify Accounts reports the successful login-password
+   change with keyring recovery guidance, rather than offering to repeat it.
 4. Add a non-administrator, log in as that account, and confirm it cannot create
    administrators. Check both users remain visible after reboot.
    In Accounts, verify the non-administrator can edit their own profile and

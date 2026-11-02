@@ -53,7 +53,7 @@ class ApplicationPackagingTests(unittest.TestCase):
             fields = shlex.split(line)
             if fields[1].startswith("--from="):
                 name = fields.pop(1).split("=", 1)[1]
-                if name == "accountsservice-build":
+                if name in {"accountsservice-build", "gnome-control-center-build"}:
                     continue  # Compiled RPMs, not source application files.
                 source_root = stages[name]
             else:
@@ -89,6 +89,7 @@ class ApplicationPackagingTests(unittest.TestCase):
     def test_payload_launchers_import_the_installed_packages_in_isolated_mode(self):
         self.assertFalse((self.image / "build").exists())
         self.assertFalse((self.image / "configure-payload.sh").exists())
+        self.assertTrue((self.image / "usr/lib/pam.d/mertensia-password").is_file())
         result = self.launcher("/usr/bin/mertensia-firstboot", "--help")
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertIn("--add-user", result.stdout)

@@ -1,0 +1,140 @@
+Subject: [PATCH] Route local account management to Mertensia Accounts
+
+Keep the Users search entry and legacy links, but never instantiate GNOME's
+Users page. Account lifecycle and password handling belong to Mertensia.
+
+--- a/panels/common/meson.build
++++ b/panels/common/meson.build
+@@ -68,6 +68,7 @@
+ )
+ 
+ sources = common_sources + files(
++  'cc-mertensia-accounts.c',
+   'cc-common-language.c',
+   'cc-duration-editor.c',
+   'cc-duration-row.c',
+--- a/panels/system/cc-system-panel.c
++++ b/panels/system/cc-system-panel.c
+@@ -24,6 +24,7 @@
+ #include <glib/gi18n-lib.h>
+ 
+ #include "cc-list-row.h"
++#include "cc-mertensia-accounts.h"
+ #include "cc-system-panel.h"
+ #include "cc-system-resources.h"
+ #include "cc-systemd-service.h"
+@@ -33,7 +34,6 @@
+ #include "region/cc-region-page.h"
+ #include "remote-desktop/cc-remote-desktop-page.h"
+ #include "secure-shell/cc-secure-shell-page.h"
+-#include "users/cc-users-page.h"
+ 
+ struct _CcSystemPanel {
+     CcPanel parent_instance;
+@@ -125,6 +125,12 @@
+ }
+ 
+ static void
++on_users_row_clicked (CcSystemPanel *self)
++{
++    cc_mertensia_accounts_open (GTK_WIDGET (self));
++}
++
++static void
+ cc_system_panel_class_init (CcSystemPanelClass *klass)
+ {
+     GtkWidgetClass *widget_class = GTK_WIDGET_CLASS (klass);
+@@ -140,6 +146,7 @@
+ 
+     gtk_widget_class_bind_template_callback (widget_class, cc_system_page_open_software_update);
+     gtk_widget_class_bind_template_callback (widget_class, on_secure_shell_row_clicked);
++    gtk_widget_class_bind_template_callback (widget_class, on_users_row_clicked);
+ 
+     g_type_ensure (CC_TYPE_ABOUT_PAGE);
+     g_type_ensure (CC_TYPE_DATE_TIME_PAGE);
+@@ -147,7 +154,6 @@
+     g_type_ensure (CC_TYPE_REGION_PAGE);
+     g_type_ensure (CC_TYPE_REMOTE_DESKTOP_PAGE);
+     g_type_ensure (CC_TYPE_SECURE_SHELL_PAGE);
+-    g_type_ensure (CC_TYPE_USERS_PAGE);
+ }
+ 
+ static void
+@@ -168,5 +174,4 @@
+     cc_panel_add_static_subpage (CC_PANEL (self), "datetime", CC_TYPE_DATE_TIME_PAGE);
+     cc_panel_add_static_subpage (CC_PANEL (self), "region", CC_TYPE_REGION_PAGE);
+     cc_panel_add_static_subpage (CC_PANEL (self), "remote-desktop", CC_TYPE_REMOTE_DESKTOP_PAGE);
+-    cc_panel_add_static_subpage (CC_PANEL (self), "users", CC_TYPE_USERS_PAGE);
+ }
+--- a/panels/system/cc-system-panel.blp
++++ b/panels/system/cc-system-panel.blp
+@@ -29,13 +29,17 @@
+         }
+ 
+         $CcListRow users_row {
+-          title: _("_Users");
+-          subtitle: _("Add and remove accounts, change password");
+-          icon-name: "org.gnome.Settings-users-symbolic";
++          title: _("Mertensia _Accounts");
++          subtitle: _("Manage users, passwords and encrypted homes");
++          icon-name: "org.mertensia.Accounts";
+           use-underline: true;
+-          show-arrow: true;
+-          action-name: "navigation.push";
+-          action-target: "'users'";
++          activated => $on_users_row_clicked(template);
++
++          [suffix]
++          Image {
++            valign: center;
++            icon-name: "adw-external-link-symbolic";
++          }
+         }
+ 
+         $CcListRow remote_desktop_row {
+--- a/panels/system/users/gnome-users-panel.desktop.in
++++ b/panels/system/users/gnome-users-panel.desktop.in
+@@ -1,9 +1,9 @@
+ [Desktop Entry]
+-Name=Users
+-Comment=Add or remove users and change your password
+-Exec=gnome-control-center system users
++Name=Mertensia Accounts
++Comment=Manage users, passwords and encrypted homes
++Exec=/usr/bin/mertensia-accounts
+ # Translators: Do NOT translate or transliterate this text (this is an icon file name)!
+-Icon=org.gnome.Settings-users-symbolic
++Icon=org.mertensia.Accounts
+ Terminal=false
+ Type=Application
+ NoDisplay=true
+@@ -11,4 +11,4 @@
+ Categories=GNOME;GTK;Settings;X-GNOME-Settings-Panel;X-GNOME-SystemSettings;
+ OnlyShowIn=GNOME;Unity;
+ # Translators: Search terms to find the Users panel. Do NOT translate or localize the semicolons! The list MUST also end with a semicolon!
+-Keywords=Login;Name;Fingerprint;Avatar;Logo;Face;Password;Parental;Restrictions;Usage;Kid;Child;
++Keywords=Users;Accounts;Login;Name;Avatar;Password;Administrator;Encryption;
+--- a/shell/cc-window.c
++++ b/shell/cc-window.c
+@@ -40,6 +40,7 @@
+ #include "cc-panel.h"
+ #include "cc-shell-model.h"
+ #include "cc-util.h"
++#include "cc-mertensia-accounts.h"
+ 
+ #define MOUSE_BACK_BUTTON 8
+ 
+@@ -291,6 +292,13 @@
+ 
+     CC_ENTRY;
+ 
++    /* Redirect before model lookup and the current-panel shortcut. This covers
++     * CLI, D-Bus activation and Settings search, even with System already open. */
++    if (cc_mertensia_accounts_matches (start_id, parameters)) {
++        cc_mertensia_accounts_open (GTK_WIDGET (self));
++        CC_RETURN (TRUE);
++    }
++
+     view = cc_panel_list_get_view (self->panel_list);
+ 
+     /* When loading the same panel again, just set its parameters */

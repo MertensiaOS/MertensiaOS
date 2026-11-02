@@ -119,6 +119,17 @@ for (let active of [false, true]) {
         result = subprocess.run(["gjs", "-c", script], text=True, capture_output=True, timeout=10)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
+    def test_accounts_redirect_rejects_stock_package_and_desktop_launcher(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            desktop = Path(temporary) / "gnome-users-panel.desktop"
+            desktop.write_text("[Desktop Entry]\nName=Mertensia Accounts\nExec=/usr/bin/mertensia-accounts\n")
+            checks.check_accounts_redirect(desktop, "1.fc45.mertensia1")
+            with self.assertRaisesRegex(SystemExit, "Missing Mertensia Accounts redirect"):
+                checks.check_accounts_redirect(desktop, "1.fc45")
+            desktop.write_text("[Desktop Entry]\nName=Users\nExec=gnome-control-center system users\n")
+            with self.assertRaisesRegex(SystemExit, "does not redirect"):
+                checks.check_accounts_redirect(desktop, "1.fc45.mertensia1")
+
     def test_failed_dependency_preflight_never_invokes_dnf(self):
         with patch.object(policy, "inventory", return_value={"openssh-server", "bootc"}), \
                 patch.object(policy.subprocess, "run", side_effect=subprocess.CalledProcessError(1, "rpm")) as run:

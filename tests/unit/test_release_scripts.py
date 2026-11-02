@@ -557,6 +557,7 @@ class ReleaseScriptTests(unittest.TestCase):
                          "etc/greenboot/check/required.d/00-mertensia-integration-local.sh",
                          "usr/share/mertensia-integration",
                          "usr/share/mertensia-flatpak-tests",
+                         "usr/share/mertensia-keyring-tests",
                          "etc/systemd/system/multi-user.target.wants/mertensia-integration.service"):
             with self.subTest(relative=relative):
                 self.log.unlink(missing_ok=True)

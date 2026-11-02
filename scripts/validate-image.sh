@@ -35,7 +35,8 @@ podman run --rm --entrypoint /usr/bin/bash "$IMAGE" -euc "$(cat <<'BASH'
       /etc/systemd/system/*.wants/mertensia-integration* \
       /usr/lib/bootc/install/*mertensia-integration* \
       /usr/share/mertensia-integration \
-      /usr/share/mertensia-flatpak-tests; do
+      /usr/share/mertensia-flatpak-tests \
+      /usr/share/mertensia-keyring-tests; do
     if [[ -e "$test_artifact" || -L "$test_artifact" ]]; then
       echo "Refusing to release an integration artifact: $test_artifact" >&2
       exit 1

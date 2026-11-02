@@ -31,7 +31,7 @@ in addition to repacking. Chunkah took 12 seconds for the earlier image and
 compression. These times exclude pulling Chunkah, importing the result and
 payload validation. Other package changes may produce different savings.
 
-## Validation
+## Validation of the 30 October 2026 trial
 
 - `scripts/validate-image.sh` passed on the rechunked payload, including fatal
   bootc lint, initramfs/Plymouth checks, application configuration and trust checks.
@@ -43,16 +43,18 @@ payload validation. Other package changes may produce different savings.
   OSTree labels.
 - Source syntax checks passed.
 
-The full installer/VM boot suite was **not run**: it requires rootful Podman,
-and local sudo required a password. Passing container validation does not prove
-installation, Secure Boot, TPM unlock, upgrade or rollback works with this image.
-The release workflow now requires that suite to pass on the rechunked payload
+This historical trial covered image transformation and container validation;
+it did not include installer/VM boot, signed upgrades or rollback. Those results
+must not be used as release acceptance for another image. The release workflow
+requires the installer and signed update/recovery suites on the rechunked payload
 before publication; a failed rechunk, validation or VM gate stops the release.
+See [testing](testing.md) for the required fixtures and interactive checks.
 
-Local evidence is in `.build/chunkah-trial/`, including compressed original and
-rechunked OCI images, timings, validation logs, filesystem comparison and image
-inspection JSON. Trial tags are `localhost/mertensiaos:chunkah-trial` and
-`localhost/mertensiaos:chunkah-repeat`.
+The trial's OCI layouts, timing logs and filesystem comparisons were local,
+ignored build outputs, not files distributed with this repository. To reproduce
+or publish a new measurement, retain the source/output digests, tool versions,
+commands and reports with the matching workflow or issue. The trial tags below
+are local examples and must be replaced with images in your own container store.
 
 ## Reproduce
 

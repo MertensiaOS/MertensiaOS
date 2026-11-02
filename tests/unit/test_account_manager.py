@@ -153,19 +153,54 @@ class AccountsClientTests(unittest.TestCase):
                                                    "fr_FR.utf8", "/var/lib/home/alice/avatar", "active")])
         service.FindUserByName.assert_called_once_with("alice", timeout=30)
 
-    def test_password_change_uses_home1_with_new_and_old_secrets_in_the_correct_order(self):
-        self.client.change_password("alice", "old password", 'new \\" λ password')
-        args = self.home.ChangePasswordHome.call_args.args
-        self.assertEqual(args[0], "alice")
-        self.assertEqual(json.loads(args[1]), {"password": ['new \\" λ password']})
-        self.assertEqual(json.loads(args[2]), {"password": ["old password"]})
+    def test_password_change_authenticates_current_password_then_uses_pam(self):
+        with mock.patch.object(client.passwords, "change_password") as pam:
+            self.client.change_password("alice", "old password", 'new λ password')
+        self.home.AuthenticateHome.assert_called_once_with("alice", '{"password":["old password"]}', timeout=120)
+        pam.assert_called_once_with("alice", "old password", 'new λ password')
+        self.home.ChangePasswordHome.assert_not_called()
+
+    def test_wrong_current_password_never_reaches_password_change(self):
+        self.home.AuthenticateHome.side_effect = dbus.DBusException(name="org.freedesktop.home1.BadPassword")
+        with mock.patch.object(client.passwords, "change_password") as pam:
+            with self.assertRaises(dbus.DBusException):
+                self.client.change_password("alice", "wrong password", "new password")
+        pam.assert_not_called()
+
+    def test_committed_change_with_pam_error_returns_warning_instead_of_retry(self):
+        with mock.patch.object(client.passwords, "change_password", side_effect=client.passwords.PamError(4)):
+            warning = self.client.change_password("alice", "old password", "new password")
+        self.assertIn("login password changed", warning)
+        self.assertIn("previous password", warning)
+        self.assertEqual(json.loads(self.home.AuthenticateHome.call_args.args[1]), {"password": ["new password"]})
+
+    def test_failed_change_does_not_report_success(self):
+        self.home.AuthenticateHome.side_effect = [None, dbus.DBusException(name="org.freedesktop.home1.BadPassword"), None]
+        with mock.patch.object(client.passwords, "change_password", side_effect=client.passwords.PamError(20)):
+            with self.assertRaisesRegex(client.RequestError, "password was not changed"):
+                self.client.change_password("alice", "old password", "new password")
+
+    def test_unknown_change_outcome_does_not_encourage_retry(self):
+        self.home.AuthenticateHome.side_effect = [None, dbus.DBusException(name="org.freedesktop.DBus.Error.NoReply")]
+        with mock.patch.object(client.passwords, "change_password", side_effect=client.passwords.PamError(4)):
+            with self.assertRaisesRegex(client.RequestError, "before trying another change"):
+                self.client.change_password("alice", "old password", "new password")
+
+    def test_unavailable_keyring_service_returns_recovery_guidance(self):
+        with mock.patch.object(client.passwords, "change_password"), mock.patch.object(client.Path, "lstat", side_effect=FileNotFoundError):
+            warning = self.client.change_password("alice", "old password", "new password")
+        self.assertIn("keyring service was unavailable", warning)
+        self.assertIn("previous password", warning)
 
     def test_password_changes_cannot_target_someone_else_or_bypass_validation(self):
-        for username, current, new in (("bob", "old password", "new password"),
-                                       ("alice", "", "new password"), ("alice", "old password", "short")):
-            with self.subTest(username=username, current=current, new=new), self.assertRaises(client.RequestError):
-                self.client.change_password(username, current, new)
-        self.home.ChangePasswordHome.assert_not_called()
+        with mock.patch.object(client.passwords, "change_password") as pam:
+            for username, current, new in (("bob", "old password", "new password"),
+                                           ("alice", "", "new password"), ("alice", "old password", "short"),
+                                           ("alice", "old password", "old password")):
+                with self.subTest(username=username, current=current, new=new), self.assertRaises(client.RequestError):
+                    self.client.change_password(username, current, new)
+        pam.assert_not_called()
+        self.home.AuthenticateHome.assert_not_called()
 
     def test_authentication_errors_are_actionable_and_do_not_echo_untrusted_service_messages(self):
         error = dbus.DBusException("sensitive backend context", name="org.freedesktop.home1.BadPassword")
