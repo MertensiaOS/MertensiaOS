@@ -32,6 +32,41 @@ see [licensing and third-party components](THIRD_PARTY.md) for exceptions to the
 root MIT license. Do not include build outputs, private signing material,
 passwords or recovery keys.
 
+## Commit messages and PR titles
+
+Use [Conventional Commits 1.0.0](https://www.conventionalcommits.org/en/v1.0.0/)
+for commit subjects and pull request titles:
+
+```text
+<type>[optional scope][!]: <description>
+```
+
+Use a lowercase type, an optional scope naming the affected component, and a
+short description in the imperative, without a trailing period. Common types:
+
+- `feat`: new user-facing functionality.
+- `fix`: a bug fix.
+- `docs`: documentation changes.
+- `build` or `ci`: image/build tooling or CI workflows.
+- `refactor`, `perf`, `test`, `style` or `chore`: restructuring, performance,
+  tests, formatting or maintenance changes.
+- `revert`: reverting an earlier change; identify the reverted commit in the body.
+
+Examples:
+
+```text
+feat(accounts): redirect GNOME Users to Mertensia Accounts
+fix(installer): reject disks mounted after selection
+docs: clarify encrypted-home recovery
+ci: run native keyring acceptance checks
+```
+
+Keep unrelated changes in separate commits where practical. Add a body when
+needed to explain the reason, behavior or validation. Mark a breaking change
+with `!` before the colon or a `BREAKING CHANGE:` footer, and explain its impact
+and required migration. A squash-merge message should follow the same convention
+and describe the final change being merged.
+
 ## Validate and submit
 
 Install the Fedora test dependencies from the [README](README.md#run-checks), then

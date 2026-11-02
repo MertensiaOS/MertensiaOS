@@ -95,8 +95,10 @@ for signing credentials, signature verification, upgrades and rollback.
 ## Help and contributions
 
 Use [support channels](SUPPORT.md) for questions and bug reports, and read
-[contributing](CONTRIBUTING.md) before opening a pull request. Report
-vulnerabilities through the [private security reporting channel](SECURITY.md).
+[contributing](CONTRIBUTING.md) before opening a pull request. Use
+[Conventional Commits](CONTRIBUTING.md#commit-messages-and-pr-titles) for commit
+subjects and PR titles. Report vulnerabilities through the
+[private security reporting channel](SECURITY.md).
 
 ## License
 

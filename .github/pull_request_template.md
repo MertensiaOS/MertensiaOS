@@ -1,3 +1,9 @@
+<!--
+Use a Conventional Commit PR title: <type>[optional scope][!]: <description>
+Examples: feat(accounts): add user profiles; docs: clarify recovery steps.
+See CONTRIBUTING.md for commit types and breaking-change guidance.
+-->
+
 ## Problem and behavior
 
 Explain the problem and resulting behavior. Link a related issue if applicable.

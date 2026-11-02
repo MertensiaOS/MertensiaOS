@@ -189,6 +189,9 @@ which operation is permitted. Secrets must stay out of argv and diagnostics.
 
 ## Working on the repository
 
+Follow the [contribution guide](../CONTRIBUTING.md), including
+[Conventional Commit subjects and PR titles](../CONTRIBUTING.md#commit-messages-and-pr-titles).
+
 Run `python3 scripts/check-source.py` and `python3 tests/run_tests.py` from the
 repository root. The runner discovers both `tests/unit/` and the host-side
 integration harness checks and fails if required tests are skipped. For a focused
