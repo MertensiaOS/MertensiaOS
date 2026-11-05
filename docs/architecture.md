@@ -10,6 +10,7 @@ src/mertensia/       Importable Python application packages
   firstboot/        Setup/account UI, regional metadata and picker widget
   boot_health/      Offline desktop health checks and GNOME notifications
   updates/          Guarded OS staging and persistent update status
+  system/           Shared desktop shell for OS Updates and Accounts
   installer/        Live installer UI, disk checks, deployment and recovery
   ui/               Shared branding paths and GTK theme loading
 branding/           Shared stylesheets, tokens, artwork, icons and licensed font
@@ -82,8 +83,16 @@ an administrator acknowledgement prevent update/recovery loops. Public status
 and private acknowledgement live under `/var/lib/mertensia/updates/`; the status
 service refreshes the public record after boot and on bootc's
 `bootc-status-updated.target`, including manual deployment changes. The staging
-helper also refreshes it after each attempt. The existing desktop notifier
-handles restart notices. See [automatic updates](updates.md) for interfaces
+helper publishes activity before downloading and refreshes it after each attempt.
+Separate attempt history retains timestamps and deferral/failure reasons when
+the status publisher reads bootc. `mertensia.updates.client` combines this record
+with read-only systemd properties; the GTK update view polls in worker threads.
+Its fixed-operation pkexec helper independently validates the caller's wheel
+membership and installed-system status, then starts the existing staging service,
+controls its timer, or acknowledges recovery under the update lock. It cannot
+select image references, bypass staging guards, run arbitrary units or reboot.
+The desktop notifier handles restart notices and opens OS Updates on activation.
+See [automatic updates](updates.md) for interfaces
 and policy.
 
 `mertensia.boot_health` implements the offline desktop checks used by Greenboot
@@ -118,16 +127,20 @@ do not modify the import path themselves.
 
 ## Application boundaries
 
-GNOME Settings delegates local user management to Mertensia Accounts. The
-System page has an external Accounts launcher, and Users search results and
-direct panel links open the same app. The native GNOME Users page is not
+GNOME Settings delegates local user management to Mertensia System's Accounts
+view. The System page has external Accounts and OS Updates launchers; its
+Application Updates row still opens GNOME Software. Users search results and
+direct panel links open Accounts. The native GNOME Users page is not
 registered. GNOME Online Accounts remains a separate cloud-service settings
 panel. AccountsService remains installed for user enumeration, profiles and GDM.
 
-The desktop Accounts app is `mertensia.accounts.ui`, launched by
-`/usr/bin/mertensia-accounts`. The `--add-user` compatibility option on
-`mertensia-firstboot` opens its creation form; first-boot setup retains its
-separate lifecycle. GTK runs unprivileged, with blocking IPC in worker threads.
+The desktop app is `mertensia.system.ui`, launched by `/usr/bin/mertensia-system`.
+An Adw.ViewStack switches between the reusable `mertensia.accounts.ui.AccountsView`
+and `mertensia.updates.ui.UpdatesView`. Page arguments use one Gio.Application
+instance, including when another launcher or notification opens it. The older
+`/usr/bin/mertensia-accounts` launcher and `--add-user` compatibility option on
+`mertensia-firstboot` open Accounts and its creation form; first-boot setup retains
+its separate lifecycle. GTK runs unprivileged, with blocking IPC in worker threads.
 The client lists home1 records and login1 sessions, uses AccountsService's
 homed-aware profile/avatar methods, and changes its own password through the
 dedicated `mertensia-password` PAM service. The unprivileged client verifies the

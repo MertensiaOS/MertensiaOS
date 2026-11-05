@@ -45,6 +45,11 @@ podman run --rm --entrypoint /usr/bin/bash "$IMAGE" -euc "$(cat <<'BASH'
   test -x /usr/libexec/mertensia-boot-health
   test -x /usr/libexec/mertensia-boot-health-notify
   test -x /usr/bin/mertensia-update
+  test -x /usr/bin/mertensia-system
+  test -x /usr/libexec/mertensia-update-helper
+  test -f /usr/share/applications/org.mertensia.System.desktop
+  test -f /usr/share/polkit-1/actions/org.mertensia.Updates.policy
+  test -f /usr/share/polkit-1/rules.d/49-mertensia-updates.rules
   test -L /etc/systemd/system/timers.target.wants/bootc-fetch-apply-updates.timer
   test -L /etc/systemd/system/greenboot-success.target.wants/mertensia-update-status.service
   test -L /etc/systemd/system/bootc-status-updated.target.wants/mertensia-update-status.service

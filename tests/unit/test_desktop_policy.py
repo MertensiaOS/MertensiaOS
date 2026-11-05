@@ -119,16 +119,42 @@ for (let active of [false, true]) {
         result = subprocess.run(["gjs", "-c", script], text=True, capture_output=True, timeout=10)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
+    def test_update_policy_authenticates_only_active_local_administrators(self):
+        rule = (ROOT / "system/config/polkit/49-mertensia-updates.rules").read_text()
+        script = '''let callback;
+const polkit = {
+    Result: {NO: "no", AUTH_SELF_KEEP: "auth_self_keep"},
+    addRule: rule => { callback = rule; }
+};
+''' + rule + '''
+for (let active of [false, true]) {
+    for (let local of [false, true]) {
+        for (let admin of [false, true]) {
+            for (let user of ["alice", "mertensia-setup"]) {
+                let subject = {user, active, local, isInGroup: group => admin && group === "wheel"};
+                let expected = active && local && admin && user !== "mertensia-setup" ? "auth_self_keep" : "no";
+                if (callback({id: "org.mertensia.updates.manage"}, subject) !== expected)
+                    throw Error("Incorrect OS update authorization");
+                if (callback({id: "org.mertensia.accounts.manage"}, subject) !== undefined)
+                    throw Error("Update policy changed account authorization");
+            }
+        }
+    }
+}
+'''
+        result = subprocess.run(["gjs", "-c", script], text=True, capture_output=True, timeout=10)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
     def test_accounts_redirect_rejects_stock_package_and_desktop_launcher(self):
         with tempfile.TemporaryDirectory() as temporary:
             desktop = Path(temporary) / "gnome-users-panel.desktop"
             desktop.write_text("[Desktop Entry]\nName=Mertensia Accounts\nExec=/usr/bin/mertensia-accounts\n")
-            checks.check_accounts_redirect(desktop, "1.fc45.mertensia1")
+            checks.check_accounts_redirect(desktop, "1.fc45.mertensia2")
             with self.assertRaisesRegex(SystemExit, "Missing Mertensia Accounts redirect"):
                 checks.check_accounts_redirect(desktop, "1.fc45")
             desktop.write_text("[Desktop Entry]\nName=Users\nExec=gnome-control-center system users\n")
             with self.assertRaisesRegex(SystemExit, "does not redirect"):
-                checks.check_accounts_redirect(desktop, "1.fc45.mertensia1")
+                checks.check_accounts_redirect(desktop, "1.fc45.mertensia2")
 
     def test_failed_dependency_preflight_never_invokes_dnf(self):
         with patch.object(policy, "inventory", return_value={"openssh-server", "bootc"}), \

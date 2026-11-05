@@ -270,5 +270,29 @@
   [
     "system/config/polkit/00-mertensia-no-host-packages.rules",
     "/usr/share/polkit-1/rules.d/00-mertensia-no-host-packages.rules"
+  ],
+  [
+    "system/bin/mertensia-system",
+    "/usr/bin/mertensia-system"
+  ],
+  [
+    "system/bin/mertensia-update-helper",
+    "/usr/libexec/mertensia-update-helper"
+  ],
+  [
+    "system/config/desktop/org.mertensia.System.desktop",
+    "/usr/share/applications/org.mertensia.System.desktop"
+  ],
+  [
+    "branding/icons/org.mertensia.System.svg",
+    "/usr/share/icons/hicolor/scalable/apps/org.mertensia.System.svg"
+  ],
+  [
+    "system/config/polkit/org.mertensia.Updates.policy",
+    "/usr/share/polkit-1/actions/org.mertensia.Updates.policy"
+  ],
+  [
+    "system/config/polkit/49-mertensia-updates.rules",
+    "/usr/share/polkit-1/rules.d/49-mertensia-updates.rules"
   ]
 ]

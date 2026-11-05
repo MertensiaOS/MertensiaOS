@@ -14,6 +14,8 @@ Flathub. Updates requesting additional permissions stay pending for manual revie
 in Software. OS updates use bootc: signed updates download daily on unmetered
 connections and are staged for your next restart. A desktop notification tells
 you when an OS update is ready; automatic staging never requests a restart.
+Open **Mertensia System → OS Updates** to check and download updates, change
+automatic downloads, or review recovery pauses. Notifications open this view.
 See [automatic updates](docs/updates.md) for controls and permission review.
 
 Greenboot checks local storage and core desktop services after boot and can
@@ -75,8 +77,10 @@ Install from the ISO, save the root recovery key outside the live system, then
 restart and create your first administrator account. The account password
 unlocks its encrypted home; the root recovery key does not unlock that home.
 
-Open **Mertensia Accounts** from the app launcher or Settings → System →
-Mertensia Accounts to manage users and create additional encrypted accounts.
+Open **Mertensia System → Accounts**, or Settings → System → Accounts, to manage
+users and create additional encrypted accounts. Settings → System → OS Updates
+opens the same app's update view. The `mertensia-accounts` command and older
+Accounts links still open Accounts directly.
 Traditional account creation through AccountsService is blocked to keep user
 homes encrypted.
 Accounts also lists existing users and provides profile pictures, names,

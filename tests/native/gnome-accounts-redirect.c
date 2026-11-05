@@ -10,8 +10,14 @@ __wrap_g_spawn_async (const gchar *working_directory, gchar **argv, gchar **envp
                      gpointer user_data, GPid *child_pid, GError **error)
 {
     g_assert_null (working_directory);
-    g_assert_cmpstr (argv[0], ==, "/usr/bin/mertensia-accounts");
-    g_assert_null (argv[1]);
+    if (g_str_equal (argv[0], "/usr/bin/mertensia-system")) {
+        g_assert_cmpstr (argv[1], ==, "--page");
+        g_assert_cmpstr (argv[2], ==, "updates");
+        g_assert_null (argv[3]);
+    } else {
+        g_assert_cmpstr (argv[0], ==, "/usr/bin/mertensia-accounts");
+        g_assert_null (argv[1]);
+    }
     g_assert_null (envp);
     g_assert_cmpint (flags, ==, G_SPAWN_DEFAULT);
     g_assert_null (child_setup);
@@ -65,11 +71,24 @@ test_launch (void)
     g_assert_cmpuint (launches, ==, 2);
 }
 
+static void
+test_updates_launch (void)
+{
+    g_autoptr(GError) error = NULL;
+    fail_spawn = FALSE;
+    g_assert_true (cc_mertensia_updates_launch (&error));
+    g_assert_no_error (error);
+    fail_spawn = TRUE;
+    g_assert_false (cc_mertensia_updates_launch (&error));
+    g_assert_error (error, G_SPAWN_ERROR, G_SPAWN_ERROR_NOENT);
+}
+
 int
 main (int argc, char **argv)
 {
     g_test_init (&argc, &argv, NULL);
     g_test_add_func ("/accounts/routes", test_routes);
     g_test_add_func ("/accounts/launch", test_launch);
+    g_test_add_func ("/updates/launch", test_updates_launch);
     return g_test_run ();
 }

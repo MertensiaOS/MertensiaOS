@@ -50,11 +50,12 @@ the enumeration hunk once Fedora ships that fix; retain the creation guard.
 
 GNOME Settings is rebuilt from Fedora's source RPM in a separate stage with
 `system/patches/gnome-control-center-mertensia-accounts.patch` and the launcher
-code in `system/gnome/`. Its System page opens Mertensia Accounts instead of
-registering GNOME's native Users subpage. Settings search, D-Bus activation and
+code in `system/gnome/`. Its System page opens Mertensia System's Accounts and
+OS Updates views; Application Updates opens GNOME Software. GNOME's native Users
+subpage is not registered. Settings search, D-Bus activation and
 `gnome-control-center system users` (including legacy `users` links) use the
-same redirect. The Users desktop entry also launches Mertensia Accounts directly.
-The RPM retains Fedora packaging with a `.mertensia1` suffix; image policy checks
+same redirect. The Users desktop entry retains the compatible Accounts launcher.
+The RPM retains Fedora packaging with a `.mertensia2` suffix; image policy checks
 require that build and its redirected desktop entry. Review the patch whenever
 Fedora updates Settings; a failed patch or changed spec stops the build.
 

@@ -1,0 +1,9 @@
+polkit.addRule(function(action, subject) {
+    if (action.id == "org.mertensia.updates.manage") {
+        if (subject.active && subject.local && subject.user != "mertensia-setup" &&
+            subject.isInGroup("wheel")) {
+            return polkit.Result.AUTH_SELF_KEEP;
+        }
+        return polkit.Result.NO;
+    }
+});

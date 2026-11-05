@@ -161,6 +161,36 @@ class UpdateTests(unittest.TestCase):
             with self.assertRaisesRegex(backend.UpdateError, "bootc exited with status 1"):
                 backend.command(["bootc", "status"])
 
+    def test_status_keeps_attempt_history_and_publishes_only_selected_image_metadata(self):
+        status = copy.deepcopy(self.status)
+        status["booted"]["image"].update(version="45.20261105.1", private="registry token")
+        backend.record_attempt("downloading")
+        attempt = json.loads((backend.STATE / "attempt.json").read_text())
+        self.assertTrue(attempt["last_attempt"])
+        self.assertIsNone(attempt["last_successful_check"])
+        backend.record_attempt("idle", successful=True)
+        record = backend.publish(status)
+        self.assertEqual(record["booted"], {"digest": DIGEST, "version": "45.20261105.1"})
+        self.assertTrue(record["last_successful_check"])
+        self.assertNotIn("registry token", json.dumps(record))
+        self.assertEqual(backend.publish(status)["last_successful_check"], record["last_successful_check"])
+        backend.BOOT_ID.write_text("boot-b")
+        after_boot = backend.publish(status)
+        self.assertIsNone(after_boot["activity"])
+        self.assertEqual(after_boot["last_successful_check"], record["last_successful_check"])
+
+    def test_deferred_staging_does_not_record_a_successful_remote_check(self):
+        with mock.patch.object(backend, "bootc_status", return_value=self.status), \
+             mock.patch.object(backend, "skip_reason", return_value="Waiting for unmetered internet"):
+            record = backend.stage()
+        self.assertIsNone(record["last_successful_check"])
+        self.assertEqual(record["activity"], "deferred")
+
+    def test_busy_lock_fails_without_waiting_for_an_active_download(self):
+        with backend.locked():
+            with self.assertRaisesRegex(backend.UpdateError, "already running"), backend.locked(blocking=False):
+                self.fail("Acquired an update lock twice")
+
     def test_notifications_are_once_per_user_and_clear_after_boot(self):
         status = backend.publish(self.status | {"staged": DEPLOYMENT})
         seen = self.root / "user-a/seen.json"
@@ -209,7 +239,7 @@ class UpdateTests(unittest.TestCase):
         backend.publish(self.status)
         send = mock.Mock()
         self.assertTrue(notifier.deliver(backend.EVENT, self.root / "seen.json", send, backend.STATUS))
-        self.assertIn("sudo mertensia-update resume", send.call_args.args[0])
+        self.assertIn("OS Updates in Mertensia System", send.call_args.args[0])
 
 
 if __name__ == "__main__":

@@ -34,6 +34,7 @@ COPY src/mertensia/firstboot /usr/lib/mertensia/python/mertensia/firstboot
 COPY src/mertensia/ui /usr/lib/mertensia/python/mertensia/ui
 COPY src/mertensia/boot_health /usr/lib/mertensia/python/mertensia/boot_health
 COPY src/mertensia/updates /usr/lib/mertensia/python/mertensia/updates
+COPY src/mertensia/system /usr/lib/mertensia/python/mertensia/system
 
 FROM scratch AS payload-build-scripts
 COPY scripts/configure-payload.sh scripts/install-image-files.py scripts/clean-desktop.py scripts/check-desktop-policy.py scripts/payload-files.json /

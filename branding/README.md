@@ -59,7 +59,8 @@ Keep strokes expanded to paths: GTK's symbolic recoloring can discard SVG stroke
 attributes and fill their interiors instead. Check icons in GTK, not just an SVG
 viewer, after editing them.
 
-Accounts uses the project-owned `icons/org.mertensia.Accounts.svg` launcher icon,
+Mertensia System uses `icons/org.mertensia.System.svg`, a purple settings tile.
+The compatible Accounts entry uses `icons/org.mertensia.Accounts.svg`,
 installed in the hicolor scalable app directory. Its purple tile and two user
 silhouettes stay sharp at desktop and HiDPI sizes without a bitmap dependency.
 
@@ -119,7 +120,8 @@ pickers and the no-results state. Repeat with `--theme dark --width 800 --height
 to check the smaller layout. The preview never creates an account or applies settings.
 
 The full Accounts manager has its own fixture-backed preview. It renders the
-real GTK widgets and exercises password rejection/retry/change, creation,
+real GTK widgets inside the shared Mertensia System window and exercises password
+rejection/retry/change, creation,
 typed deletion confirmation and non-administrator access without connecting
 to host account services. With the Broadway display connected, run:
 
@@ -130,3 +132,17 @@ GDK_BACKEND=broadway BROADWAY_DISPLAY=:7 GSK_RENDERER=broadway GTK_A11Y=none \
 
 Repeat with `--theme dark` to check dark mode. Run without `--capture` to explore
 the simulated manager interactively. These users exist only in process memory.
+
+The shared window and OS Updates view also have a fixture-backed preview:
+
+```sh
+GDK_BACKEND=broadway BROADWAY_DISPLAY=:7 GSK_RENDERER=broadway GTK_A11Y=none \
+  /usr/bin/python3 scripts/previews/system.py --capture /tmp/system-preview
+```
+
+It blocks host commands and supplies simulated update status, authentication and
+restart callbacks. Captures exercise download/staging, Accounts navigation and
+creation dialog, recovery acknowledgement, timer changes, cancelled authorization,
+network deferral, failure, interrupted downloads, stale status and unsupported
+systems. Use `--theme dark --width 640 --height 600` to check a smaller display.
+The preview does not establish that a real signed image downloads or boots.

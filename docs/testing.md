@@ -224,6 +224,26 @@ offline ISO runs can omit it; that omission remains visible as skipped coverage.
 
 ## Automatic updates and Flatpak permissions
 
+Run `scripts/previews/system.py --capture /tmp/system-preview` with the
+[GTK preview environment](../branding/README.md#visual-preview) to exercise the
+real shared System window with in-memory updates and accounts. Repeat in dark
+mode at 640 × 600. `scripts/previews/accounts.py` exercises the existing account
+password/create/remove flows inside that window. Unit coverage checks helper
+authorization, fixed operations, stale/interrupted state, attempt history,
+notification activation and isolated image launchers.
+
+On an installed disposable VM, verify both Settings links and application
+shortcuts open the correct view in the same app instance. Click staged-update
+and recovery notifications while the window is closed and while Accounts is
+open. As an administrator, cancel authentication for download/timer/resume and
+confirm the actual setting is restored. As a standard user, confirm update
+controls cannot mutate OS state. Close the window during a real download and
+verify the systemd service completes and the notifier still delivers. Verify
+**Restart…** uses GNOME's normal confirmation and respects session inhibitors.
+After recovery, inspect the failure and use **Resume Updates…**; it must not
+download, restart or re-enable a disabled timer. These VM checks remain necessary
+before release; fixtures and container tests do not establish them.
+
 Run the stock GNOME Software permission checks against a built payload:
 
 ```sh
@@ -339,18 +359,18 @@ use a visible display and the normal production ISO for these checks.
    the UI and check regional settings, keyboard input and timezone.
 3. Log in through GDM, log out, and log in again. Check the encrypted home is
    usable, the initial account has administrator access, and setup is no longer
-   offered. Open Mertensia Accounts and check both the account list and the
+   offered. Open Mertensia System → Accounts and check both the account list and the
    signed-in user's profile. Verify name, picture and language changes persist
    after restarting Accounts. From Add User, verify the polkit prompt identifies
    the signed-in administrator and accepts that account's login password.
    Cancel a prompt and check that the form retains its values and allows retry.
-   In Settings → System, open Mertensia Accounts and confirm it launches our
+   In Settings → System, open Accounts and confirm it launches our
    app rather than GNOME's native Users page. Check Users search results and
    `gnome-control-center system users` (also legacy `users` links) open the same
    app, including while Settings already shows System. Account authorization
-   happens in Mertensia Accounts; AccountsService must still reject traditional
+   happens in the Accounts view; AccountsService must still reject traditional
    account creation.
-   In Mertensia Accounts, open your own Password dialog.
+   In Accounts, open your own Password dialog.
    Check that an incorrect current password is rejected, then change the
    password. Log out, reboot, and verify that the new password unlocks the
    encrypted home and the old password fails. If a login keyring is configured,

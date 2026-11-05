@@ -5,4 +5,5 @@ Comment=Manage users, profiles, passwords and encrypted homes
 Exec=/usr/bin/mertensia-accounts
 Icon=org.mertensia.Accounts
 Categories=Settings;System;
+NoDisplay=true
 Keywords=Users;Accounts;Password;Avatar;Administrator;Login;

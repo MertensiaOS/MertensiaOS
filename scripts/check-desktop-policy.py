@@ -32,7 +32,7 @@ def check_password_pam(system_auth: Path, passwd: Path) -> None:
 
 
 def check_accounts_redirect(desktop: Path, release: str) -> None:
-    if not release.endswith(".mertensia1"):
+    if not release.endswith(".mertensia2"):
         raise SystemExit(f"Missing Mertensia Accounts redirect in GNOME Settings: {release}")
     entry = configparser.ConfigParser(interpolation=None)
     entry.read_string(desktop.read_text())

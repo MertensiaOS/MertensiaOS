@@ -1,0 +1,18 @@
+[Desktop Entry]
+Type=Application
+Name=Mertensia System
+Comment=Manage OS updates and encrypted accounts
+Exec=/usr/bin/mertensia-system
+Icon=org.mertensia.System
+Categories=Settings;System;
+Keywords=OS;Updates;Upgrade;Recovery;Users;Accounts;Password;Administrator;
+StartupNotify=true
+Actions=Updates;Accounts;
+
+[Desktop Action Updates]
+Name=OS Updates
+Exec=/usr/bin/mertensia-system --page updates
+
+[Desktop Action Accounts]
+Name=Accounts
+Exec=/usr/bin/mertensia-system --page accounts

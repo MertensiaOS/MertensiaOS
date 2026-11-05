@@ -7,6 +7,42 @@ The preinstalled native Chromium browser is part of the OS image. Its security
 fixes require a maintainer-published release and a restart into that release;
 Software does not update it. See [Chromium](chromium.md).
 
+## Desktop controls
+
+Open **Mertensia System → OS Updates**, Settings → System → OS Updates, or click
+an OS update/recovery notification. Accounts is the other view in the same app.
+The Settings **Application Updates** row opens GNOME Software for Flatpaks.
+
+The OS Updates view shows the running and staged image versions (falling back to
+their image digests), the last successful check, and whether a download is
+running, deferred, interrupted, failed or paused after recovery. A missing staged
+image is shown as **No update staged**, never as a claim that the installed image
+is the channel's latest release. Old-boot status is ignored until the system
+publishes a current record. **Update details** contains the last attempt and the
+command for inspecting the service journal.
+
+**Check and Download** starts the same guarded systemd service as the daily timer.
+There is no separate check-only operation: an eligible published update downloads
+and stages for the next restart. The service continues when the window closes.
+The automatic-download switch controls the OS timer; disabling it does not cancel
+a running download or discard an already staged image. **Restart…** asks GNOME
+to start its normal restart confirmation and session-inhibitor flow.
+
+After recovery, **Resume Updates…** explains the pause and asks for confirmation
+before acknowledging it. Review and address the failure first: resuming can allow
+the same published image to be downloaded again. Resuming does not download or
+restart, and it does not enable a disabled timer.
+
+Reading status requires no authentication. Download, resume and timer changes
+require an active local administrator's authentication through Polkit. The
+desktop app runs without root privileges; its separate helper accepts only these
+fixed operations and independently checks the original caller and installed
+system. Account management retains its own helper and authorization policy.
+
+Command-line entry points are `mertensia-system --page updates` and
+`mertensia-system --page accounts`. The older `mertensia-accounts` and
+`mertensia-firstboot --add-user` entry points open the shared app's Accounts view.
+
 ## Application updates and permissions
 
 Open **Software** to discover, install and update apps from Flathub. Background
@@ -63,7 +99,12 @@ sudo systemctl start bootc-fetch-apply-updates.service
 
 `status` prints JSON. For desktop users it reads the public status file; root
 refreshes that file from bootc. The record contains its boot ID, staged digest,
-pending recovery event ID and the last deferral/failure reason. State lives in
+running/staged image version and digest summaries, queued rollback flag, pending
+recovery event ID, last attempt/check timestamps, activity and the last
+deferral/failure reason. `attempt.json` preserves attempt history across status
+refreshes and boots; a status refresh alone never records a successful channel
+check. The desktop also reads systemd's timer and service state, so an old
+download record cannot appear as a still-running download. State lives in
 `/var/lib/mertensia/updates/`; only root can write it. Notifications ignore
 records from older boots and retry if the notification service is unavailable.
 The publisher runs after boot health collection and whenever bootc activates

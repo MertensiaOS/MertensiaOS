@@ -29,7 +29,7 @@ python3 /run/mertensia-build/check-desktop-policy.py
 )
 
 (
-  chmod 0755 /usr/bin/mertensia-update && \
+  chmod 0755 /usr/bin/mertensia-update /usr/bin/mertensia-system /usr/libexec/mertensia-update-helper && \
       systemctl enable bootc-fetch-apply-updates.timer mertensia-update-status.service
 )
 

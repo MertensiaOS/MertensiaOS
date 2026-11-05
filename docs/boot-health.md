@@ -66,8 +66,10 @@ At login, each ordinary GNOME user receives:
 
 > MertensiaOS restored the previous OS version because an update could not start correctly.
 
-The recovery notification also explains that automatic OS updates pause until
-an administrator runs `sudo mertensia-update resume`. The notifier also watches
+The recovery notification also explains that automatic OS updates pause. Click
+it to open Mertensia System's OS Updates view, review the failure, and use
+**Resume Updates…** as an administrator. The CLI equivalent is
+`sudo mertensia-update resume`. The notifier also watches
 for events recorded after login. It remembers the last
 delivered event in `$XDG_STATE_HOME/mertensia/boot-health-notification.json`
 (normally `~/.local/state/mertensia/boot-health-notification.json`). Each user

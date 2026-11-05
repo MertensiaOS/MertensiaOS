@@ -79,7 +79,7 @@ elif command == "podman":
         script_index = args.index("-euc") + 1
         script = args[script_index]
         root = os.environ["FAKE_PAYLOAD_ROOT"]
-        for prefix in ("/usr/lib/", "/usr/lib64/", "/usr/libexec/", "/usr/share/", "/etc/", "/usr/bin/mertensia-update", "/usr/bin/chromium-browser"):
+        for prefix in ("/usr/lib/", "/usr/lib64/", "/usr/libexec/", "/usr/share/", "/etc/", "/usr/bin/mertensia-update", "/usr/bin/mertensia-system", "/usr/bin/chromium-browser"):
             script = script.replace(prefix, root + prefix)
         script = script.replace("'ExecStart=" + root + "/usr/bin/mertensia-update", "'ExecStart=/usr/bin/mertensia-update")
         script = script.replace('["' + root + '/usr/bin/chromium-browser"]', '["/usr/bin/chromium-browser"]')
@@ -185,6 +185,11 @@ class ReleaseScriptTests(unittest.TestCase):
             "usr/libexec/mertensia-boot-health": ROOT / "system/bin/mertensia-boot-health",
             "usr/libexec/mertensia-boot-health-notify": ROOT / "system/bin/mertensia-boot-health-notify",
             "usr/bin/mertensia-update": ROOT / "system/bin/mertensia-update",
+            "usr/bin/mertensia-system": ROOT / "system/bin/mertensia-system",
+            "usr/libexec/mertensia-update-helper": ROOT / "system/bin/mertensia-update-helper",
+            "usr/share/applications/org.mertensia.System.desktop": ROOT / "system/config/desktop/org.mertensia.System.desktop",
+            "usr/share/polkit-1/actions/org.mertensia.Updates.policy": ROOT / "system/config/polkit/org.mertensia.Updates.policy",
+            "usr/share/polkit-1/rules.d/49-mertensia-updates.rules": ROOT / "system/config/polkit/49-mertensia-updates.rules",
             "usr/lib/systemd/system/bootc-fetch-apply-updates.service.d/50-mertensia-stage.conf": ROOT / "system/config/systemd/bootc-fetch-apply-updates.service.d/50-mertensia-stage.conf",
             "usr/lib/greenboot/check/required.d/50-mertensia-desktop.sh": ROOT / "system/config/greenboot/50-mertensia-desktop.sh",
             "etc/chromium/policies/managed/mertensia.json": ROOT / "system/config/chromium/policies/managed/mertensia.json",

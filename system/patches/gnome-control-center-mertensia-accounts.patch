@@ -1,4 +1,4 @@
-Subject: [PATCH] Route local account management to Mertensia Accounts
+Subject: [PATCH] Open Mertensia System for accounts and OS updates
 
 Keep the Users search entry and legacy links, but never instantiate GNOME's
 Users page. Account lifecycle and password handling belong to Mertensia.
@@ -31,7 +31,7 @@ Users page. Account lifecycle and password handling belong to Mertensia.
  
  struct _CcSystemPanel {
      CcPanel parent_instance;
-@@ -125,6 +125,12 @@
+@@ -125,6 +125,18 @@
  }
  
  static void
@@ -41,14 +41,21 @@ Users page. Account lifecycle and password handling belong to Mertensia.
 +}
 +
 +static void
++on_os_updates_row_clicked (CcSystemPanel *self)
++{
++    cc_mertensia_updates_open (GTK_WIDGET (self));
++}
++
++static void
  cc_system_panel_class_init (CcSystemPanelClass *klass)
  {
      GtkWidgetClass *widget_class = GTK_WIDGET_CLASS (klass);
-@@ -140,6 +146,7 @@
+@@ -140,6 +146,8 @@
  
      gtk_widget_class_bind_template_callback (widget_class, cc_system_page_open_software_update);
      gtk_widget_class_bind_template_callback (widget_class, on_secure_shell_row_clicked);
 +    gtk_widget_class_bind_template_callback (widget_class, on_users_row_clicked);
++    gtk_widget_class_bind_template_callback (widget_class, on_os_updates_row_clicked);
  
      g_type_ensure (CC_TYPE_ABOUT_PAGE);
      g_type_ensure (CC_TYPE_DATE_TIME_PAGE);
@@ -68,14 +75,28 @@ Users page. Account lifecycle and password handling belong to Mertensia.
  }
 --- a/panels/system/cc-system-panel.blp
 +++ b/panels/system/cc-system-panel.blp
-@@ -29,13 +29,17 @@
+@@ -29,13 +29,31 @@
          }
  
++        $CcListRow os_updates_row {
++          title: _("_OS Updates");
++          subtitle: _("Manage OS updates and recovery");
++          icon-name: "software-update-available-symbolic";
++          use-underline: true;
++          activated => $on_os_updates_row_clicked(template);
++
++          [suffix]
++          Image {
++            valign: center;
++            icon-name: "adw-external-link-symbolic";
++          }
++        }
++
          $CcListRow users_row {
 -          title: _("_Users");
 -          subtitle: _("Add and remove accounts, change password");
 -          icon-name: "org.gnome.Settings-users-symbolic";
-+          title: _("Mertensia _Accounts");
++          title: _("_Accounts");
 +          subtitle: _("Manage users, passwords and encrypted homes");
 +          icon-name: "org.mertensia.Accounts";
            use-underline: true;
@@ -92,6 +113,16 @@ Users page. Account lifecycle and password handling belong to Mertensia.
          }
  
          $CcListRow remote_desktop_row {
+@@ -76,7 +94,8 @@
+ 
+         Adw.ActionRow {
+           activatable: true;
+-          title: _("S_oftware Updates");
++          title: _("_Application Updates");
++          subtitle: _("Manage Flatpak apps in Software");
+           icon-name: "system-update-symbolic";
+           use-underline: true;
+           activated => $cc_system_page_open_software_update(template);
 --- a/panels/system/users/gnome-users-panel.desktop.in
 +++ b/panels/system/users/gnome-users-panel.desktop.in
 @@ -1,9 +1,9 @@

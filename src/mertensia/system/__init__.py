@@ -1,0 +1,1 @@
+"""Mertensia System desktop application."""

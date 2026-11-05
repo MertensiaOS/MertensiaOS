@@ -13,7 +13,6 @@ gi.require_version("Adw", "1")
 gi.require_version("GdkPixbuf", "2.0")
 from gi.repository import Adw, Gdk, GdkPixbuf, Gio, GLib, Gtk
 
-from mertensia.ui.branding import BRANDING, load_brand_style
 from .client import AccountsClient, administrator_request, available_languages, current_identity, error_message
 from .validation import RequestError, validate_password
 
@@ -78,10 +77,10 @@ class AccountForm(Adw.Dialog):
             entry.set_text("")
 
 
-class AccountsWindow(Adw.ApplicationWindow):
-    def __init__(self, app, *, client_factory=AccountsClient, admin_request=administrator_request,
+class AccountsView(Adw.Bin):
+    def __init__(self, *, client_factory=AccountsClient, admin_request=administrator_request,
                  identity_factory=current_identity, languages_factory=available_languages):
-        super().__init__(application=app, title="Mertensia Accounts", default_width=780, default_height=720)
+        super().__init__()
         self.client_factory = client_factory
         self.admin_request = admin_request
         self.identity_factory = identity_factory
@@ -97,22 +96,15 @@ class AccountsWindow(Adw.ApplicationWindow):
         self.pending_add = False
         self.loaded = False
         self.active_form = None
-        self.set_icon_name("org.mertensia.Accounts")
-        Gtk.IconTheme.get_for_display(self.get_display()).add_search_path(str(BRANDING / "icons"))
-        self.style = Adw.StyleManager.get_default()
-        self.provider = None
-        self._style_changed()
-        self.style.connect("notify::dark", self._style_changed)
-        self.style.connect("notify::high-contrast", self._style_changed)
-        self.connect("close-request", self._close_requested)
         self.toasts = Adw.ToastOverlay()
         self.navigation = Adw.NavigationView()
         self.navigation.connect("popped", lambda *_: setattr(self, "selected", None))
         self.toasts.set_child(self.navigation)
-        self.set_content(self.toasts)
+        self.set_child(self.toasts)
 
         toolbar = Adw.ToolbarView()
         header = Adw.HeaderBar()
+        self.header = header
         self.refresh_button = Gtk.Button(icon_name="view-refresh-symbolic", tooltip_text="Refresh accounts")
         self.refresh_button.connect("clicked", self.refresh)
         self.add_button = Gtk.Button(label="Add User", sensitive=False, css_classes=["suggested-action"])
@@ -135,12 +127,6 @@ class AccountsWindow(Adw.ApplicationWindow):
         self.home_page = Adw.NavigationPage(child=toolbar, title="Accounts", tag="accounts")
         self.navigation.add(self.home_page)
         self.refresh()
-
-    def _style_changed(self, *_args):
-        if self.provider:
-            Gtk.StyleContext.remove_provider_for_display(self.get_display(), self.provider)
-        self.provider = load_brand_style(self.get_display(), self.style.get_dark(),
-                                         self.style.get_high_contrast(), stylesheets=())
 
     def _close_requested(self, *_args):
         if self.mutating:
@@ -446,7 +432,7 @@ class AccountsWindow(Adw.ApplicationWindow):
                     image.savev(avatar, "png", [], [])
                     self.client_factory().set_profile(account.username, "avatar", avatar)
             self._run(work, lambda _: self._changed("Profile picture updated."))
-        dialog.open(self, None, chosen)
+        dialog.open(self.get_root(), None, chosen)
 
     def _confirm_admin(self, account, heading, body, operation, enabled, label):
         if not self.identity.administrator or self.busy:
@@ -495,23 +481,9 @@ class AccountsWindow(Adw.ApplicationWindow):
         self._present(form)
 
 
-class AccountsApp(Adw.Application):
-    def __init__(self):
-        super().__init__(application_id="org.mertensia.Accounts", flags=Gio.ApplicationFlags.HANDLES_COMMAND_LINE)
-
-    def do_activate(self):
-        window = self.get_active_window() or AccountsWindow(self)
-        window.present()
-
-    def do_command_line(self, command_line):
-        self.activate()
-        if "--add-user" in command_line.get_arguments():
-            self.get_active_window().show_create()
-        return 0
-
-
 def main(argv=None):
     parser = argparse.ArgumentParser(description="Manage encrypted MertensiaOS user accounts")
     parser.add_argument("--add-user", action="store_true", help="Open the account creation form")
     args = parser.parse_args(argv)
-    return AccountsApp().run(["mertensia-accounts"] + (["--add-user"] if args.add_user else []))
+    from mertensia.system.ui import main as system_main
+    return system_main(["--page", "accounts"] + (["--add-user"] if args.add_user else []))

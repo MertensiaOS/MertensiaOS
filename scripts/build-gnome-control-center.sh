@@ -7,7 +7,7 @@ mkdir -p "$build_root" /out
 dnf download --source --destdir="$build_root" gnome-control-center
 sources=("$build_root"/gnome-control-center-*.src.rpm)
 test "${#sources[@]}" -eq 1
-release="$(rpm -qp --qf '%{RELEASE}' "${sources[0]}").mertensia1"
+release="$(rpm -qp --qf '%{RELEASE}' "${sources[0]}").mertensia2"
 rpm --define "_topdir $build_root" -i "${sources[0]}"
 install -m0644 /build/gnome-control-center-mertensia-accounts.patch "$build_root/SOURCES/"
 install -m0644 /build/gnome/cc-mertensia-accounts.{c,h} "$build_root/SOURCES/"

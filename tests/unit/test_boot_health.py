@@ -186,7 +186,8 @@ class RecoveryEventTests(unittest.TestCase):
                                     "org.freedesktop.Notifications", "Notify"))
         values = args[4].unpack()
         self.assertEqual(values[4], notifier.MESSAGE)
-        self.assertEqual(values[6]["desktop-entry"], "org.mertensia.BootHealth")
+        self.assertEqual(values[5], ["default", "Open OS Updates"])
+        self.assertEqual(values[6]["desktop-entry"], "org.mertensia.System")
         self.assertEqual(args[-2], 5000)
 
     def test_setup_account_never_connects_to_the_notification_service(self):

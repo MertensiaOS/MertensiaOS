@@ -2,6 +2,7 @@
 
 import argparse
 from contextlib import contextmanager
+from datetime import datetime, timezone
 import fcntl
 import json
 import os
@@ -55,7 +56,7 @@ def recovery_pending():
 
 
 def bootc_status():
-    data = json.loads(command(["bootc", "status", "--json"]))
+    data = json.loads(command(["bootc", "status", "--json", "--format-version=1"]))
     status = data["status"]
     if not isinstance(status, dict) or not isinstance(status.get("booted"), dict):
         raise UpdateError("No booted bootc deployment")
@@ -65,10 +66,34 @@ def bootc_status():
 def publish(status, reason=None):
     staged = status.get("staged")
     digest = staged.get("image", {}).get("imageDigest") if staged else None
+    attempt = read_record(STATE / "attempt.json")
     record = {"version": 1, "boot_id": BOOT_ID.read_text().strip(),
-              "staged_digest": digest, "recovery_pending": recovery_pending(), "reason": reason}
+              "staged_digest": digest, "recovery_pending": recovery_pending(),
+              "reason": reason if reason is not None else attempt.get("reason"),
+              "booted": deployment_summary(status.get("booted")),
+              "staged": deployment_summary(staged),
+              "rollback_queued": bool(status.get("rollbackQueued")),
+              "last_attempt": attempt.get("last_attempt"),
+              "last_successful_check": attempt.get("last_successful_check"),
+              "activity": attempt.get("activity") if attempt.get("boot_id") == BOOT_ID.read_text().strip() else None}
     atomic_json(STATUS, record)
     return record
+
+
+def deployment_summary(deployment):
+    """Publish selected image metadata, never registry credentials or diagnostics."""
+    image = (deployment or {}).get("image") or {}
+    return {"digest": image.get("imageDigest"), "version": image.get("version")}
+
+
+def record_attempt(activity, reason=None, *, successful=False):
+    previous = read_record(STATE / "attempt.json")
+    now = datetime.now(timezone.utc).isoformat()
+    atomic_json(STATE / "attempt.json", {
+        "boot_id": BOOT_ID.read_text().strip(), "activity": activity, "reason": reason,
+        "last_attempt": now if activity in {"downloading", "deferred"} else previous.get("last_attempt"),
+        "last_successful_check": now if successful else previous.get("last_successful_check"),
+    })
 
 
 def healthy_boot():
@@ -116,11 +141,14 @@ def skip_reason(status):
 
 
 @contextmanager
-def locked():
+def locked(*, blocking=True):
     STATE.mkdir(parents=True, exist_ok=True, mode=0o755)
     with (STATE / "lock").open("a") as stream:
         os.chmod(stream.name, 0o600)
-        fcntl.flock(stream, fcntl.LOCK_EX)
+        try:
+            fcntl.flock(stream, fcntl.LOCK_EX | (0 if blocking else fcntl.LOCK_NB))
+        except BlockingIOError as error:
+            raise UpdateError("An OS update operation is already running. Try again when it finishes.") from error
         yield
 
 
@@ -129,18 +157,25 @@ def stage():
     reason = skip_reason(status)
     if reason:
         print(reason, flush=True)
+        record_attempt("deferred", reason)
         return publish(status, reason)
     # Inherit stdout/stderr so bootc's diagnostics go directly to the journal.
     # Never use --apply: the user's normal restart activates this deployment.
+    record_attempt("downloading")
+    publish(status)
     try:
         result = subprocess.run(["bootc", "upgrade"], timeout=3600, check=False)
     except (OSError, subprocess.TimeoutExpired) as error:
-        publish(bootc_status(), "OS update download was interrupted or timed out")
+        record_attempt("failed", "OS update download was interrupted or timed out")
+        publish(bootc_status())
         raise UpdateError("OS update download was interrupted or timed out") from error
     if result.returncode:
-        publish(bootc_status(), "OS update staging failed; see the update service journal")
+        record_attempt("failed", "OS update staging failed; see the update service journal")
+        publish(bootc_status())
         raise UpdateError(f"bootc upgrade exited with status {result.returncode}")
-    return publish(bootc_status())
+    status = bootc_status()
+    record_attempt("idle", successful=True)
+    return publish(status)
 
 
 def resume():
@@ -150,6 +185,7 @@ def resume():
     event_id = recovery_pending()
     if event_id:
         atomic_json(ACKNOWLEDGEMENT, {"event_id": event_id}, mode=0o600)
+    record_attempt("idle")
     return publish(bootc_status())
 
 

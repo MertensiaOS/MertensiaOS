@@ -41,3 +41,24 @@ cc_mertensia_accounts_open (GtkWidget *parent)
         adw_dialog_present (dialog, parent);
     }
 }
+
+gboolean
+cc_mertensia_updates_launch (GError **error)
+{
+    char *argv[] = { "/usr/bin/mertensia-system", "--page", "updates", NULL };
+
+    return g_spawn_async (NULL, argv, NULL, G_SPAWN_DEFAULT, NULL, NULL, NULL, error);
+}
+
+void
+cc_mertensia_updates_open (GtkWidget *parent)
+{
+    g_autoptr(GError) error = NULL;
+
+    if (!cc_mertensia_updates_launch (&error)) {
+        AdwDialog *dialog = adw_alert_dialog_new ("Could not open OS Updates", error->message);
+        adw_alert_dialog_add_response (ADW_ALERT_DIALOG (dialog), "close", "_Close");
+        adw_alert_dialog_set_close_response (ADW_ALERT_DIALOG (dialog), "close");
+        adw_dialog_present (dialog, parent);
+    }
+}

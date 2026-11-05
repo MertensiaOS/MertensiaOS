@@ -96,6 +96,12 @@ class ApplicationPackagingTests(unittest.TestCase):
         result = self.launcher("/usr/bin/mertensia-accounts", "--help")
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertIn("Manage encrypted MertensiaOS user accounts", result.stdout)
+        result = self.launcher("/usr/bin/mertensia-system", "--help")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("--page {updates,accounts}", result.stdout)
+        result = self.launcher("/usr/libexec/mertensia-update-helper", "download")
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertNotIn("untrusted module", result.stderr)
         result = self.launcher("/usr/libexec/mertensia-boot-health", "--help")
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertIn("collect", result.stdout)
@@ -107,6 +113,23 @@ class ApplicationPackagingTests(unittest.TestCase):
         self.assertEqual(json.loads(result.stdout)["event"], "error")
         self.assertNotIn("untrusted module", result.stderr)
         self.assertFalse((self.image / MODULE_ROOT.lstrip("/") / "mertensia/installer").exists())
+
+    def test_system_app_entry_points_and_update_policy_are_installed(self):
+        applications = self.image / "usr/share/applications"
+        system = configparser.ConfigParser(interpolation=None)
+        system.read(applications / "org.mertensia.System.desktop")
+        self.assertEqual(system["Desktop Entry"]["Exec"], "/usr/bin/mertensia-system")
+        self.assertEqual(system["Desktop Action Accounts"]["Exec"], "/usr/bin/mertensia-system --page accounts")
+        self.assertEqual(system["Desktop Action Updates"]["Exec"], "/usr/bin/mertensia-system --page updates")
+        accounts = configparser.ConfigParser(interpolation=None)
+        accounts.read(applications / "org.mertensia.Accounts.desktop")
+        self.assertEqual(accounts["Desktop Entry"]["NoDisplay"], "true")
+        self.assertTrue((self.image / "usr/share/icons/hicolor/scalable/apps/org.mertensia.System.svg").is_file())
+        policy = ET.parse(self.image / "usr/share/polkit-1/actions/org.mertensia.Updates.policy")
+        action = policy.find("action")
+        self.assertEqual(action.attrib["id"], "org.mertensia.updates.manage")
+        self.assertEqual(action.find("annotate").text, "/usr/libexec/mertensia-update-helper")
+        self.assertEqual(action.find("defaults/allow_any").text, "no")
 
     def test_installer_overlay_imports_its_helper_and_uses_shared_branding(self):
         self.stage("Containerfile.installer")

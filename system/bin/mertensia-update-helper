@@ -1,0 +1,8 @@
+#!/usr/bin/python3 -I
+"""Launch the authorized OS update helper from image-owned modules."""
+import sys
+
+sys.path.insert(0, "/usr/lib/mertensia/python")
+from mertensia.updates.helper import main
+
+sys.exit(main())

@@ -7,6 +7,8 @@ import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 from mertensia.accounts import client, ui
+from mertensia.system.ui import SystemWindow
+from mertensia.updates.ui import UpdatesView
 from gi.repository import Graphene
 
 
@@ -58,10 +60,15 @@ def main():
     def activate(app):
         ui.Adw.StyleManager.get_default().set_color_scheme(
             ui.Adw.ColorScheme.FORCE_DARK if args.theme == "dark" else ui.Adw.ColorScheme.FORCE_LIGHT)
-        window = ui.AccountsWindow(app, client_factory=lambda: fixture, admin_request=fixture.admin_request,
-                                   identity_factory=lambda: fixture.identity,
-                                   languages_factory=lambda: ["en_NZ.utf8", "en_US.utf8", "fr_FR.utf8"])
-        window.present()
+        root = SystemWindow(app, accounts_factory=lambda: ui.AccountsView(
+            client_factory=lambda: fixture, admin_request=fixture.admin_request,
+            identity_factory=lambda: fixture.identity,
+            languages_factory=lambda: ["en_NZ.utf8", "en_US.utf8", "fr_FR.utf8"]),
+            updates_factory=lambda: UpdatesView(load=lambda: {"record": {}, "current": False, "supported": False,
+                "timer_enabled": False, "timer_active": False, "running": False, "failed": False}))
+        window = root.accounts
+        root.show_page("accounts")
+        root.present()
         if not args.capture:
             return
         args.capture.mkdir(parents=True, exist_ok=True)
@@ -69,7 +76,7 @@ def main():
 
         def capture(name):
             # Adw.Dialog may use a separate native surface on Broadway.
-            target = window.active_form.get_child() if window.active_form else window
+            target = window.active_form.get_child() if window.active_form else root
             paintable = ui.Gtk.WidgetPaintable.new(target)
             content = ui.Gtk.Snapshot.new()
             paintable.snapshot(content, target.get_width(), target.get_height())
@@ -82,7 +89,7 @@ def main():
             assert found
             snapshot.append_color(background, Graphene.Rect().init(0, 0, target.get_width(), target.get_height()))
             snapshot.append_node(node)
-            texture = window.get_renderer().render_texture(snapshot.to_node(), None)
+            texture = root.get_renderer().render_texture(snapshot.to_node(), None)
             path = args.capture / f"accounts-{args.theme}-{name}.png"
             assert texture.save_to_png(str(path))
             print(path, flush=True)
