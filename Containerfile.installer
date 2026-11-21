@@ -35,7 +35,6 @@ RUN --mount=type=cache,id=mertensia-installer-dnf45,target=/var/cache/libdnf5,sh
     util-linux \
     systemd-udev \
     podman \
-    skopeo \
     && test -r /usr/lib64/cryptsetup/libcryptsetup-token-systemd-tpm2.so
 
 RUN --mount=type=bind,from=installer-files,target=/run/mertensia-files,ro \

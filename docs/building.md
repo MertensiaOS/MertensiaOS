@@ -25,6 +25,12 @@ compiler and PAM headers stay in the build stage. oo7 and its PAM module are
 explicit payload dependencies; image checks require the service and all three
 modules. See [testing](testing.md) for native PAM and keyring acceptance checks.
 
+Skopeo is rebuilt from Fedora's source RPM with support for matching the
+GitHub release workflow's Fulcio certificate identity. The RPM has a
+`.mertensia1` release suffix. Skopeo uses the workflow-aware policy for bootc
+pulls, while Podman reads the stock-format default-deny policy. Recheck the
+patch when updating Skopeo. See [release trust](releases.md#trust-and-credentials).
+
 ## Development
 
 ```sh
@@ -119,8 +125,8 @@ sudo env MERTENSIA_BUILD_MODE=production \
 ```
 
 Replace the digest placeholder with the actual release digest. Production mode
-verifies the signature using the checked-in public key and the containers/image
-policy before importing the image into the local store. It refuses a local or
+verifies the signature against the pinned GitHub workflow identity before
+importing the exact digest into the local store. It refuses a local or
 foreign payload and does not rebuild the verified payload. Production installs
 also check target reachability before erasure and use bootc's enforced signature
 policy and fetch check. Networking is therefore required for production

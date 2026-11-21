@@ -1,6 +1,5 @@
 """Exercise release fail-closed boundaries without touching a registry."""
 
-import base64
 import json
 import os
 from pathlib import Path
@@ -17,6 +16,9 @@ ROOT = Path(__file__).resolve().parents[2]
 REPOSITORY = "ghcr.io/mertensiaos/mertensiaos"
 DIGEST = "sha256:" + "a" * 64
 IMMUTABLE_IMAGE = f"{REPOSITORY}@{DIGEST}"
+OIDC_ISSUER = "https://token.actions.githubusercontent.com"
+WORKFLOW_REF = "MertensiaOS/MertensiaOS/.github/workflows/release.yml@refs/heads/main"
+WORKFLOW_IDENTITY = f"https://github.com/{WORKFLOW_REF}"
 LOCAL_IMAGE_ID = "b" * 64
 RETAGGED_IMAGE_ID = "c" * 64
 
@@ -37,26 +39,17 @@ def resolve_local(source):
         return source.removeprefix("sha256:")
     state = Path(os.environ["FAKE_LOCAL_TAG_STATE"])
     return state.read_text() if state.exists() else os.environ["FAKE_LOCAL_IMAGE_ID"]
-if command == "podman" and args[0] in {"run", "push"}:
+if command == "podman" and (args[0] == "push" or "-euc" in args):
     source = args[args.index("-euc") - 1] if args[0] == "run" else args[-2]
     record["resolved_image_id"] = resolve_local(source)
 if command == "skopeo" and "--policy" in args:
     policy_path = Path(args[args.index("--policy") + 1])
-    registries_path = Path(args[args.index("--registries.d") + 1])
     record["policy"] = json.loads(policy_path.read_text())
-    record["registries"] = {
-        path.name: path.read_text() for path in registries_path.iterdir()
-    }
 with open(os.environ["FAKE_TOOL_LOG"], "a") as log:
     log.write(json.dumps(record) + "\n")
 
 if command == "cosign":
-    if args[0] == "public-key":
-        if os.environ.get("FAKE_PUBLIC_KEY_FAIL") == "1":
-            print("cannot decrypt " + os.environ.get("COSIGN_PRIVATE_KEY", ""), file=sys.stderr)
-            sys.exit(1)
-        sys.stdout.write(Path(os.environ["FAKE_PUBLIC_KEY"]).read_text())
-    elif args[0] == "verify":
+    if args[0] in {"verify", "verify-blob"}:
         if os.environ.get("FAKE_COSIGN_VERIFY_FAIL") == "1":
             print("no matching signatures", file=sys.stderr)
             sys.exit(1)
@@ -70,6 +63,11 @@ elif command == "podman":
             print("local image unavailable", file=sys.stderr)
             sys.exit(1)
         print(resolve_local(args[-1]))
+    if args[0] == "run" and "/usr/bin/skopeo" in args:
+        if os.environ.get("FAKE_POLICY_VERIFY_FAIL") == "1":
+            print("image rejected by signature policy", file=sys.stderr)
+            sys.exit(1)
+        sys.exit(0)
     if args[0] == "run" and os.environ.get("FAKE_RETAG_AFTER_VALIDATION") == "1":
         Path(os.environ["FAKE_LOCAL_TAG_STATE"]).write_text(os.environ["FAKE_RETAGGED_IMAGE_ID"])
     if args[0] == "run" and os.environ.get("FAKE_VALIDATE_FAIL") == "1":
@@ -106,9 +104,6 @@ elif command == "skopeo":
         else:
             print("manifest unknown", file=sys.stderr)
             sys.exit(1)
-    elif "--policy" in args and os.environ.get("FAKE_POLICY_VERIFY_FAIL") == "1":
-        print("image rejected by signature policy", file=sys.stderr)
-        sys.exit(1)
 elif command == "bootc" and os.environ.get("FAKE_LINT_FAIL") == "1":
     print("bootc image lint failed", file=sys.stderr)
     sys.exit(1)
@@ -120,7 +115,7 @@ elif command == "getent":
 elif command == "gsettings":
     print("false" if args[-1] == "refresh-when-metered" else "true")
 elif command == "rpm":
-    print("gnome-software-51.0-1.fc45.x86_64")
+    print("1.fc45.mertensia1" if args[-1] == "skopeo" else "gnome-software-51.0-1.fc45.x86_64")
 elif command == "plymouth-set-default-theme":
     print(os.environ.get("FAKE_PLYMOUTH_THEME", "mertensia"))
 elif command == "fc-match":
@@ -131,8 +126,8 @@ elif command == "fc-match":
 class ReleaseScriptTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        if not shutil.which("openssl") or not shutil.which("bash"):
-            raise unittest.SkipTest("release tests require bash and openssl")
+        if not shutil.which("bash"):
+            raise unittest.SkipTest("release tests require bash")
 
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory()
@@ -151,12 +146,13 @@ class ReleaseScriptTests(unittest.TestCase):
         self.environment.update(
             PATH=str(self.bin) + os.pathsep + os.environ.get("PATH", ""),
             FAKE_TOOL_LOG=str(self.log),
-            FAKE_PUBLIC_KEY=str(ROOT / "cosign.pub"),
             FAKE_DIGEST=DIGEST,
             FAKE_LOCAL_IMAGE_ID=LOCAL_IMAGE_ID,
             FAKE_RETAGGED_IMAGE_ID=RETAGGED_IMAGE_ID,
             FAKE_LOCAL_TAG_STATE=str(self.work / "local-tag"),
-            MERTENSIA_SIGNING_KEY="test-signing-key",
+            GITHUB_WORKFLOW_REF=WORKFLOW_REF,
+            ACTIONS_ID_TOKEN_REQUEST_URL="https://token.example.test",
+            ACTIONS_ID_TOKEN_REQUEST_TOKEN="test-oidc-token",
         )
 
     def run_script(self, script, *arguments, **environment):
@@ -177,9 +173,10 @@ class ReleaseScriptTests(unittest.TestCase):
     def payload_fixture(self):
         payload = self.work / "payload"
         fixtures = {
-            "etc/pki/containers/mertensia.pub": ROOT / "cosign.pub",
+            "etc/pki/containers/mertensia-fulcio.crt": ROOT / "system/config/containers/fulcio.crt",
+            "etc/pki/containers/mertensia-rekor.pub": ROOT / "system/config/containers/rekor.pub",
             "etc/containers/policy.json": ROOT / "system/config/containers/policy.json",
-            "usr/share/mertensia/bootc-policy.json": ROOT / "system/config/containers/policy.json",
+            "etc/containers/mertensia-bootc-policy.json": ROOT / "system/config/containers/bootc-policy.json",
             "etc/containers/registries.d/mertensia.yaml": ROOT / "system/config/containers/registries.yaml",
             "etc/greenboot/greenboot.conf": ROOT / "system/config/greenboot/greenboot.conf",
             "usr/libexec/mertensia-boot-health": ROOT / "system/bin/mertensia-boot-health",
@@ -243,7 +240,9 @@ class ReleaseScriptTests(unittest.TestCase):
     def calls(self, command, operation=None):
         return [record for record in self.commands()
                 if record["command"] == command
-                and (operation is None or record["args"][0] == operation)]
+                and (operation is None or record["args"][0] == operation
+                     or (command == "skopeo" and record["args"][0] == "--policy"
+                         and record["args"][2] == operation))]
 
     def assert_no_push_or_promotion(self):
         self.assertEqual(self.calls("podman", "push"), [])
@@ -253,57 +252,18 @@ class ReleaseScriptTests(unittest.TestCase):
     def assert_no_promotion(self):
         self.assertEqual(self.calls("skopeo", "copy"), [])
 
-    def mismatched_public_key(self):
-        # Negating the public point yields a different valid P-256 public key.
-        # This only uses the repository's public fixture; no private key exists.
-        pem = (ROOT / "cosign.pub").read_text()
-        der = bytearray(base64.b64decode("".join(pem.splitlines()[1:-1])))
-        self.assertEqual(len(der), 91)
-        self.assertEqual(der[-65], 4)  # uncompressed EC point
-        prime = int("ffffffff00000001000000000000000000000000ffffffffffffffffffffffff", 16)
-        y = int.from_bytes(der[-32:], "big")
-        der[-32:] = (prime - y).to_bytes(32, "big")
-        encoded = base64.b64encode(der).decode("ascii")
-        alternate = self.work / "mismatched.pub"
-        alternate.write_text("-----BEGIN PUBLIC KEY-----\n"
-                             + "\n".join(encoded[i:i + 64] for i in range(0, len(encoded), 64))
-                             + "\n-----END PUBLIC KEY-----\n")
-        return alternate
-
-    def test_mismatched_signing_key_is_rejected_before_push(self):
-        result = self.publish(FAKE_PUBLIC_KEY=str(self.mismatched_public_key()))
-        self.assertEqual(result.returncode, 2, result.stderr)
-        self.assertIn("does not match", result.stderr)
-        self.assert_no_push_or_promotion()
-        self.assertEqual(self.calls("podman", "run"), [])
-
-    def test_signing_preflight_accepts_matching_key_without_registry_access(self):
-        result = self.run_script("check-signing-key.sh", COSIGN_PRIVATE_KEY="test-private-key")
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn("matches cosign.pub", result.stdout)
-        self.assertEqual(self.commands(), [{"command": "cosign", "args": [
-            "public-key", "--key", "env://COSIGN_PRIVATE_KEY"]}])
-
-    def test_signing_preflight_rejects_missing_key_without_running_tools(self):
-        result = self.run_script("check-signing-key.sh", COSIGN_PRIVATE_KEY="")
-        self.assertEqual(result.returncode, 2)
-        self.assertIn("SIGNING_SECRET is missing", result.stderr)
-        self.assertEqual(self.commands(), [])
-
-    def test_signing_preflight_hides_errors_that_might_contain_key_material(self):
-        secret = "private-key-material-for-redaction-test"
-        result = self.run_script("check-signing-key.sh", COSIGN_PRIVATE_KEY=secret,
-                                 FAKE_PUBLIC_KEY_FAIL="1")
-        self.assertEqual(result.returncode, 2)
-        self.assertIn("COSIGN_PASSWORD", result.stderr)
-        self.assertNotIn(secret, result.stdout + result.stderr)
-
-    def test_signing_preflight_rejects_mismatched_key_without_registry_access(self):
-        result = self.run_script("check-signing-key.sh", COSIGN_PRIVATE_KEY="test-private-key",
-                                 FAKE_PUBLIC_KEY=str(self.mismatched_public_key()))
-        self.assertEqual(result.returncode, 2)
-        self.assertIn("does not match cosign.pub", result.stderr)
-        self.assertEqual(len(self.commands()), 1)
+    def test_publishing_rejects_missing_oidc_and_wrong_workflow_before_push(self):
+        for overrides in (
+            {"ACTIONS_ID_TOKEN_REQUEST_TOKEN": ""},
+            {"ACTIONS_ID_TOKEN_REQUEST_URL": ""},
+            {"GITHUB_WORKFLOW_REF": WORKFLOW_REF.replace("/main", "/feature")},
+            {"GITHUB_WORKFLOW_REF": WORKFLOW_REF.replace("/release.yml", "/other.yml")},
+        ):
+            with self.subTest(overrides=overrides):
+                result = self.publish(**overrides)
+                self.assertEqual(result.returncode, 2, result.stderr)
+                self.assertIn("trusted GitHub Actions workflow", result.stderr)
+                self.assertEqual(self.commands(), [])
 
     def test_existing_version_is_rejected_before_push(self):
         result = self.publish(FAKE_INSPECT="exists")
@@ -336,8 +296,8 @@ class ReleaseScriptTests(unittest.TestCase):
     def test_failed_policy_verification_prevents_channel_promotion(self):
         result = self.publish(FAKE_POLICY_VERIFY_FAIL="1")
         self.assertNotEqual(result.returncode, 0)
-        self.assertEqual(len(self.calls("cosign", "verify")), 1)
-        self.assertEqual(sum("policy" in record for record in self.commands()), 1)
+        self.assertEqual(self.calls("cosign", "verify"), [])
+        self.assertIn("/usr/bin/skopeo", self.calls("podman", "run")[1]["args"])
         self.assert_no_promotion()
 
     def test_signing_failure_prevents_verification_and_promotion(self):
@@ -364,35 +324,42 @@ class ReleaseScriptTests(unittest.TestCase):
         self.assertEqual(verification["args"][-1], IMMUTABLE_IMAGE)
         self.assertIn("--new-bundle-format=false", signing["args"])
         self.assertIn("--use-signing-config=false", signing["args"])
-        policy_copy = next(record for record in records if "policy" in record)
+        self.assertNotIn("--key", signing["args"])
+        native_verification = self.calls("podman", "run")[1]
+        self.assertIn("/usr/bin/skopeo", native_verification["args"])
+        self.assertIn(LOCAL_IMAGE_ID, native_verification["args"])
+        self.assertIn(f"docker://{IMMUTABLE_IMAGE}", native_verification["args"])
         promotion = self.calls("skopeo", "copy")[0]
-        self.assertEqual(promotion["args"], ["copy", "--preserve-digests",
-                                           f"docker://{IMMUTABLE_IMAGE}",
-                                           f"docker://{REPOSITORY}:latest"])
-        ordered = [validation, push, signing, verification, policy_copy, promotion]
+        self.assertEqual(promotion["args"][-5:], ["copy", "--preserve-digests", "--remove-signatures",
+                                                 f"docker://{IMMUTABLE_IMAGE}", f"docker://{REPOSITORY}:latest"])
+        ordered = [validation, push, signing, native_verification, verification, promotion]
         self.assertEqual([records.index(record) for record in ordered],
                          sorted(records.index(record) for record in ordered))
 
-    def test_verify_release_uses_scoped_strict_policy_and_signature_attachments(self):
+    def test_verify_release_checks_workflow_identity_and_only_imports_verified_digest(self):
         destination = "oci:" + str(self.work / "verified-image") + ":verified"
         result = self.run_script("verify-release.sh", IMMUTABLE_IMAGE, destination)
         self.assertEqual(result.returncode, 0, result.stderr)
         verification = self.calls("cosign", "verify")[0]
         self.assertEqual(verification["args"], ["verify", "--new-bundle-format=false",
-                                              "--key", str(ROOT / "cosign.pub"), IMMUTABLE_IMAGE])
-        policy_copy = next(record for record in self.commands() if "policy" in record)
-        policy = policy_copy["policy"]
-        self.assertEqual(policy["default"], [{"type": "reject"}])
-        self.assertEqual(set(policy["transports"]["docker"]), {REPOSITORY})
-        scoped = policy["transports"]["docker"][REPOSITORY]
-        self.assertEqual(scoped, [{"type": "sigstoreSigned", "keyPath": str(ROOT / "cosign.pub"),
-                                  "signedIdentity": {"type": "matchRepository"}}])
-        registries = policy_copy["registries"]
-        self.assertEqual(registries["mertensia.yaml"], (ROOT / "system/config/containers/registries.yaml").read_text())
-        self.assertIn(REPOSITORY, registries["mertensia.yaml"])
-        self.assertIn("use-sigstore-attachments: true", registries["mertensia.yaml"])
+                                              "--certificate-oidc-issuer", OIDC_ISSUER,
+                                              "--certificate-identity", WORKFLOW_IDENTITY, IMMUTABLE_IMAGE])
+        policy_copy = self.calls("skopeo", "copy")[0]
+        self.assertEqual(policy_copy["policy"], {
+            "default": [{"type": "reject"}],
+            "transports": {"docker": {IMMUTABLE_IMAGE: [{"type": "insecureAcceptAnything"}]}},
+        })
         self.assertEqual(policy_copy["args"][-2:], [f"docker://{IMMUTABLE_IMAGE}", destination])
         self.assertIn("--preserve-digests", policy_copy["args"])
+
+    def test_verify_installer_checksums_pins_workflow_identity(self):
+        checksum = str(self.work / "SHA256SUMS")
+        result = self.run_script("verify-release.sh", "--checksums", checksum)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(self.calls("cosign", "verify-blob")[0]["args"], [
+            "verify-blob", "--certificate-oidc-issuer", OIDC_ISSUER,
+            "--certificate-identity", WORKFLOW_IDENTITY, "--bundle", checksum + ".sigstore.json", checksum,
+        ])
 
     def test_local_retag_after_validation_cannot_change_the_pushed_payload(self):
         result = self.publish(FAKE_RETAG_AFTER_VALIDATION="1")
@@ -504,17 +471,22 @@ class ReleaseScriptTests(unittest.TestCase):
         (payload / "etc/systemd/system/timers.target.wants/bootc-fetch-apply-updates.timer").unlink()
         self.assertNotEqual(self.run_script("validate-image.sh", "localhost/mertensia:release").returncode, 0)
 
-    def test_changed_payload_key_prevents_publication(self):
+    def test_changed_sigstore_trust_roots_prevent_publication(self):
         payload = self.payload_fixture()
-        shutil.copyfile(self.mismatched_public_key(), payload / "etc/pki/containers/mertensia.pub")
-        result = self.publish()
-        self.assertNotEqual(result.returncode, 0)
-        self.assertIn("does not match the release trust root", result.stderr)
-        self.assert_no_push_or_promotion()
+        for name in ("mertensia-fulcio.crt", "mertensia-rekor.pub"):
+            with self.subTest(name=name):
+                trust_root = payload / "etc/pki/containers" / name
+                original = trust_root.read_text()
+                trust_root.write_text(original + "\n")
+                result = self.publish()
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("trust root differs", result.stderr)
+                self.assert_no_push_or_promotion()
+                trust_root.write_text(original)
 
     def test_extra_accept_rule_in_payload_policy_prevents_publication(self):
         payload = self.payload_fixture()
-        policy_file = payload / "etc/containers/policy.json"
+        policy_file = payload / "etc/containers/mertensia-bootc-policy.json"
         policy = json.loads(policy_file.read_text())
         policy["transports"]["docker"][REPOSITORY].append({"type": "insecureAcceptAnything"})
         policy_file.write_text(json.dumps(policy))
@@ -527,17 +499,17 @@ class ReleaseScriptTests(unittest.TestCase):
         payload = self.payload_fixture()
         policy_file = payload / "etc/containers/policy.json"
         policy = json.loads(policy_file.read_text())
-        policy["transports"]["docker"]["ghcr.io/mertensiaos"] = [{"type": "insecureAcceptAnything"}]
+        policy["transports"]["docker"] = {"ghcr.io/mertensiaos": [{"type": "insecureAcceptAnything"}]}
         policy_file.write_text(json.dumps(policy))
         result = self.publish()
         self.assertNotEqual(result.returncode, 0)
         self.assert_no_push_or_promotion()
 
-    def test_changed_backup_policy_prevents_publication(self):
+    def test_changed_workflow_identity_prevents_publication(self):
         payload = self.payload_fixture()
-        policy_file = payload / "usr/share/mertensia/bootc-policy.json"
+        policy_file = payload / "etc/containers/mertensia-bootc-policy.json"
         policy = json.loads(policy_file.read_text())
-        policy["default"] = [{"type": "insecureAcceptAnything"}]
+        policy["transports"]["docker"][REPOSITORY][0]["fulcio"]["buildSignerURI"] += "-wrong-signer"
         policy_file.write_text(json.dumps(policy))
         result = self.publish()
         self.assertNotEqual(result.returncode, 0)
@@ -643,7 +615,10 @@ class ReleaseScriptTests(unittest.TestCase):
 
     def test_release_signs_all_health_fixtures_and_requires_automatic_recovery(self):
         workflow = yaml.safe_load((ROOT / ".github/workflows/release.yml").read_text())
-        steps = workflow["jobs"]["release"]["steps"]
+        job = workflow["jobs"]["release"]
+        self.assertEqual(job["permissions"]["id-token"], "write")
+        self.assertEqual(job["if"], "github.ref == 'refs/heads/main'")
+        steps = job["steps"]
         fixture = next(step for step in steps if step.get("id") == "fixture")
         gate = next(step for step in steps if "--require-greenboot-recovery" in step.get("run", ""))
         self.assertIn("for mode in none always transient", fixture["run"])

@@ -172,12 +172,13 @@ def build_commands(args, work):
         commands.append(["podman", "build", "--pull", "-f", str(ROOT / "Containerfile"), "-t", base, str(ROOT)])
     commands.append(["podman", "build", "--build-arg", f"BASE_IMAGE={base}", "--build-arg", "INTEGRATION_ROLE=payload",
                      "-f", str(ROOT / "tests/integration/Containerfile"), "-t", payload, str(ROOT)])
+    if args.upgrade_image:
+        commands[-1][2:2] = ["--build-arg", f"INTEGRATION_UPGRADE_IMAGE={args.upgrade_image}"]
     if args.upgrade_public_key:
         public = args.upgrade_public_key.read_bytes()
         if not public.startswith(b"-----BEGIN PUBLIC KEY-----") or b"PRIVATE KEY" in public:
             raise HarnessError("--upgrade-public-key must contain a PEM public signing key")
-        commands[-1][2:2] = ["--build-arg", f"INTEGRATION_UPGRADE_IMAGE={args.upgrade_image}",
-                             "--build-arg", "INTEGRATION_PUBLIC_KEY_B64=" + base64.b64encode(public).decode()]
+        commands[-1][2:2] = ["--build-arg", "INTEGRATION_PUBLIC_KEY_B64=" + base64.b64encode(public).decode()]
     commands.append(["podman", "build", "--build-arg", f"BASE_IMAGE={base}", "--build-arg", f"SOURCE_IMAGE={payload}",
                      "--build-arg", f"TARGET_IMAGE={target}", "--build-arg", "BUILD_MODE=development",
                      "-f", str(ROOT / "Containerfile.installer"), "-t", installer_base, str(ROOT)])
@@ -689,7 +690,7 @@ def run_suite(args, work, firmware, results):
         results.step("Restore networking after healthy offline boot", lambda: guest.command("networking", enabled=True))
         results.step("Verify persisted accounts and login integration after reboot", lambda: guest.command("login-checks", password=password))
         if args.upgrade_image:
-            results.step("Reject signed update with an incorrect verification key", lambda: guest.command("reject-update", image=args.upgrade_image))
+            results.step("Reject signed update with an incorrect signer", lambda: guest.command("reject-update", image=args.upgrade_image))
             if args.automatic_update_image:
                 results.step("Automatically stage signed update without restart",
                              lambda: guest.command("automatic-upgrade", image=args.automatic_update_image))

@@ -1,31 +1,36 @@
 #!/usr/bin/env bash
-# Verify an immutable release using both Cosign and the installed OS policy.
+# Verify artifacts from the protected release workflow.
 set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-IMAGE="${1:?Usage: verify-release.sh ghcr.io/mertensiaos/mertensiaos@sha256:DIGEST}"
-if [[ ! "$IMAGE" =~ ^ghcr\.io/mertensiaos/mertensiaos@sha256:[a-f0-9]{64}$ ]]; then
-  echo "Expected an immutable digest in the official MertensiaOS repository" >&2
+source "$ROOT_DIR/scripts/release-identity.sh"
+verify_identity=(--certificate-oidc-issuer "$OIDC_ISSUER" --certificate-identity "$WORKFLOW_IDENTITY")
+case "${1:-}" in
+  --checksums)
+    checksums="${2:?Supply the path to SHA256SUMS}"
+    cosign verify-blob "${verify_identity[@]}" --bundle "$checksums.sigstore.json" "$checksums"
+    exit
+    ;;
+  --fixture)
+    repository="$RELEASE_REPOSITORY-integration"
+    shift
+    ;;
+  *)
+    repository="$RELEASE_REPOSITORY"
+    ;;
+esac
+IMAGE="${1:?Supply an immutable image digest in the official repository}"
+digest="${IMAGE#"$repository@"}"
+if [[ ! "$digest" =~ ^sha256:[a-f0-9]{64}$ || "$IMAGE" != "$repository@$digest" ]]; then
+  echo "Expected an immutable digest in $repository" >&2
   exit 2
 fi
-for command in cosign skopeo python3; do
-  command -v "$command" >/dev/null || { echo "Missing dependency: $command" >&2; exit 2; }
-done
-WORK="$(mktemp -d)"
-trap 'rm -rf "$WORK"' EXIT
-DESTINATION="${2:-oci:$WORK/image:verified}"
-cosign verify --new-bundle-format=false --key "$ROOT_DIR/cosign.pub" "$IMAGE" >"$WORK/verification.json"
-# An isolated policy/registry directory avoids changing the builder's trust.
-python3 - "$ROOT_DIR" "$WORK" <<'PY'
-import json
-import pathlib
-import sys
-root, work = map(pathlib.Path, sys.argv[1:])
-policy = json.loads((root / "system/config/containers/policy.json").read_text())
-policy["transports"]["docker"]["ghcr.io/mertensiaos/mertensiaos"][0]["keyPath"] = str(root / "cosign.pub")
-(work / "policy.json").write_text(json.dumps(policy))
-(work / "registries.d").mkdir()
-(work / "registries.d/mertensia.yaml").write_text((root / "system/config/containers/registries.yaml").read_text())
-PY
-skopeo --policy "$WORK/policy.json" --registries.d "$WORK/registries.d" copy \
-  --preserve-digests "docker://$IMAGE" "$DESTINATION" >/dev/null
+
+cosign verify --new-bundle-format=false "${verify_identity[@]}" "$IMAGE" >/dev/null
+if [[ -n "${2:-}" ]]; then
+  # The runner uses stock Skopeo. Allow only the exact manifest Cosign verified.
+  work="$(mktemp -d)"
+  trap 'rm -rf "$work"' EXIT
+  printf '{"default":[{"type":"reject"}],"transports":{"docker":{"%s":[{"type":"insecureAcceptAnything"}]}}}\n' "$IMAGE" >"$work/policy.json"
+  skopeo --policy "$work/policy.json" copy --preserve-digests --remove-signatures "docker://$IMAGE" "$2" >/dev/null
+fi
 printf 'Verified release: %s\n' "$IMAGE"

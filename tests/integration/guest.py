@@ -565,7 +565,7 @@ def automatic_upgrade(image):
     require(isinstance(image, str) and "@" not in image and not image.startswith("-"), "a tagged fixture is required")
     repository = image.rsplit(":", 1)[0]
     require("integration" in repository.rsplit("/", 1)[-1], "automatic update requires an integration repository")
-    policy = json.loads(Path("/etc/containers/policy.json").read_text())
+    policy = json.loads(Path("/etc/containers/mertensia-bootc-policy.json").read_text())
     rules = policy.get("transports", {}).get("docker", {}).get(repository, [])
     require(any(rule.get("type") == "sigstoreSigned" for rule in rules), "fixture has no signature policy")
     require(boot_health()["healthy"], "automatic update requires a healthy boot")
@@ -619,10 +619,10 @@ def update_recovery_pause():
 
 
 def reject_wrong_signer(image):
-    """Prove the same signed update is rejected when its trusted key is wrong."""
+    """Prove the same signed update is rejected when its signer is wrong."""
     require(role() == "payload", "signature rejection requires the installed system")
     require(isinstance(image, str) and image and not image.startswith("-"), "invalid update image")
-    path = Path("/etc/containers/policy.json")
+    path = Path("/etc/containers/mertensia-bootc-policy.json")
     original = path.read_bytes()
     policy = json.loads(original)
     head, separator, tail = image.partition("@")[0].rpartition("/")
@@ -631,17 +631,15 @@ def reject_wrong_signer(image):
     scope = policy.get("transports", {}).get("docker", {}).get(repository)
     require(isinstance(scope, list) and any(rule.get("type") == "sigstoreSigned" for rule in scope),
             "integration repository has no signature verification rule")
-    staged_before = status().get("status", {}).get("staged")
-    # An ephemeral unrelated key is generated locally; production private keys
-    # are never available to the guest or the test agent.
-    private = run(["openssl", "genpkey", "-algorithm", "EC", "-pkeyopt", "ec_paramgen_curve:prime256v1"])
-    public = run(["openssl", "pkey", "-pubout"], input_text=private)
-    private = None
+    staged_before = status()["status"].get("staged")
     with tempfile.NamedTemporaryFile(mode="w", dir="/run", prefix="integration-wrong-signer-") as key:
-        key.write(public + "\n")
-        key.flush()
         for rule in scope:
-            if rule.get("type") == "sigstoreSigned":
+            if "fulcio" in rule:
+                rule["fulcio"]["buildSignerURI"] += "-wrong-signer"
+            elif rule.get("type") == "sigstoreSigned":
+                private = run(["openssl", "genpkey", "-algorithm", "EC", "-pkeyopt", "ec_paramgen_curve:prime256v1"])
+                key.write(run(["openssl", "pkey", "-pubout"], input_text=private))
+                key.flush()
                 rule["keyPath"] = key.name
         try:
             # Preserve the inode's production SELinux label and file mode.
@@ -649,12 +647,12 @@ def reject_wrong_signer(image):
             failed = subprocess.run(["bootc", "switch", "--enforce-container-sigpolicy", image],
                                     text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=2400)
             require(failed.returncode != 0 and "signature" in failed.stderr.lower(),
-                    "update was not rejected for signature verification with an incorrect key")
-            require(status().get("status", {}).get("staged") == staged_before,
+                    "update was not rejected for signature verification with an incorrect signer")
+            require(status()["status"].get("staged") == staged_before,
                     "rejected update changed the staged deployment")
         finally:
             path.write_bytes(original)
-    return {"incorrect_signing_key_rejected": True, "no_deployment_staged": True, "original_trust_restored": True}
+    return {"incorrect_signer_rejected": True, "no_deployment_staged": True, "original_trust_restored": True}
 
 
 def chromium_checks():

@@ -14,7 +14,6 @@ on:
       - 'branding/**'
       - 'installer/**'
       - 'system/**'
-      - 'cosign.pub'
       - 'tests/**'
       - 'scripts/**'
       - '.github/workflows/iso-smoke.yml'

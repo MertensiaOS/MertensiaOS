@@ -3,14 +3,9 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'New immutable version, e.g. 45.20261005.1 (required when publishing)'
-        required: false
-        type: string
-      signing_check_only:
-        description: 'Check signing credentials without building or publishing a release'
-        default: false
+        description: 'New immutable version, e.g. 45.20261005.1'
         required: true
-        type: boolean
+        type: string
       channel:
         description: 'Update channel to promote after verification'
         default: latest
@@ -19,47 +14,27 @@ on:
         options: [latest, testing]
 permissions:
   contents: read
-  packages: write
 concurrency:
   group: mertensia-release
   cancel-in-progress: false
 jobs:
   checks:
-    if: ${{ !inputs.signing_check_only }}
+    if: github.ref == 'refs/heads/main'
     uses: ./.github/workflows/ci.yml
     permissions:
       contents: read
-  signing:
-    if: github.ref == 'refs/heads/main' || inputs.signing_check_only
-    runs-on: ubuntu-24.04
-    environment: release
+  release:
+    if: github.ref == 'refs/heads/main'
+    needs: checks
     permissions:
       contents: read
-    timeout-minutes: 5
-    steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
-        with:
-          cosign-release: v3.0.6
-          install-dir: /usr/local/bin
-          use-sudo: 'true'
-      - name: Validate release signing credentials
-        env:
-          COSIGN_PRIVATE_KEY: ${{ secrets.SIGNING_SECRET }}
-          COSIGN_PASSWORD: ${{ secrets.COSIGN_PASSWORD }}
-        run: bash scripts/check-signing-key.sh
-  release:
-    if: github.ref == 'refs/heads/main' && !inputs.signing_check_only
-    needs: [checks, signing]
+      packages: write
+      id-token: write
     runs-on: ubuntu-24.04
     environment: release
     timeout-minutes: 240
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-      - name: Require release version
-        env:
-          RELEASE_VERSION: ${{ inputs.version }}
-        run: test -n "$RELEASE_VERSION" || { echo 'A version is required when publishing a release.' >&2; exit 1; }
       - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
         with:
           cosign-release: v3.0.6
@@ -82,29 +57,24 @@ jobs:
       - name: Publish separate signed update and recovery fixtures
         id: fixture
         env:
-          COSIGN_PRIVATE_KEY: ${{ secrets.SIGNING_SECRET }}
-          COSIGN_PASSWORD: ${{ secrets.COSIGN_PASSWORD }}
           REGISTRY_AUTH_FILE: /root/.docker/config.json
         run: |
-          bash scripts/check-signing-key.sh
           fixture_repo=ghcr.io/mertensiaos/mertensiaos-integration
-          public_key_b64="$(base64 -w0 cosign.pub)"
           for mode in none always transient; do
             fixture_tag="run-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-$mode"
             sudo podman build --build-arg BASE_IMAGE=localhost/mertensiaos:release \
               --build-arg INTEGRATION_ROLE=payload --build-arg "INTEGRATION_REVISION=$fixture_tag" \
               --build-arg "INTEGRATION_HEALTH_MODE=$mode" \
               --build-arg "INTEGRATION_UPGRADE_IMAGE=$fixture_repo:$fixture_tag" \
-              --build-arg "INTEGRATION_PUBLIC_KEY_B64=$public_key_b64" \
               -f tests/integration/Containerfile -t "localhost/mertensiaos:fixture-$mode" .
             sudo env "REGISTRY_AUTH_FILE=$REGISTRY_AUTH_FILE" podman push --digestfile "$RUNNER_TEMP/fixture-digest" \
               "localhost/mertensiaos:fixture-$mode" "docker://$fixture_repo:$fixture_tag"
             fixture_digest="$(cat "$RUNNER_TEMP/fixture-digest")"
             [[ "$fixture_digest" =~ ^sha256:[a-f0-9]{64}$ ]]
             fixture_image="$fixture_repo@$fixture_digest"
-            sudo --preserve-env=COSIGN_PRIVATE_KEY,COSIGN_PASSWORD cosign sign --yes \
-              --new-bundle-format=false --use-signing-config=false --key env://COSIGN_PRIVATE_KEY "$fixture_image"
-            cosign verify --new-bundle-format=false --key cosign.pub "$fixture_image" >/dev/null
+            sudo --preserve-env=ACTIONS_ID_TOKEN_REQUEST_TOKEN,ACTIONS_ID_TOKEN_REQUEST_URL,GITHUB_ACTIONS cosign sign --yes \
+              --new-bundle-format=false --use-signing-config=false "$fixture_image"
+            bash scripts/verify-release.sh --fixture "$fixture_image"
             printf '%s=%s\n' "$mode" "$fixture_image" >> "$GITHUB_OUTPUT"
             if [[ "$mode" = none ]]; then
               printf 'automatic=%s:%s\n' "$fixture_repo" "$fixture_tag" >> "$GITHUB_OUTPUT"
@@ -118,7 +88,7 @@ jobs:
           TRANSIENT_IMAGE: ${{ steps.fixture.outputs.transient }}
         run: |
           sudo bash scripts/test-iso.sh --build --base-image localhost/mertensiaos:release \
-            --upgrade-image "$UPGRADE_IMAGE" --upgrade-public-key cosign.pub --require-upgrade \
+            --upgrade-image "$UPGRADE_IMAGE" --require-upgrade \
             --automatic-update-image "$AUTOMATIC_UPDATE_IMAGE" \
             --greenboot-failure-image "$FAILURE_IMAGE" --greenboot-transient-image "$TRANSIENT_IMAGE" \
             --require-greenboot-recovery \
@@ -126,12 +96,10 @@ jobs:
       - name: Publish, sign, verify and promote
         id: publish
         env:
-          COSIGN_PRIVATE_KEY: ${{ secrets.SIGNING_SECRET }}
-          COSIGN_PASSWORD: ${{ secrets.COSIGN_PASSWORD }}
           RELEASE_VERSION: ${{ inputs.version }}
           RELEASE_CHANNEL: ${{ inputs.channel }}
           REGISTRY_AUTH_FILE: /root/.docker/config.json
-        run: sudo --preserve-env=COSIGN_PRIVATE_KEY,COSIGN_PASSWORD,GITHUB_OUTPUT,REGISTRY_AUTH_FILE bash scripts/publish-image.sh localhost/mertensiaos:release "$RELEASE_VERSION" "$RELEASE_CHANNEL"
+        run: sudo --preserve-env=ACTIONS_ID_TOKEN_REQUEST_TOKEN,ACTIONS_ID_TOKEN_REQUEST_URL,GITHUB_ACTIONS,GITHUB_WORKFLOW_REF,GITHUB_OUTPUT,REGISTRY_AUTH_FILE bash scripts/publish-image.sh localhost/mertensiaos:release "$RELEASE_VERSION" "$RELEASE_CHANNEL"
       - name: Build installer from verified release digest
         env:
           RELEASE_IMAGE: ${{ steps.publish.outputs.image }}
@@ -141,10 +109,9 @@ jobs:
           sudo bash -c 'cd output/installer && sha256sum mertensiaos-installer.iso > SHA256SUMS'
           sudo chown -R "$(id -u):$(id -g)" output/installer
       - name: Sign installer checksums
-        env:
-          COSIGN_PRIVATE_KEY: ${{ secrets.SIGNING_SECRET }}
-          COSIGN_PASSWORD: ${{ secrets.COSIGN_PASSWORD }}
-        run: cosign sign-blob --yes --key env://COSIGN_PRIVATE_KEY --bundle output/installer/SHA256SUMS.sigstore.json output/installer/SHA256SUMS
+        run: |
+          cosign sign-blob --yes --bundle output/installer/SHA256SUMS.sigstore.json output/installer/SHA256SUMS
+          bash scripts/verify-release.sh --checksums output/installer/SHA256SUMS
       - name: Save installer and signed checksums
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
@@ -153,7 +120,6 @@ jobs:
             output/installer/mertensiaos-installer.iso
             output/installer/SHA256SUMS
             output/installer/SHA256SUMS.sigstore.json
-            cosign.pub
           retention-days: 30
       - name: Collect test diagnostics
         if: always()

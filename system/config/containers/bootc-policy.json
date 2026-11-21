@@ -1,0 +1,32 @@
+{
+  "default": [
+    {
+      "type": "reject"
+    }
+  ],
+  "transports": {
+    "docker": {
+      "ghcr.io/mertensiaos/mertensiaos": [
+        {
+          "type": "sigstoreSigned",
+          "signedIdentity": {
+            "type": "matchRepository"
+          },
+          "fulcio": {
+            "caPath": "/etc/pki/containers/mertensia-fulcio.crt",
+            "oidcIssuer": "https://token.actions.githubusercontent.com",
+            "buildSignerURI": "https://github.com/MertensiaOS/MertensiaOS/.github/workflows/release.yml@refs/heads/main"
+          },
+          "rekorPublicKeyPath": "/etc/pki/containers/mertensia-rekor.pub"
+        }
+      ]
+    },
+    "containers-storage": {
+      "": [
+        {
+          "type": "insecureAcceptAnything"
+        }
+      ]
+    }
+  }
+}

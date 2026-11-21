@@ -21,11 +21,17 @@ COPY system/gnome /build/gnome
 COPY scripts/build-gnome-control-center.sh /build/build-gnome-control-center.sh
 RUN bash /build/build-gnome-control-center.sh
 
+FROM quay.io/fedora/fedora-bootc:45 AS skopeo-build
+
+RUN dnf -y install dnf5-plugins rpm-build
+COPY system/patches/skopeo-fulcio-build-signer.patch /build/skopeo-fulcio-build-signer.patch
+COPY scripts/build-skopeo.sh /build/build-skopeo.sh
+RUN bash /build/build-skopeo.sh
+
 ## Stage file inputs on an empty filesystem to avoid diffing the full OS for each COPY.
 FROM scratch AS payload-files
 COPY system /system
 COPY branding /branding
-COPY cosign.pub /cosign.pub
 
 FROM scratch AS payload-applications
 COPY src/mertensia/__init__.py /usr/lib/mertensia/python/mertensia/__init__.py
@@ -87,6 +93,9 @@ RUN dnf -y install \
     xdg-desktop-portal \
     xdg-desktop-portal-gnome \
     && rm -rf /tmp/mertensia-accountsservice /tmp/mertensia-gnome-control-center && dnf clean all
+
+RUN --mount=type=bind,from=skopeo-build,source=/out,target=/run/mertensia-skopeo,ro \
+    dnf -y install /run/mertensia-skopeo/skopeo-*.rpm && dnf clean all
 
 RUN authselect select local with-systemd-homed with-group-merging --force --nobackup && \
     authselect check && \

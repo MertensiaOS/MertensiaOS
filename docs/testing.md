@@ -218,7 +218,7 @@ attachments. This harness does not push or sign images, alter registry access,
 or insert private signing keys into guests.
 
 The release workflow prepares a signed update fixture in the separate public
-`ghcr.io/mertensiaos/mertensiaos-integration` repository and requires this complete
+`ghcr.io/mertensiaos/mertensiaos-integration` repository using GitHub Actions OIDC and requires this complete
 update/rollback sequence before publishing the clean production payload. Routine
 offline ISO runs can omit it; that omission remains visible as skipped coverage.
 
@@ -292,6 +292,9 @@ suite boots the update and verifies accounts and rollback. Recovery fixtures als
 verify staging pauses after both GRUB fallback and Greenboot rollback, and that
 administrator acknowledgement does not itself change deployments. Offline runs
 without the tagged fixture explicitly report automatic staging as skipped.
+For the official release fixture, the integration overlay trusts the same
+workflow identity as the production payload. Locally signed fixtures can
+supply their own public key with `--upgrade-public-key`.
 
 In a normal GNOME session, also verify the OS restart-ready notification, one
 delivery per digest/user, stale-notice clearing after boot, and the explanation

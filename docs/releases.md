@@ -2,51 +2,32 @@
 
 ## Trust and credentials
 
-`cosign.pub` is the existing project release trust root. Images install it as
-`/etc/pki/containers/mertensia.pub`. The container policy rejects registry pulls
-unless they are signed images from `ghcr.io/mertensiaos/mertensiaos`. The only
-unsigned exception is the privileged local container store used for offline
-development payloads. This policy also applies to ordinary Podman pulls;
-additional repositories require an explicit administrator policy change.
+The release job requests a GitHub OIDC token with `id-token: write`. Cosign
+uses it to get a short-lived certificate from Sigstore's Fulcio service and
+logs the signature in Rekor. The expected issuer is
+`https://token.actions.githubusercontent.com`. The trusted workflow identity is
+`https://github.com/MertensiaOS/MertensiaOS/.github/workflows/release.yml@refs/heads/main`.
+The workflow needs no repository signing secret. Restrict the `release`
+environment to `main` and require review of changes to the workflow.
 
-The registry configuration enables Sigstore attachments for the official
-repository. Container signatures use Cosign 3.0.6's legacy attachment format
-for compatibility with containers/image; checksum blobs use Sigstore bundles.
-These choices follow the [containers/image signature policy documentation](https://github.com/containers/image/blob/main/docs/containers-policy.json.5.md)
-and [Cosign signing documentation](https://github.com/sigstore/cosign/blob/v3.0.6/doc/cosign_sign.md).
+The payload ships a Fedora Skopeo build with support for matching the Fulcio
+Build Signer URI. Its policy at `/etc/containers/mertensia-bootc-policy.json`
+trusts that workflow only for `ghcr.io/mertensiaos/mertensiaos`, using the
+checked-in Fulcio root and Rekor public key from the
+[public Sigstore trust root](https://github.com/sigstore/root-signing/blob/main/targets/trusted_root.json).
+It rejects other registry pulls. The ordinary Podman policy rejects registry
+pulls by default and allows the local container store for development.
 
-The private key corresponding to `cosign.pub` is required. A new unrelated key
-cannot sign updates accepted by existing installations. The publisher compares
-the signing key's public half with the checked-in key before pushing. Never
-commit private keys; keep them in protected secrets or a supported KMS.
+Cosign 3.0.6 writes container signatures as legacy Sigstore attachments with
+Rekor v1 timestamps so Skopeo can verify them during bootc pulls. The ISO
+checksum file uses a Sigstore bundle. See the [Sigstore CI signing guide](https://docs.sigstore.dev/quickstart/quickstart-ci/)
+and the [Skopeo verifier backport](https://github.com/podman-container-tools/container-libs/pull/625).
 
-Configure GitHub Actions repository secrets, or secrets in the `release`
-environment, with:
-
-| Secret | Purpose |
-| --- | --- |
-| `SIGNING_SECRET` | Complete PEM private key matching `cosign.pub`, including header, footer and newlines; not base64-encoded |
-| `COSIGN_PASSWORD` | Its passphrase, or empty for an unencrypted key |
-
-The workflow maps `SIGNING_SECRET` to the `COSIGN_PRIVATE_KEY` environment
-variable used by Cosign. Repository secrets are inherited by the `release`
-environment unless an environment secret overrides the same name. Private keys
-stay in the signing steps' environment; they are not build arguments or artifacts.
-
-To check the stored key before publishing, dispatch **Publish signed release**
-with `signing_check_only` enabled. Leave the version empty. This mode only opens
-the key and compares its public half with `cosign.pub`; it does not build images,
-publish packages or promote an update channel. It can also run on a branch when
-validating a workflow change. A missing key, incorrect passphrase, invalid format
-or mismatched public key fails the check without printing the secret.
-
-Allow the workflow's `GITHUB_TOKEN` to write packages and ensure both the official
-GHCR package and `mertensiaos-integration` test package are publicly readable.
-The latter contains instrumented test images and must never be distributed as
-an OS release. Apply a retention policy to its unique `run-*` tags.
-Add environment protection appropriate to
-your maintainers. Credentials and environment settings cannot be created from
-source code; configure them before dispatching a release.
+Allow the workflow's `GITHUB_TOKEN` to write packages. Both the official
+GHCR package and `mertensiaos-integration` must be publicly readable by
+unauthenticated clients. GHCR makes new packages private by default, so set
+visibility when provisioning the packages. The integration package contains
+instrumented test images. Apply a retention policy to its unique `run-*` tags.
 
 ## Automated publication
 
@@ -69,7 +50,7 @@ requires the source tests and payload build first, then:
 2. Exercises actual ISO installation, recovery boot, accounts, signed upgrade and rollback, then validates the clean payload, rejecting development/test access and altered trust configuration.
 3. Publishes a new version tag, signs its immutable digest and verifies it with both Cosign and containers/image.
 4. Promotes the verified digest to the selected channel.
-5. Builds the production ISO from that signed digest and uploads the ISO, signed checksum bundle and public key as workflow artifacts.
+5. Builds the production ISO from that signed digest and uploads the ISO, checksum file and signed bundle as workflow artifacts.
 
 It refuses an existing version and serializes workflow releases. A failed
 signature or policy check leaves the update channel untouched; an incomplete
@@ -78,45 +59,37 @@ after promotion leaves the verified payload published, so inspect the run before
 retrying. Workflow artifacts are retained for 30 days; download approved releases
 to your long-term distribution location.
 
-For local publication, install Podman, Skopeo, OpenSSL, Python and Cosign 3.0.6.
-Run all commands under the same account/container store. Configure Podman/Skopeo
-and Cosign to use the same Docker-format authentication file. For example, in a
-root shell:
-
-```sh
-install -d -m 0700 /root/.docker
-podman login --authfile /root/.docker/config.json ghcr.io
-export REGISTRY_AUTH_FILE=/root/.docker/config.json
-export MERTENSIA_SIGNING_KEY=/secure/location/cosign.key
-podman build --pull --no-cache -f Containerfile -t localhost/mertensiaos:release-unpacked .
-bash scripts/rechunk-image.sh localhost/mertensiaos:release-unpacked localhost/mertensiaos:release
-bash scripts/publish-image.sh localhost/mertensiaos:release 45.20261005.1 testing
-```
-
-Cosign prompts for an encrypted key's password unless `COSIGN_PASSWORD` is supplied
-securely by your environment. Do not put passphrases in command arguments.
-
 ## Verification
 
-Verify a payload by its actual digest:
+Install Cosign 3.0.6 and Python 3. Verify a payload by its actual digest:
 
 ```sh
 bash scripts/verify-release.sh ghcr.io/mertensiaos/mertensiaos@sha256:REPLACE_WITH_64_HEX_DIGEST
 ```
 
-This checks both the Cosign signature and the policy used by the OS. The second
-check downloads the payload into temporary OCI storage, so allow enough space.
-Production ISO builds use the same verifier to import directly into container storage.
+This verifies the Cosign signature against the release workflow identity.
+The publisher also checks the digest using the Skopeo verifier shipped in the
+OS before moving the channel. Production ISO builds verify the signature and
+then import the same immutable digest into local container storage.
 
-For a downloaded ISO, obtain the public key through a trusted project checkout,
-verify the checksum bundle, then verify the ISO bytes:
+For a downloaded ISO, use the verifier from a trusted project checkout. From
+the directory containing the three artifacts, pass the checksum file to the
+script, then verify the ISO bytes:
 
 ```sh
-cosign verify-blob --key cosign.pub --bundle SHA256SUMS.sigstore.json SHA256SUMS
+bash /path/to/trusted/checkout/scripts/verify-release.sh --checksums SHA256SUMS
 sha256sum --check SHA256SUMS
 ```
 
 ## Upgrade and rollback
+
+Installations that trust the previous Cosign public key need a transition
+image that contains the new bootc policy and carries both signatures. Before
+promoting a keyless-only release to a channel used by these installations,
+publish and verify a dual-signed transition digest and let users boot into it.
+Keep that digest available for older deployments that return via rollback.
+If the previous signing key is unavailable, reinstall from a verified keyless
+ISO after backing up user data.
 
 On an installed production system:
 
@@ -128,8 +101,8 @@ sudo systemctl reboot
 ```
 
 `upgrade` stages the image for the next boot. bootc verifies registry pulls
-against `/etc/containers/policy.json`; the installed update reference follows
-the selected signed channel. A digest target remains pinned until explicitly
+against `/etc/containers/mertensia-bootc-policy.json`. The installed update
+reference follows the selected signed channel. A digest target remains pinned until explicitly
 switched. The bootc timer stages signed updates daily on unmetered connections;
 users choose when to restart. See [automatic updates](updates.md) for controls,
 GNOME Software permission review and recovery acknowledgement.

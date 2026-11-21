@@ -1,2 +1,2 @@
-# Unified diff context uses one space on otherwise blank source lines.
-system/patches/*.patch whitespace=-blank-at-eol
+# Unified diff context prefixes blank lines and Go indentation with one space.
+system/patches/*.patch whitespace=-blank-at-eol,-space-before-tab

@@ -2,14 +2,15 @@
 set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 IMAGE="${1:?Usage: validate-image.sh LOCAL_PAYLOAD_IMAGE}"
-for command in podman openssl sha256sum python3; do
+for command in podman sha256sum python3; do
   command -v "$command" >/dev/null || { echo "Missing dependency: $command" >&2; exit 2; }
 done
-EXPECTED_KEY_SHA256="$(openssl pkey -pubin -in "$ROOT_DIR/cosign.pub" -outform DER | sha256sum)"
-EXPECTED_KEY_SHA256="${EXPECTED_KEY_SHA256%% *}"
-EXPECTED_POLICY="$(<"$ROOT_DIR/system/config/containers/policy.json")"
-EXPECTED_REGISTRIES_SHA256="$(sha256sum "$ROOT_DIR/system/config/containers/registries.yaml")"
-EXPECTED_REGISTRIES_SHA256="${EXPECTED_REGISTRIES_SHA256%% *}"
+TRUST_DIR="$ROOT_DIR/system/config/containers"
+EXPECTED_POLICY="$(<"$TRUST_DIR/policy.json")"
+EXPECTED_BOOTC_POLICY="$(<"$TRUST_DIR/bootc-policy.json")"
+EXPECTED_REGISTRIES_SHA256="$(sha256sum <"$TRUST_DIR/registries.yaml")"
+EXPECTED_FULCIO_SHA256="$(sha256sum <"$TRUST_DIR/fulcio.crt")"
+EXPECTED_REKOR_SHA256="$(sha256sum <"$TRUST_DIR/rekor.pub")"
 EXPECTED_BROWSER_MANAGED="$(<"$ROOT_DIR/system/config/chromium/policies/managed/mertensia.json")"
 EXPECTED_BROWSER_RECOMMENDED="$(<"$ROOT_DIR/system/config/chromium/policies/recommended/mertensia.json")"
 # Pass only public trust data as arguments, without binding host paths into the
@@ -94,12 +95,8 @@ podman run --rm --entrypoint /usr/bin/bash "$IMAGE" -euc "$(cat <<'BASH'
       fi
     fi
   done
-  payload_key_sha256="$(openssl pkey -pubin -in /etc/pki/containers/mertensia.pub -outform DER | sha256sum)"
-  if [[ "${payload_key_sha256%% *}" != "$1" ]]; then
-    echo "Payload signing key does not match the release trust root" >&2
-    exit 1
-  fi
-  python3 - "$2" "$3" "$4" "$5" <<'PY'
+  [[ "$(rpm -q --qf '%{RELEASE}' skopeo)" == *.mertensia1 ]]
+  python3 - "$@" <<'PY'
 import configparser
 import hashlib
 import json
@@ -129,16 +126,25 @@ handlers.read("/usr/share/applications/gnome-mimeapps.list")
 for mime in ("x-scheme-handler/http", "x-scheme-handler/https", "text/html", "application/xhtml+xml"):
     if handlers.get("Default Applications", mime, fallback="") != "chromium-browser.desktop;":
         raise SystemExit(f"Missing Chromium default handler: {mime}")
-expected_policy = json.loads(sys.argv[1])
 if "GREENBOOT_MAX_BOOT_ATTEMPTS=3" not in Path("/etc/greenboot/greenboot.conf").read_text().splitlines():
     raise SystemExit("Payload does not use the release Greenboot retry policy")
-for policy_file in ("/etc/containers/policy.json", "/usr/share/mertensia/bootc-policy.json"):
+for policy_file, expected in (
+    ("/etc/containers/policy.json", sys.argv[1]),
+    ("/etc/containers/mertensia-bootc-policy.json", sys.argv[5]),
+):
     policy = json.loads(Path(policy_file).read_text())
-    if policy != expected_policy:
+    if policy != json.loads(expected):
         raise SystemExit(f"Payload signature policy differs from the release policy: {policy_file}")
-registries = Path("/etc/containers/registries.d/mertensia.yaml").read_bytes()
-if hashlib.sha256(registries).hexdigest() != sys.argv[2]:
-    raise SystemExit("Payload signature registry configuration differs from the release configuration")
+for path, expected, label in (
+    ("/etc/containers/registries.d/mertensia.yaml", sys.argv[2], "signature registry configuration"),
+    ("/etc/pki/containers/mertensia-fulcio.crt", sys.argv[6], "Fulcio trust root"),
+    ("/etc/pki/containers/mertensia-rekor.pub", sys.argv[7], "Rekor trust root"),
+):
+    if hashlib.sha256(Path(path).read_bytes()).hexdigest() != expected:
+        raise SystemExit(f"Payload {label} differs from the release configuration")
+
 PY
 BASH
-)" mertensia-image-validation "$EXPECTED_KEY_SHA256" "$EXPECTED_POLICY" "$EXPECTED_REGISTRIES_SHA256" "$EXPECTED_BROWSER_MANAGED" "$EXPECTED_BROWSER_RECOMMENDED"
+)" mertensia-image-validation "$EXPECTED_POLICY" "${EXPECTED_REGISTRIES_SHA256%% *}" \
+  "$EXPECTED_BROWSER_MANAGED" "$EXPECTED_BROWSER_RECOMMENDED" "$EXPECTED_BOOTC_POLICY" \
+  "${EXPECTED_FULCIO_SHA256%% *}" "${EXPECTED_REKOR_SHA256%% *}"

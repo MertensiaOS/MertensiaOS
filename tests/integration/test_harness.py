@@ -50,7 +50,7 @@ class HarnessTests(unittest.TestCase):
             actual_path = Path
 
             def path(value):
-                return {"/sysroot/ostree/deploy": deployment_root, "/etc/containers/policy.json": policy,
+                return {"/sysroot/ostree/deploy": deployment_root, "/etc/containers/mertensia-bootc-policy.json": policy,
                         "/proc/sys/kernel/random/boot_id": boot_id}.get(str(value), actual_path(value))
 
             def run(args, **kwargs):
@@ -546,6 +546,18 @@ class TestSigningPolicyTests(unittest.TestCase):
         self.assertEqual(updated["default"], [{"type": "reject"}])
         self.assertEqual(updated["transports"]["docker"]["ghcr.io/mertensiaos/mertensiaos"][0]["keyPath"], "/production.pub")
         self.assertEqual(updated["transports"]["docker"]["ghcr.io/example/mertensia-integration"][0]["signedIdentity"], {"type": "matchRepository"})
+
+    def test_keyless_fixtures_inherit_workflow_identity_only_for_the_project_repository(self):
+        policy = json.loads((harness.ROOT / "system/config/containers/bootc-policy.json").read_text())
+        release_repo = "ghcr.io/mertensiaos/mertensiaos"
+        fixture_repo = release_repo + "-integration"
+        with self.assertRaises(ValueError):
+            self.policy.add_scope(policy, "ghcr.io/example/integration:next", public_key=False)
+        updated = self.policy.add_scope(policy, fixture_repo + ":next", public_key=False)
+        rules = updated["transports"]["docker"]
+        self.assertEqual(rules[fixture_repo], rules[release_repo])
+        rules[fixture_repo][0]["fulcio"]["buildSignerURI"] = "changed in the test overlay"
+        self.assertIn("release.yml@refs/heads/main", rules[release_repo][0]["fulcio"]["buildSignerURI"])
 
     def test_test_key_cannot_replace_production_or_existing_trust(self):
         with self.assertRaises(ValueError):

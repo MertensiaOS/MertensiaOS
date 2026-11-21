@@ -2,11 +2,13 @@
 
 import argparse
 import base64
+from copy import deepcopy
 import json
 import subprocess
 from pathlib import Path
 
 
+RELEASE_REPOSITORY = "ghcr.io/mertensiaos/mertensiaos"
 KEY_PATH = "/etc/pki/containers/mertensia-integration.pub"
 
 
@@ -16,38 +18,44 @@ def repository(image):
     if not separator or not head or not tail:
         raise ValueError("integration update must use a fully qualified registry repository")
     result = head + "/" + tail.partition(":")[0]
-    if result == "ghcr.io/mertensiaos/mertensiaos" or "integration" not in tail.partition(":")[0]:
+    if result == RELEASE_REPOSITORY or "integration" not in tail.partition(":")[0]:
         raise ValueError("test signing policy is restricted to an integration repository")
     return result
 
 
-def add_scope(policy, image):
+def add_scope(policy, image, *, public_key=True):
     if policy.get("default") != [{"type": "reject"}]:
         raise ValueError("integration overlays require the production default-reject signature policy")
     scope = repository(image)
     existing = policy.setdefault("transports", {}).setdefault("docker", {})
     if scope in existing:
         raise ValueError("test signing policy cannot replace an existing repository trust rule")
-    existing[scope] = [{"type": "sigstoreSigned", "keyPath": KEY_PATH,
-                        "signedIdentity": {"type": "matchRepository"}}]
+    if public_key:
+        existing[scope] = [{"type": "sigstoreSigned", "keyPath": KEY_PATH,
+                            "signedIdentity": {"type": "matchRepository"}}]
+    elif scope == RELEASE_REPOSITORY + "-integration":
+        existing[scope] = deepcopy(existing[RELEASE_REPOSITORY])
+    else:
+        raise ValueError("provide a public key for a locally signed integration repository")
     return policy
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--image", required=True)
-    parser.add_argument("--public-key-base64", required=True)
+    parser.add_argument("--public-key-base64", default="")
     args = parser.parse_args()
-    policy_path = Path("/etc/containers/policy.json")
-    policy = add_scope(json.loads(policy_path.read_text()), args.image)
-    public = base64.b64decode(args.public_key_base64, validate=True)
-    if not public.startswith(b"-----BEGIN PUBLIC KEY-----") or b"PRIVATE KEY" in public:
-        raise ValueError("provide a PEM public signing key")
-    key = Path(KEY_PATH)
-    key.parent.mkdir(parents=True, exist_ok=True)
-    key.write_bytes(public)
-    key.chmod(0o644)
-    subprocess.run(["openssl", "pkey", "-pubin", "-in", str(key), "-noout"], check=True)
+    policy_path = Path("/etc/containers/mertensia-bootc-policy.json")
+    policy = add_scope(json.loads(policy_path.read_text()), args.image, public_key=bool(args.public_key_base64))
+    if args.public_key_base64:
+        public = base64.b64decode(args.public_key_base64, validate=True)
+        if not public.startswith(b"-----BEGIN PUBLIC KEY-----") or b"PRIVATE KEY" in public:
+            raise ValueError("provide a PEM public signing key")
+        key = Path(KEY_PATH)
+        key.parent.mkdir(parents=True, exist_ok=True)
+        key.write_bytes(public)
+        key.chmod(0o644)
+        subprocess.run(["openssl", "pkey", "-pubin", "-in", str(key), "-noout"], check=True)
     policy_path.write_text(json.dumps(policy, indent=2) + "\n")
     # Enable Sigstore attachment discovery for the explicitly scoped test repo.
     registry = repository(args.image)

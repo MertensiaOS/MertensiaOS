@@ -252,16 +252,20 @@
     "/usr/lib/mertensiaos-release"
   ],
   [
-    "cosign.pub",
-    "/etc/pki/containers/mertensia.pub"
+    "system/config/containers/fulcio.crt",
+    "/etc/pki/containers/mertensia-fulcio.crt"
+  ],
+  [
+    "system/config/containers/rekor.pub",
+    "/etc/pki/containers/mertensia-rekor.pub"
   ],
   [
     "system/config/containers/policy.json",
     "/etc/containers/policy.json"
   ],
   [
-    "system/config/containers/policy.json",
-    "/usr/share/mertensia/bootc-policy.json"
+    "system/config/containers/bootc-policy.json",
+    "/etc/containers/mertensia-bootc-policy.json"
   ],
   [
     "system/config/containers/registries.yaml",
