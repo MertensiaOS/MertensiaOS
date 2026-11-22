@@ -32,14 +32,14 @@ instrumented test images. Apply a retention policy to its unique `run-*` tags.
 ## Automated publication
 
 Release payload builds use `podman build --pull --no-cache`, refreshing RPMs
-including Chromium even when the Fedora base digest is unchanged. Publication
+including Brave Origin even when the Fedora base digest is unchanged. Publication
 still requires a manual dispatch. The finished payload is then repacked with
 digest-pinned Chunkah into up to 128 content-based layers, reducing update
 downloads. This converts the inherited OSTree image to plain bootc while
 preserving its bootc metadata and release trust configuration. See the
 [Chunkah measurements and implementation](chunkah.md).
 Complete the graphical and live Safe Browsing
-[Chromium acceptance checks](chromium.md#acceptance-checks) before promoting a
+[Brave Origin acceptance checks](brave.md#acceptance-checks) before promoting a
 release; the headless VM probe does not cover these services.
 
 Run **Publish signed release** from GitHub Actions with a new version, such as

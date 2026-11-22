@@ -655,7 +655,7 @@ def reject_wrong_signer(image):
     return {"incorrect_signer_rejected": True, "no_deployment_staged": True, "original_trust_restored": True}
 
 
-def chromium_checks():
+def brave_checks():
     require(role() == "payload", "browser checks require the installed system")
     # Disposable account; never start a root browser or touch locked homed homes.
     name = "mertensia-browser-test"
@@ -665,8 +665,8 @@ def chromium_checks():
     run(["useradd", "--system", "--no-log-init", "--create-home", "--home-dir", "/var/lib/mertensia-integration/browser-home", name])
     try:
         result = run(["runuser", "-u", name, "--", "env", "-u", "WAYLAND_DISPLAY",
-                      "-u", "CHROMIUM_USER_FLAGS", "/usr/bin/python3", "-I",
-                      "/usr/share/mertensia-integration/chromium_probe.py"], timeout=180)
+                      "/usr/bin/python3", "-I",
+                      "/usr/share/mertensia-integration/brave_probe.py"], timeout=180)
         return json.loads(result)
     finally:
         run(["userdel", "--remove", name])
@@ -718,8 +718,8 @@ def main():
                     result = update_recovery_pause()
                 elif command == "boot-health":
                     result = boot_health()
-                elif command == "chromium-checks":
-                    result = chromium_checks()
+                elif command == "brave-checks":
+                    result = brave_checks()
                 elif command == "recovery-event":
                     result = recovery_event()
                 elif command == "set-health-failure":

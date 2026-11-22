@@ -369,11 +369,10 @@ class ApplicationPackagingTests(unittest.TestCase):
                 self.assertTrue((self.image / name).is_file())
         self.assertFalse((self.image / "etc/systemd/system/var-tmp.mount").exists())
 
-    def test_chromium_policies_and_default_handlers(self):
-        root = self.image / "etc/chromium/policies"
+    def test_brave_policies_and_default_handlers(self):
+        root = self.image / "etc/brave/policies"
         self.assertEqual(json.loads((root / "managed/mertensia.json").read_text()), {
-            "SitePerProcess": True, "MetricsReportingEnabled": False,
-            "UrlKeyedAnonymizedDataCollectionEnabled": False,
+            "SitePerProcess": True,
         })
         self.assertEqual(json.loads((root / "recommended/mertensia.json").read_text()), {
             "SafeBrowsingProtectionLevel": 1, "BackgroundModeEnabled": False,
@@ -383,19 +382,9 @@ class ApplicationPackagingTests(unittest.TestCase):
         defaults = configparser.ConfigParser()
         defaults.read(self.image / "usr/share/applications/gnome-mimeapps.list")
         self.assertEqual(dict(defaults["Default Applications"]), {
-            mime: "chromium-browser.desktop;" for mime in (
+            mime: "brave-origin.desktop;" for mime in (
                 "x-scheme-handler/http", "x-scheme-handler/https", "text/html", "application/xhtml+xml")
         })
-
-    def test_chromium_wayland_hook_preserves_flags_and_headless_selection(self):
-        hook = self.image / "etc/chromium/mertensia-wayland.conf"
-        for display, expected in (("wayland-0", "--existing --ozone-platform=wayland"), ("", "--existing")):
-            with self.subTest(display=display):
-                result = subprocess.run(
-                    ["bash", "-euc", 'CHROMIUM_FLAGS=--existing; . "$1"; printf "%s" "$CHROMIUM_FLAGS"', "test", str(hook)],
-                    env=dict(os.environ, WAYLAND_DISPLAY=display), text=True, capture_output=True, check=True,
-                )
-                self.assertEqual(result.stdout, expected)
 
 
 if __name__ == "__main__":

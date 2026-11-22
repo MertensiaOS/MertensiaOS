@@ -10,7 +10,7 @@ bug reports, [contributing](../CONTRIBUTING.md) to work on changes, and the
 - [Updates](updates.md): OS staging, Flatpak permissions and restart notifications.
 - [Recovery](recovery.md): interrupted installation, root unlock, TPM resealing and home backups.
 - [Boot health](boot-health.md): Greenboot checks, rollback and recovery notifications.
-- [Chromium](chromium.md): browser configuration, updates, diagnostics and acceptance checks.
+- [Brave Origin](brave.md): browser configuration, updates, diagnostics and acceptance checks.
 
 ## Building and maintaining the project
 

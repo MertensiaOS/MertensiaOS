@@ -4,10 +4,9 @@
 MertensiaOS is a Fedora 45 bootc desktop with GNOME, an encrypted system volume,
 TPM-backed root unlock, and separate encrypted homes managed by systemd-homed.
 
-Fedora Chromium is the default browser, with native Wayland and sandboxing,
-enforced site isolation, and reduced optional data collection. Chromium updates
-arrive through OS releases and require a restart. See [browser hardening](docs/chromium.md)
-for defaults, diagnostics and compatibility checks.
+Brave Origin is the default browser. MertensiaOS ships the native stable RPM
+with enforced site isolation. Browser updates arrive through OS releases and
+require a restart. See [Brave Origin](docs/brave.md) for policies, diagnostics and compatibility checks.
 
 GNOME Software discovers, installs and automatically updates Flatpak apps from
 Flathub. Updates requesting additional permissions stay pending for manual review

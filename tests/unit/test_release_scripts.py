@@ -77,11 +77,11 @@ elif command == "podman":
         script_index = args.index("-euc") + 1
         script = args[script_index]
         root = os.environ["FAKE_PAYLOAD_ROOT"]
-        for prefix in ("/usr/lib/", "/usr/lib64/", "/usr/libexec/", "/usr/share/", "/etc/", "/usr/bin/mertensia-update", "/usr/bin/mertensia-system", "/usr/bin/chromium-browser"):
+        for prefix in ("/usr/lib/", "/usr/lib64/", "/usr/libexec/", "/usr/share/", "/etc/", "/opt/", "/usr/bin/mertensia-update", "/usr/bin/mertensia-system"):
             script = script.replace(prefix, root + prefix)
         script = script.replace("'ExecStart=" + root + "/usr/bin/mertensia-update", "'ExecStart=/usr/bin/mertensia-update")
-        script = script.replace('["' + root + '/usr/bin/chromium-browser"]', '["/usr/bin/chromium-browser"]')
-        script = script.replace("'. " + root + "/etc/chromium/mertensia-wayland.conf'", "'. /etc/chromium/mertensia-wayland.conf'")
+        script = script.replace("test -x /usr/bin/brave-origin-stable",
+                                "test -x " + root + "/usr/bin/brave-origin-stable")
         # Relocated fixtures belong to the test runner; production requires root.
         script = script.replace("expected_owner = 0", "expected_owner = " + str(os.getuid()))
         result = subprocess.run(["bash", "-euc", script, *args[script_index + 1:]])
@@ -115,6 +115,8 @@ elif command == "getent":
 elif command == "gsettings":
     print("false" if args[-1] == "refresh-when-metered" else "true")
 elif command == "rpm":
+    if args in (["-q", "chromium"], ["-q", "brave-browser"]):
+        sys.exit(1)
     print("1.fc45.mertensia1" if args[-1] == "skopeo" else "gnome-software-51.0-1.fc45.x86_64")
 elif command == "plymouth-set-default-theme":
     print(os.environ.get("FAKE_PLYMOUTH_THEME", "mertensia"))
@@ -189,9 +191,8 @@ class ReleaseScriptTests(unittest.TestCase):
             "usr/share/polkit-1/rules.d/49-mertensia-updates.rules": ROOT / "system/config/polkit/49-mertensia-updates.rules",
             "usr/lib/systemd/system/bootc-fetch-apply-updates.service.d/50-mertensia-stage.conf": ROOT / "system/config/systemd/bootc-fetch-apply-updates.service.d/50-mertensia-stage.conf",
             "usr/lib/greenboot/check/required.d/50-mertensia-desktop.sh": ROOT / "system/config/greenboot/50-mertensia-desktop.sh",
-            "etc/chromium/policies/managed/mertensia.json": ROOT / "system/config/chromium/policies/managed/mertensia.json",
-            "etc/chromium/policies/recommended/mertensia.json": ROOT / "system/config/chromium/policies/recommended/mertensia.json",
-            "etc/chromium/mertensia-wayland.conf": ROOT / "system/config/chromium/mertensia-wayland.conf",
+            "etc/brave/policies/managed/mertensia.json": ROOT / "system/config/brave/policies/managed/mertensia.json",
+            "etc/brave/policies/recommended/mertensia.json": ROOT / "system/config/brave/policies/recommended/mertensia.json",
             "usr/share/applications/gnome-mimeapps.list": ROOT / "system/config/desktop/gnome-mimeapps.list",
         }
         for target, source in fixtures.items():
@@ -203,16 +204,20 @@ class ReleaseScriptTests(unittest.TestCase):
         plugin = payload / "usr/lib64/gnome-software/plugins-23/libgs_plugin_flatpak.so"
         plugin.parent.mkdir(parents=True)
         plugin.touch()
-        browser_config = payload / "etc/chromium/chromium.conf"
-        browser_config.write_text(". /etc/chromium/mertensia-wayland.conf\n")
-        for name in ("usr/bin/chromium-browser", "usr/lib64/chromium-browser/chrome-sandbox",
+        for name in ("usr/bin/brave-origin-stable", "opt/brave.com/brave-origin/brave",
+                     "opt/brave.com/brave-origin/chrome-sandbox",
                      "usr/libexec/mertensia-check-plymouth-initrd"):
             executable = payload / name
             executable.parent.mkdir(parents=True, exist_ok=True)
             executable.write_text("#!/bin/sh\nexit 0\n")
             executable.chmod(0o755)
-        (payload / "usr/share/applications/chromium-browser.desktop").write_text(
-            "[Desktop Entry]\nExec=/usr/bin/chromium-browser %U\n")
+        (payload / "opt/brave.com/brave-origin/LICENSE").write_text("License fixture\n")
+        for name in ("brave-origin.desktop", "com.brave.Origin.desktop"):
+            (payload / "usr/share/applications" / name).write_text(
+                "[Desktop Entry]\nExec=/usr/bin/brave-origin-stable --skip-origin-startup-dialog %U\n"
+                "[Desktop Action new-window]\nExec=/usr/bin/brave-origin-stable --skip-origin-startup-dialog\n"
+                "[Desktop Action new-private-window]\n"
+                "Exec=/usr/bin/brave-origin-stable --skip-origin-startup-dialog --incognito\n")
         fragment = payload / "usr/lib/bootupd/grub2-static/configs.d/08_greenboot.cfg"
         fragment.parent.mkdir(parents=True, exist_ok=True)
         fragment.write_text("# packaged Greenboot GRUB fragment\n")
@@ -433,32 +438,46 @@ class ReleaseScriptTests(unittest.TestCase):
 
     def test_payload_validation_rejects_browser_policy_changes_and_writable_files(self):
         payload = self.payload_fixture()
-        policy = payload / "etc/chromium/policies/managed/mertensia.json"
+        policy = payload / "etc/brave/policies/managed/mertensia.json"
         original = policy.read_text()
         policy.write_text('{"SitePerProcess": false}')
         result = self.run_script("validate-image.sh", "localhost/mertensia:release")
         self.assertNotEqual(result.returncode, 0)
-        self.assertIn("Chromium managed policies differ", result.stderr)
+        self.assertIn("Brave managed policies differ", result.stderr)
         values = json.loads(original)
-        values["SitePerProcess"] = 1  # Python considers 1 == True; Chromium types do not.
+        values["SitePerProcess"] = 1  # Python considers 1 == True; Browser policy types differ.
         policy.write_text(json.dumps(values))
         result = self.run_script("validate-image.sh", "localhost/mertensia:release")
         self.assertNotEqual(result.returncode, 0)
-        self.assertIn("Chromium managed policies differ", result.stderr)
+        self.assertIn("Brave managed policies differ", result.stderr)
         policy.write_text(original)
         policy.chmod(0o666)
         result = self.run_script("validate-image.sh", "localhost/mertensia:release")
         self.assertNotEqual(result.returncode, 0)
-        self.assertIn("Unsafe Chromium policy", result.stderr)
+        self.assertIn("Unsafe Brave policy", result.stderr)
+
+    def test_payload_validation_requires_skip_dialog_on_every_browser_action(self):
+        payload = self.payload_fixture()
+        for name in ("brave-origin.desktop", "com.brave.Origin.desktop"):
+            desktop = payload / "usr/share/applications" / name
+            original = desktop.read_text()
+            for suffix in (" %U", "", " --incognito"):
+                with self.subTest(name=name, suffix=suffix):
+                    desktop.write_text(original.replace(
+                        f" --skip-origin-startup-dialog{suffix}\n", f"{suffix}\n"))
+                    result = self.run_script("validate-image.sh", "localhost/mertensia:release")
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertIn(f"Incorrect Brave Origin launch command in {name}", result.stderr)
+                desktop.write_text(original)
 
     def test_payload_validation_rejects_missing_browser_and_wrong_handler(self):
         payload = self.payload_fixture()
         defaults = payload / "usr/share/applications/gnome-mimeapps.list"
-        defaults.write_text(defaults.read_text().replace("chromium-browser.desktop", "other.desktop"))
+        defaults.write_text(defaults.read_text().replace("brave-origin.desktop", "other.desktop"))
         result = self.run_script("validate-image.sh", "localhost/mertensia:release")
         self.assertNotEqual(result.returncode, 0)
-        self.assertIn("Missing Chromium default handler", result.stderr)
-        (payload / "usr/bin/chromium-browser").unlink()
+        self.assertIn("Missing Brave Origin default handler", result.stderr)
+        (payload / "usr/bin/brave-origin-stable").unlink()
         self.assertNotEqual(self.run_script("validate-image.sh", "localhost/mertensia:release").returncode, 0)
 
     def test_payload_validation_rejects_missing_update_timer_or_rebooting_override(self):

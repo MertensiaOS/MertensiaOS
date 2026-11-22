@@ -11,8 +11,8 @@ EXPECTED_BOOTC_POLICY="$(<"$TRUST_DIR/bootc-policy.json")"
 EXPECTED_REGISTRIES_SHA256="$(sha256sum <"$TRUST_DIR/registries.yaml")"
 EXPECTED_FULCIO_SHA256="$(sha256sum <"$TRUST_DIR/fulcio.crt")"
 EXPECTED_REKOR_SHA256="$(sha256sum <"$TRUST_DIR/rekor.pub")"
-EXPECTED_BROWSER_MANAGED="$(<"$ROOT_DIR/system/config/chromium/policies/managed/mertensia.json")"
-EXPECTED_BROWSER_RECOMMENDED="$(<"$ROOT_DIR/system/config/chromium/policies/recommended/mertensia.json")"
+EXPECTED_BROWSER_MANAGED="$(<"$ROOT_DIR/system/config/brave/policies/managed/mertensia.json")"
+EXPECTED_BROWSER_RECOMMENDED="$(<"$ROOT_DIR/system/config/brave/policies/recommended/mertensia.json")"
 # Pass only public trust data as arguments, without binding host paths into the
 # image. This also works on SELinux hosts and keeps the expected trust external.
 podman run --rm --entrypoint /usr/bin/bash "$IMAGE" -euc "$(cat <<'BASH'
@@ -56,10 +56,19 @@ podman run --rm --entrypoint /usr/bin/bash "$IMAGE" -euc "$(cat <<'BASH'
   test -L /etc/systemd/system/bootc-status-updated.target.wants/mertensia-update-status.service
   test -L /etc/systemd/user/gnome-session.target.wants/gnome-software.service
   rpm -q gnome-software
-  rpm -q chromium chromium-common
-  test -x /usr/bin/chromium-browser
-  test -x /usr/lib64/chromium-browser/chrome-sandbox
-  grep -Fx '. /etc/chromium/mertensia-wayland.conf' /etc/chromium/chromium.conf
+  rpm -q brave-origin
+  if rpm -q brave-browser >/dev/null; then
+    echo "Payload includes standard Brave" >&2
+    exit 1
+  fi
+  if rpm -q chromium >/dev/null; then
+    echo "Payload includes Fedora Chromium" >&2
+    exit 1
+  fi
+  test -x /usr/bin/brave-origin-stable
+  test -x /opt/brave.com/brave-origin/brave
+  test -x /opt/brave.com/brave-origin/chrome-sandbox
+  test -s /opt/brave.com/brave-origin/LICENSE
   test -f /usr/lib64/gnome-software/plugins-23/libgs_plugin_flatpak.so
   if find /usr/lib64/gnome-software -name 'libgs_plugin_*.so' | grep -E '/libgs_plugin_(packagekit|dnf5|rpm-ostree|fwupd|epiphany|dkms)\.so$'; then
     echo "Payload includes an excluded GNOME Software update backend" >&2
@@ -104,28 +113,35 @@ from pathlib import Path
 import sys
 
 expected_owner = 0
-browser_root = Path("/etc/chromium/policies")
+browser_root = Path("/etc/brave/policies")
 for level, expected in (("managed", sys.argv[3]), ("recommended", sys.argv[4])):
     policy_path = browser_root / level / "mertensia.json"
     actual_values = json.loads(policy_path.read_text())
     expected_values = json.loads(expected)
     if (actual_values != expected_values or
             any(type(actual_values[key]) is not type(value) for key, value in expected_values.items())):
-        raise SystemExit(f"Chromium {level} policies differ from release defaults")
+        raise SystemExit(f"Brave {level} policies differ from release defaults")
     for path in (browser_root, policy_path.parent, policy_path):
         metadata = path.stat()
         mode = 0o755 if path.is_dir() else 0o644
         if path.is_symlink() or metadata.st_uid != expected_owner or metadata.st_gid != expected_owner or metadata.st_mode & 0o7777 != mode:
-            raise SystemExit(f"Unsafe Chromium policy ownership or permissions: {path}")
-desktop = configparser.ConfigParser(interpolation=None)
-desktop.read("/usr/share/applications/chromium-browser.desktop")
-if desktop.get("Desktop Entry", "Exec", fallback="").split()[0:1] != ["/usr/bin/chromium-browser"]:
-    raise SystemExit("Chromium desktop entry does not use the Fedora launcher")
+            raise SystemExit(f"Unsafe Brave policy ownership or permissions: {path}")
+launcher = ["/usr/bin/brave-origin-stable", "--skip-origin-startup-dialog"]
+for name in ("brave-origin.desktop", "com.brave.Origin.desktop"):
+    desktop = configparser.ConfigParser(interpolation=None)
+    desktop.read(Path("/usr/share/applications") / name)
+    for section, arguments in (
+        ("Desktop Entry", ["%U"]),
+        ("Desktop Action new-window", []),
+        ("Desktop Action new-private-window", ["--incognito"]),
+    ):
+        if desktop.get(section, "Exec", fallback="").split() != launcher + arguments:
+            raise SystemExit(f"Incorrect Brave Origin launch command in {name} [{section}]")
 handlers = configparser.ConfigParser(interpolation=None)
 handlers.read("/usr/share/applications/gnome-mimeapps.list")
 for mime in ("x-scheme-handler/http", "x-scheme-handler/https", "text/html", "application/xhtml+xml"):
-    if handlers.get("Default Applications", mime, fallback="") != "chromium-browser.desktop;":
-        raise SystemExit(f"Missing Chromium default handler: {mime}")
+    if handlers.get("Default Applications", mime, fallback="") != "brave-origin.desktop;":
+        raise SystemExit(f"Missing Brave Origin default handler: {mime}")
 if "GREENBOOT_MAX_BOOT_ATTEMPTS=3" not in Path("/etc/greenboot/greenboot.conf").read_text().splitlines():
     raise SystemExit("Payload does not use the release Greenboot retry policy")
 for policy_file, expected in (

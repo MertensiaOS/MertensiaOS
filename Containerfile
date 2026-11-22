@@ -108,13 +108,20 @@ RUN systemctl enable NetworkManager.service && \
     systemctl set-default graphical.target
 
 RUN dnf -y install \
-    chromium \
     flatpak \
     gnome-software \
     ptyxis \
     gnome-text-editor \
     gnome-firmware \
     && dnf clean all
+
+# Only the image build uses Brave's repository. Installed systems use bootc.
+RUN --mount=type=bind,from=payload-files,source=/system/config/brave,target=/run/mertensia-brave,ro \
+    dnf -y --best --repofrompath='brave-browser,https://brave-browser-rpm-release.s3.brave.com/$basearch' \
+      --setopt=brave-browser.gpgcheck=1 \
+      --setopt=brave-browser.gpgkey=file:///run/mertensia-brave/brave-core.asc \
+      --setopt=brave-browser.includepkgs=brave-origin,brave-keyring \
+      install brave-origin && dnf clean all
 
 RUN --mount=type=bind,from=payload-files,target=/run/mertensia-files,ro \
     --mount=type=bind,from=payload-build-scripts,target=/run/mertensia-build,ro \

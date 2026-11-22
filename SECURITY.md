@@ -31,9 +31,9 @@ configuration or integration issue.
 The project is under development and does not define a long-term support
 schedule for older images. Security fixes reach installed systems through newly
 published OS images; rebuilding source or merging a fix alone does not update an
-installed machine. Chromium is part of the OS image, while Flatpak apps have a
-separate update path. See [updates](docs/updates.md),
-[browser updates](docs/chromium.md#updates-and-rollback) and
+installed machine. Brave Origin ships with the OS image and receives browser
+security fixes through signed OS updates. Flatpak apps update separately. See
+[updates](docs/updates.md), [browser updates](docs/brave.md#updates-and-rollback) and
 [release signature verification](docs/releases.md#verification).
 
 Ordinary bugs and usage questions belong in the [support channels](SUPPORT.md).

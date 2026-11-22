@@ -3,9 +3,9 @@
 MertensiaOS uses Fedora's stock GNOME Software for Flatpak apps and bootc for the
 OS. They have separate update controls. Firmware stays manual in GNOME Firmware.
 
-The preinstalled native Chromium browser is part of the OS image. Its security
+The preinstalled native Brave Origin browser is part of the OS image. Its security
 fixes require a maintainer-published release and a restart into that release;
-Software does not update it. See [Chromium](chromium.md).
+Software does not update it. See [Brave Origin](brave.md).
 
 ## Desktop controls
 

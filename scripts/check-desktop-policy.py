@@ -51,7 +51,7 @@ def main() -> None:
     required = {"bootc", "bootupd", "podman", "skopeo", "openssh-clients", "gnome-software",
                 "dnf5daemon-server", "dnf5daemon-server-polkit", "NetworkManager", "NetworkManager-wifi",
                 "google-noto-fonts-all", "glibc-all-langpacks", "fwupd", "gnome-firmware", "gdm",
-                "chromium", "systemd-pam", "systemd-udev", "cryptsetup", "tpm2-tools", "greenboot",
+                "brave-origin", "systemd-pam", "systemd-udev", "cryptsetup", "tpm2-tools", "greenboot",
                 "nfs-client-utils", "nfsv3-client-utils", "nfsv4-client-utils", "rpcbind", "avahi",
                 "oo7-daemon", "pam_oo7"}
     if required - packages:

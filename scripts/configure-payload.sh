@@ -4,11 +4,14 @@ set -euo pipefail
 
 # Each subshell preserves the failure boundary of the original RUN command.
 (
-  chmod 0755 /etc/chromium/policies /etc/chromium/policies/managed /etc/chromium/policies/recommended && \
-      chmod 0644 /etc/chromium/policies/managed/mertensia.json /etc/chromium/policies/recommended/mertensia.json \
-        /etc/chromium/mertensia-wayland.conf /usr/share/applications/gnome-mimeapps.list && \
-      printf '\n# MertensiaOS native Wayland default\n. /etc/chromium/mertensia-wayland.conf\n' >> /etc/chromium/chromium.conf
+  chmod 0755 /etc/brave/policies /etc/brave/policies/managed /etc/brave/policies/recommended && \
+      chmod 0644 /etc/brave/policies/{managed,recommended}/mertensia.json \
+        /usr/share/applications/gnome-mimeapps.list
 )
+
+# Keep both vendor desktop IDs, including the portal alias.
+sed -Ei 's@^Exec=/usr/bin/brave-origin-stable( %U| --incognito)?$@Exec=/usr/bin/brave-origin-stable --skip-origin-startup-dialog\1@' \
+  /usr/share/applications/{brave-origin,com.brave.Origin}.desktop
 
 python3 /run/mertensia-build/clean-desktop.py
 python3 /run/mertensia-build/check-desktop-policy.py

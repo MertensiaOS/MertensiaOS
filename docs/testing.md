@@ -141,11 +141,11 @@ Agent prerequisite failures appear in the virtio handshake and serial log;
 timeouts identify the boot stage and the diagnostic files to inspect. The normal
 production ISO keeps its regular graphical boot configuration.
 
-The installed-system run also requires the unprivileged headless Chromium probe:
-effective policies, native namespace/seccomp sandboxing and active site
-isolation. It opens no debugging TCP port. Graphical desktop integration,
+The installed-system run also requires the unprivileged headless Brave Origin probe:
+effective policies, native namespace/seccomp sandboxing, active site isolation
+and HTML rendering. It opens no debugging TCP port. Graphical desktop integration,
 two-account browser data persistence and live Safe Browsing checks remain
-[explicit interactive acceptance checks](chromium.md#acceptance-checks).
+[explicit interactive acceptance checks](brave.md#acceptance-checks).
 
 The core run asserts:
 

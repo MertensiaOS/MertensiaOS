@@ -69,11 +69,11 @@ sessions, excluding setup and the live installer. GSettings defaults enable
 updates and notifications while retaining user preferences. Installed Flatpaks
 live in persistent `/var/lib/flatpak` or encrypted user homes.
 
-Fedora Chromium is a native payload package and follows bootc OS updates.
-Image-owned browser policies live under `system/config/chromium/`; the Fedora
-launcher sources a MertensiaOS Wayland hook after its packaged configuration.
-A GNOME MIME defaults file selects the packaged desktop entry without changing
-per-user preferences. See [Chromium](chromium.md) for policies and validation.
+The native Brave Origin stable RPM is installed from its signed upstream
+repository during the payload build and follows bootc OS updates. Browser
+policies live under `system/config/brave/`. GNOME MIME defaults select the
+upstream desktop entry and respect per-user preferences. See
+[Brave Origin](brave.md) for policies and validation.
 
 `mertensia.updates` is a small guard around `bootc upgrade`, invoked by the
 packaged bootc timer/service with image-owned drop-ins. It defers staging until

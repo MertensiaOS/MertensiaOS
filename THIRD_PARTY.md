@@ -12,6 +12,7 @@ fonts or packages included in the OS image.
 | `system/patches/skopeo-fulcio-build-signer.patch` | Changes to Fedora's Skopeo source and a backport from [containers/image](https://github.com/podman-container-tools/container-libs/pull/625), licensed Apache-2.0. [License text](LICENSES/Apache-2.0.txt). |
 | `branding/fonts/Figtree-Variable.ttf` | Copyright 2022 The Figtree Project Authors; [SIL Open Font License 1.1](branding/fonts/OFL.txt). [Upstream Figtree](https://github.com/erikdkennedy/figtree). |
 | Fedora packages and their assets | Retain each package's licenses and notices. In particular, the Plymouth spinner/prompt assets copied during image construction remain Fedora package assets; see [Plymouth integration](docs/plymouth.md#assets-and-image-integration). |
+| Brave Origin stable RPM | The unmodified upstream package retains its license and third-party notices in `/opt/brave.com/brave-origin/LICENSE` and `brave://credits`. Brave's source is [MPL 2.0](https://www.mozilla.org/en-US/MPL/2.0/), with bundled components under their respective licenses. See [Brave Origin source and redistribution](docs/brave.md#source-and-redistribution). |
 
 The build scripts rebuild Fedora source RPMs for AccountsService, GNOME
 Settings and Skopeo with the checked-in patches and helper code. See the

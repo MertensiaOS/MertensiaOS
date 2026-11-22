@@ -9,7 +9,7 @@ ARG INTEGRATION_PUBLIC_KEY_B64=
 ARG INTEGRATION_HEALTH_MODE=none
 ARG INTEGRATION_GRAPHICAL_BOOT=0
 COPY tests/integration/guest.py /usr/libexec/mertensia-integration-agent
-COPY tests/integration/chromium_probe.py /usr/share/mertensia-integration/chromium_probe.py
+COPY tests/integration/brave_probe.py /usr/share/mertensia-integration/brave_probe.py
 COPY tests/integration/contract.json /usr/share/mertensia-integration/contract.json
 COPY tests/integration/iso.yaml /usr/share/mertensia-integration/iso.yaml
 COPY installer/config/iso.yaml /usr/share/mertensia-integration/graphical-iso.yaml

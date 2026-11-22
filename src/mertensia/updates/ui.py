@@ -63,7 +63,7 @@ class UpdatesView(Adw.Bin):
         self.refresh_button.connect("clicked", self.refresh)
         self.header.pack_start(self.refresh_button)
         toolbar.add_top_bar(self.header)
-        self.page = Adw.PreferencesPage(title="OS Updates", description="OS updates include Chromium and take effect after a restart.")
+        self.page = Adw.PreferencesPage(title="OS Updates", description="OS updates include Brave Origin and take effect after a restart.")
         toolbar.set_content(self.page)
         self.toasts.set_child(toolbar)
         self.set_child(self.toasts)

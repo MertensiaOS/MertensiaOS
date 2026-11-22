@@ -663,8 +663,8 @@ def run_suite(args, work, firmware, results):
 
         results.step("Boot installed disk without installation media", boot_installed)
         original = results.step("Verify TPM unlock, recovery key, enforcing SELinux and GDM", lambda: guest.command("root-checks", recovery_key=recovery))
-        results.step("Verify Chromium policies, native sandbox and site isolation as an unprivileged user",
-                     lambda: guest.command("chromium-checks"))
+        results.step("Verify Brave Origin policies, native sandbox and site isolation as an unprivileged user",
+                     lambda: guest.command("brave-checks"))
         if args.require_greenboot_recovery:
             if original["status"].get("status", {}).get("rollback"):
                 raise HarnessError("first-install failure test requires no previous deployment")
@@ -794,10 +794,10 @@ def run_suite(args, work, firmware, results):
         guest = None
         results.skip("Graphical login and polkit UI", "PAM and helper integration are automated; see docs/testing.md for interactive GNOME/polkit acceptance checks")
         results.skip("GNOME recovery notification appearance", "event publication is automated; real-session appearance and per-user delivery require interactive acceptance")
-        results.skip("Chromium graphical integration and per-user profile persistence",
-                     "headless policy/sandbox checks are automated; see docs/chromium.md for logged-in GNOME acceptance")
-        results.skip("Chromium live Safe Browsing protection",
-                     "requires successful network-backed database updates and harmless phishing/malware test interstitials; see docs/chromium.md")
+        results.skip("Brave Origin graphical integration and per-user profile persistence",
+                     "headless policy/sandbox checks are automated; see docs/brave.md for logged-in GNOME acceptance")
+        results.skip("Brave Origin live Safe Browsing protection",
+                     "requires successful network-backed database updates and harmless phishing/malware test interstitials; see docs/brave.md")
     finally:
         if guest:
             guest.close()

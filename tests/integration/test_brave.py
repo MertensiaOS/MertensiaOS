@@ -4,10 +4,10 @@ import copy
 import unittest
 from unittest import mock
 
-from integration import chromium_probe as probe, guest
+from integration import brave_probe as probe, guest
 
 
-class ChromiumProbeTests(unittest.TestCase):
+class BraveProbeTests(unittest.TestCase):
     def policies(self):
         return {"chromePolicies": {
             name: {"value": value, "level": level, "scope": "machine", "source": "platform"}
@@ -15,7 +15,7 @@ class ChromiumProbeTests(unittest.TestCase):
         }}
 
     def test_accepts_effective_machine_policies(self):
-        self.assertEqual(len(probe.validate_policies(self.policies())), 8)
+        self.assertEqual(len(probe.validate_policies(self.policies())), 6)
 
     def test_rejects_missing_policy_and_ambiguous_exports(self):
         export = self.policies()
@@ -71,7 +71,7 @@ class ChromiumProbeTests(unittest.TestCase):
              mock.patch.object(guest.subprocess, "run", return_value=mock.Mock(returncode=2)), \
              mock.patch.object(guest, "run", side_effect=run):
             with self.assertRaisesRegex(RuntimeError, "browser failed"):
-                guest.chromium_checks()
+                guest.brave_checks()
         self.assertEqual(commands[-1], ["userdel", "--remove", "mertensia-browser-test"])
         browser_command = commands[1]
         self.assertIn("-u", browser_command)
@@ -81,11 +81,11 @@ class ChromiumProbeTests(unittest.TestCase):
     def test_guest_refuses_live_image_and_existing_account(self):
         with mock.patch.object(guest, "role", return_value="live"), mock.patch.object(guest, "run") as run:
             with self.assertRaisesRegex(RuntimeError, "installed system"):
-                guest.chromium_checks()
+                guest.brave_checks()
             run.assert_not_called()
         with mock.patch.object(guest, "role", return_value="payload"), \
              mock.patch.object(guest.subprocess, "run", return_value=mock.Mock(returncode=0)), \
              mock.patch.object(guest, "run") as run:
             with self.assertRaisesRegex(RuntimeError, "already exists"):
-                guest.chromium_checks()
+                guest.brave_checks()
             run.assert_not_called()
