@@ -177,9 +177,13 @@ for (let active of [false, true]) {
         for name in ("bootc", "podman", "skopeo", "openssh-clients", "gnome-software",
                      "dnf5daemon-server", "dnf5daemon-server-polkit", "NetworkManager",
                      "google-noto-fonts-all", "glibc-all-langpacks", "fwupd", "systemd-pam",
-                     "nfs-client-utils", "rpcbind", "avahi"):
+                     "nfs-client-utils", "rpcbind", "avahi", "firewalld", "passim-libs", "sos"):
             with self.subTest(name=name):
                 self.assertFalse(policy.excluded(name))
+
+    def test_passim_daemon_is_removed_and_masked(self):
+        self.assertTrue(policy.excluded("passim"))
+        self.assertIn("passim.service", policy.MASKED)
 
     def test_polkit_denies_dnf_actions_without_affecting_other_desktop_actions(self):
         # Execute the actual rule with GJS (SpiderMonkey), not text matching.

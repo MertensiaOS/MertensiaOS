@@ -155,7 +155,8 @@ The core run asserts:
    temporary key and cleans up target mounts/mappings.
 3. The installed disk boots with persistent TPM state, root is encrypted,
    automatic TPM unlock succeeds, the saved recovery key independently unlocks
-   root, installed SELinux enforces, and GDM is active.
+   root, installed SELinux enforces, and GDM is active. Firewalld is active with
+   its nftables table loaded and only the DHCPv6 client service in the default zone.
    Greenboot passes before any accounts exist. A later reboot with networking
    disabled must also pass; networking is restored before registry tests.
 4. The real account helper creates an initial administrator and an additional

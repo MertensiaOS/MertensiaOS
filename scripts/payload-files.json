@@ -4,6 +4,10 @@
     "/usr/lib/pam.d/mertensia-password"
   ],
   [
+    "system/config/firewalld/mertensia-public.xml",
+    "/usr/lib/firewalld/zones/mertensia-public.xml"
+  ],
+  [
     "system/config/brave/policies",
     "/etc/brave/policies"
   ],

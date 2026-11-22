@@ -50,6 +50,7 @@ FROM quay.io/fedora/fedora-bootc:45
 RUN dnf -y install \
     openssl \
     fwupd \
+    firewalld \
     google-noto-fonts-all \
     glibc-all-langpacks \
     iso-codes \

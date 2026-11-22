@@ -46,19 +46,20 @@ def main() -> None:
     for name in packages:
         if re.fullmatch(r"openssh-server|sssd(?:-.*)?|adcli(?:-selinux)?|qemu-user-static(?:-.*)?|"
                         r"NetworkManager-cloud-setup|cloud-utils-growpart|WALinuxAgent-udev|gnome-tour|nfs-utils|"
-                        r"gnome-software-(?:rpm-ostree|fedora-langpacks)", name):
+                        r"gnome-software-(?:rpm-ostree|fedora-langpacks)|passim", name):
             raise SystemExit(f"Excluded desktop package: {name}")
     required = {"bootc", "bootupd", "podman", "skopeo", "openssh-clients", "gnome-software",
                 "dnf5daemon-server", "dnf5daemon-server-polkit", "NetworkManager", "NetworkManager-wifi",
                 "google-noto-fonts-all", "glibc-all-langpacks", "fwupd", "gnome-firmware", "gdm",
                 "brave-origin", "systemd-pam", "systemd-udev", "cryptsetup", "tpm2-tools", "greenboot",
                 "nfs-client-utils", "nfsv3-client-utils", "nfsv4-client-utils", "rpcbind", "avahi",
-                "oo7-daemon", "pam_oo7"}
+                "oo7-daemon", "pam_oo7", "firewalld", "passim-libs"}
     if required - packages:
         raise SystemExit(f"Missing retained packages: {sorted(required - packages)}")
     masked = {"sshd.service", "sshd.socket", "sshd@.service", "sssd.service", "nfs-server.service",
               "nm-cloud-setup.service", "nm-cloud-setup.timer", "dnf5daemon-server.service",
-              "flatpak-add-fedora-repos.service", "rpm-ostree-countme.timer", "rpm-ostree-countme.service"}
+              "flatpak-add-fedora-repos.service", "rpm-ostree-countme.timer", "rpm-ostree-countme.service",
+              "passim.service"}
     units = Path("/etc/systemd/system")
     for name in masked:
         path = units / name
@@ -68,6 +69,16 @@ def main() -> None:
         link = units / f"{target}.wants/nfs-client.target"
         if not link.is_symlink() or str(link.readlink()) != "/usr/lib/systemd/system/nfs-client.target":
             raise SystemExit(f"Missing NFS client activation link: {link}")
+    firewall_link = units / "multi-user.target.wants/firewalld.service"
+    if not firewall_link.is_symlink() or str(firewall_link.readlink()) != "/usr/lib/systemd/system/firewalld.service":
+        raise SystemExit(f"Missing firewalld activation link: {firewall_link}")
+    subprocess.run(["firewall-offline-cmd", "--check-config"], check=True)
+    default_zone = subprocess.check_output(["firewall-offline-cmd", "--get-default-zone"], text=True).strip()
+    if default_zone != "mertensia-public":
+        raise SystemExit(f"Unexpected default firewall zone: {default_zone}")
+    services = subprocess.check_output(["firewall-offline-cmd", "--list-services"], text=True).split()
+    if services != ["dhcpv6-client"]:
+        raise SystemExit(f"Unexpected services in the default firewall zone: {services}")
     for link in units.rglob("*"):
         if link.is_symlink() and link.parent.suffix in (".wants", ".requires"):
             if link.name in masked | {"rpcbind.socket", "rpcbind.service"}:
@@ -76,6 +87,8 @@ def main() -> None:
         text = path.read_text()
         if "org.rpm.dnf.v0" in text or "dnf5daemon-server" in text:
             raise SystemExit(f"Unwanted DNF D-Bus activation: {path}")
+        if "org.freedesktop.Passim" in text:
+            raise SystemExit(f"Unwanted Passim D-Bus activation: {path}")
     assert not Path("/usr/share/polkit-1/rules.d/org.rpm.dnf.v0.rules").exists()
     assert Path("/usr/share/polkit-1/rules.d/00-mertensia-no-host-packages.rules").is_file()
     assert Path("/usr/share/mertensia/homed-accounts-only").is_file()

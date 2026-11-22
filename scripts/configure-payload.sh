@@ -14,6 +14,8 @@ sed -Ei 's@^Exec=/usr/bin/brave-origin-stable( %U| --incognito)?$@Exec=/usr/bin/
   /usr/share/applications/{brave-origin,com.brave.Origin}.desktop
 
 python3 /run/mertensia-build/clean-desktop.py
+firewall-offline-cmd --set-default-zone=mertensia-public
+systemctl enable firewalld.service
 python3 /run/mertensia-build/check-desktop-policy.py
 
 (

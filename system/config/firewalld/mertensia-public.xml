@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<zone>
+  <short>MertensiaOS Public</short>
+  <description>Default for networks without an explicitly assigned zone.</description>
+  <service name="dhcpv6-client"/>
+</zone>

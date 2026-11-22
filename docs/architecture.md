@@ -45,7 +45,8 @@ maps these files to the paths required by each system component.
 
 Both builds run `scripts/clean-desktop.py` after RPM installation. It removes
 the SSH server, domain authentication, cloud helpers, foreign-architecture
-emulators, NFS server, GNOME Tour and unused Software plugins. RPM checks the
+emulators, NFS server, GNOME Tour, unused Software plugins and the Passim
+LAN cache daemon. Fedora's `passim-libs` remains for fwupd. RPM checks the
 exact removal set before DNF runs; dependency cascades fail the build.
 `scripts/check-desktop-policy.py` verifies package retention and activation paths.
 
@@ -56,10 +57,11 @@ discovery, the full Noto collection and language packs remain. Cleanup restores
 `nfs-client.target` after NFS server erasure disables it; rpcbind stays available
 on demand without boot enablement.
 
-The image currently provides no managed inbound firewall policy: firewalld is
-absent and nftables.service is disabled. Runtime rules and network exposure
-require verification in a booted system. Bootc preserves local `/etc` overrides
-on upgrades, so changed image defaults also require upgrade acceptance testing.
+Firewalld starts at boot and uses nftables. Network connections without an
+explicit zone use `mertensia-public`, which allows DHCPv6 client traffic and
+keeps inbound services such as mDNS and remote desktop closed by default.
+Administrators can select a different zone per NetworkManager connection for
+trusted networks. Bootc preserves local `/etc` overrides on upgrades.
 
 Flatpak's signed Flathub remote lives in `system/config/flatpak/` and is shipped
 under `/usr/share/flatpak/`. Fedora's stock GNOME Software owns application

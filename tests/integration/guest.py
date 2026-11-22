@@ -211,7 +211,11 @@ def root_checks(recovery_key, *, expect_tpm=True, expect_offline=False):
     wait_for_gdm()
     health = boot_health()
     require(health["healthy"], "installed system did not pass Greenboot: " + json.dumps(health))
-    return {"secure_boot": True, "selinux_enforcing": True, "tpm_unlock": expect_tpm,
+    require(run(["systemctl", "is-active", "firewalld.service"]) == "active", "firewalld did not start at boot")
+    require(run(["firewall-cmd", "--get-default-zone"]) == "mertensia-public", "unexpected runtime firewall zone")
+    require(run(["firewall-cmd", "--list-services"]) == "dhcpv6-client", "unexpected services in the default firewall zone")
+    run(["nft", "list", "table", "inet", "firewalld"])
+    return {"secure_boot": True, "selinux_enforcing": True, "firewall_active": True, "tpm_unlock": expect_tpm,
             "recovery_key_unlock": True, "gdm_active": True, "greenboot_healthy": True,
             "offline_checked": expect_offline, **boot_identity()}
 

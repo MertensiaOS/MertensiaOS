@@ -12,13 +12,14 @@ EXCLUDED = (
     "openssh-server", "sssd", "sssd-*", "adcli", "adcli-selinux",
     "qemu-user-static", "qemu-user-static-*", "NetworkManager-cloud-setup",
     "cloud-utils-growpart", "WALinuxAgent-udev", "gnome-tour", "nfs-utils",
-    "gnome-software-rpm-ostree", "gnome-software-fedora-langpacks",
+    "gnome-software-rpm-ostree", "gnome-software-fedora-langpacks", "passim",
 )
 MASKED = (
     "sshd.service", "sshd.socket", "sshd@.service", "sssd.service",
     "nm-cloud-setup.service", "nm-cloud-setup.timer", "nfs-server.service",
     "dnf5daemon-server.service", "flatpak-add-fedora-repos.service",
     "rpm-ostree-countme.timer", "rpm-ostree-countme.service",
+    "passim.service",
 )
 
 
