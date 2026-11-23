@@ -39,9 +39,17 @@ python3 /run/mertensia-build/check-desktop-policy.py
 )
 
 (
+  # With one deployment, GRUB menu entry 1 can be UEFI Firmware Settings.
+  # Keep the exhausted counter for Greenboot, but only select a fallback when armed.
+  fragment=/usr/lib/bootupd/grub2-static/configs.d/08_greenboot.cfg
+  if ! grep -Fxq '    set default=1' "$fragment"; then
+    echo 'Unexpected Greenboot GRUB fragment; review the rollback guard' >&2
+    exit 1
+  fi
+  sed -i '/^    set default=1$/c\    if [ -n "${greenboot_next_deployment_id}" ]; then\n      set default=1\n    fi' "$fragment"
+
   chmod 0755 /usr/libexec/mertensia-boot-health /usr/libexec/mertensia-boot-health-notify \
         /usr/lib/greenboot/check/required.d/50-mertensia-desktop.sh && \
-      test -s /usr/lib/bootupd/grub2-static/configs.d/08_greenboot.cfg && \
       ! rpm -q greenboot-default-health-checks && \
       systemctl disable greenboot-healthcheck.service && \
       systemctl enable greenboot-healthcheck.service mertensia-boot-health-status.service && \

@@ -45,11 +45,14 @@ permanent. The automatic recovery tests exercise both paths.
 
 A fresh installation has no previous deployment to restore. A failed fallback
 can also require manual intervention. These cases must stop after bounded
-retries; the release tests explicitly check them. Firmware failures, an
-unavailable encrypted root or a hung kernel can prevent Greenboot from running.
-A hang may require a reset before another attempt, and a kernel panic is not
-equivalent to GRUB failing to load a boot entry. Recovery is not a watchdog or a
-guarantee against every pre-userspace failure.
+retries. The installer writes a GRUB configuration that selects the previous
+menu entry after retry exhaustion only when Greenboot has armed a rollback.
+The release tests check that a repaired installation boots after manual
+intervention. Firmware failures, an unavailable encrypted root or a hung
+kernel can prevent Greenboot from running. A hang may require a reset before
+another attempt, and a kernel panic is not equivalent to GRUB failing to load
+a boot entry. Recovery is not a watchdog or a guarantee against every
+pre-userspace failure.
 
 Rollback preserves `/var` and encrypted homes. Keep separate data backups. The
 root recovery key and TPM recovery procedures remain described in
