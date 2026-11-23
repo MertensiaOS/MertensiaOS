@@ -46,11 +46,10 @@ Run **Publish signed release** from `main` in GitHub Actions and choose channel
 `testing` or `latest`. Leave the version field blank to generate a version such
 as `45.20261123.12.1` from the OS version, UTC date, workflow run number and run
 attempt. To choose the version yourself, supply an unused container tag. The
-release workflow requires successful **Check source and build payload** and **ISO
-installation smoke test** runs triggered by the push to `main` for the exact
-commit being released. The release waits up to 180 minutes for both runs to
-appear and pass. If either run finishes unsuccessfully or the wait times out,
-resolve the issue and retry the release. The release workflow then:
+release workflow waits up to 180 minutes for **Check source and build payload**
+to pass on the `main` push for the exact commit being released. If that run
+fails or the wait times out, resolve the issue and retry the release. The
+release workflow then:
 
 1. Builds, rechunks and validates a clean payload, then builds separately published, signed update and recovery fixtures from that rechunked payload.
 2. Exercises actual ISO installation, recovery boot, accounts, signed upgrade and rollback, then validates the clean payload, rejecting development/test access and altered trust configuration.
