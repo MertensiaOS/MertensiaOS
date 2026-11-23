@@ -25,32 +25,28 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 185
     steps:
-      - name: Wait for successful main push checks for the release commit
+      - name: Wait for successful source and payload CI for the release commit
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           deadline=$((SECONDS + 180 * 60))
           while (( SECONDS < deadline )); do
-            pending=false
-            for workflow in ci.yml iso-smoke.yml; do
-              run=$(gh api --method GET "repos/$GITHUB_REPOSITORY/actions/workflows/$workflow/runs" \
-                -f branch=main -f event=push -f "head_sha=$GITHUB_SHA" \
-                --jq '.workflow_runs | max_by(.run_number) | if . == null then "missing" else "\(.status)/\(.conclusion // "none") \(.html_url)" end')
-              read -r result url <<< "$run"
-              case "$result" in
-                completed/success) echo "$workflow passed for $GITHUB_SHA: $url" ;;
-                completed/*)
-                  echo "::error::$workflow failed for $GITHUB_SHA: $result${url:+ $url}. Resolve the failure and retry."
-                  exit 1 ;;
-                *)
-                  echo "Waiting for $workflow for $GITHUB_SHA: $result${url:+ $url}"
-                  pending=true ;;
-              esac
-            done
-            if [[ "$pending" == false ]]; then exit 0; fi
+            run=$(gh api --method GET "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs" \
+              -f branch=main -f event=push -f "head_sha=$GITHUB_SHA" \
+              --jq '.workflow_runs | max_by(.run_number) | if . == null then "missing" else "\(.status)/\(.conclusion // "none") \(.html_url)" end')
+            read -r result url <<< "$run"
+            case "$result" in
+              completed/success)
+                echo "ci.yml passed for $GITHUB_SHA: $url"
+                exit 0 ;;
+              completed/*)
+                echo "::error::ci.yml failed for $GITHUB_SHA: $result${url:+ $url}. Resolve the failure and retry."
+                exit 1 ;;
+              *) echo "Waiting for ci.yml for $GITHUB_SHA: $result${url:+ $url}" ;;
+            esac
             sleep 60
           done
-          echo "::error::Timed out waiting for main push checks for $GITHUB_SHA after 180 minutes."
+          echo "::error::Timed out waiting for source and payload CI for $GITHUB_SHA after 180 minutes."
           exit 1
   release:
     if: github.ref == 'refs/heads/main'
