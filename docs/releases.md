@@ -48,9 +48,9 @@ as `45.20261123.12.1` from the OS version, UTC date, workflow run number and run
 attempt. To choose the version yourself, supply an unused container tag. The
 release workflow requires successful **Check source and build payload** and **ISO
 installation smoke test** runs triggered by the push to `main` for the exact
-commit being released. Wait for both runs to pass before dispatching. If the
-release stops at this check, resolve any CI failures and retry after both runs
-pass. The release workflow then:
+commit being released. The release waits up to 180 minutes for both runs to
+appear and pass. If either run finishes unsuccessfully or the wait times out,
+resolve the issue and retry the release. The release workflow then:
 
 1. Builds, rechunks and validates a clean payload, then builds separately published, signed update and recovery fixtures from that rechunked payload.
 2. Exercises actual ISO installation, recovery boot, accounts, signed upgrade and rollback, then validates the clean payload, rejecting development/test access and altered trust configuration.

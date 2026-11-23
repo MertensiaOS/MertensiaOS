@@ -23,22 +23,35 @@ jobs:
     permissions:
       actions: read
     runs-on: ubuntu-24.04
+    timeout-minutes: 185
     steps:
-      - name: Require successful main push checks for the release commit
+      - name: Wait for successful main push checks for the release commit
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          for workflow in ci.yml iso-smoke.yml; do
-            run=$(gh api --method GET "repos/$GITHUB_REPOSITORY/actions/workflows/$workflow/runs" \
-              -f branch=main -f event=push -f "head_sha=$GITHUB_SHA" \
-              --jq '.workflow_runs | max_by(.run_number) | if . == null then "missing" else "\(.status)/\(.conclusion // "none") \(.html_url)" end')
-            read -r result url <<< "$run"
-            if [[ "$result" != completed/success ]]; then
-              echo "::error::$workflow must pass on the main push for $GITHUB_SHA. Found $result${url:+ $url}. Wait for the run or resolve its failure before retrying."
-              exit 1
-            fi
-            echo "$workflow passed for $GITHUB_SHA: $url"
+          deadline=$((SECONDS + 180 * 60))
+          while (( SECONDS < deadline )); do
+            pending=false
+            for workflow in ci.yml iso-smoke.yml; do
+              run=$(gh api --method GET "repos/$GITHUB_REPOSITORY/actions/workflows/$workflow/runs" \
+                -f branch=main -f event=push -f "head_sha=$GITHUB_SHA" \
+                --jq '.workflow_runs | max_by(.run_number) | if . == null then "missing" else "\(.status)/\(.conclusion // "none") \(.html_url)" end')
+              read -r result url <<< "$run"
+              case "$result" in
+                completed/success) echo "$workflow passed for $GITHUB_SHA: $url" ;;
+                completed/*)
+                  echo "::error::$workflow failed for $GITHUB_SHA: $result${url:+ $url}. Resolve the failure and retry."
+                  exit 1 ;;
+                *)
+                  echo "Waiting for $workflow for $GITHUB_SHA: $result${url:+ $url}"
+                  pending=true ;;
+              esac
+            done
+            if [[ "$pending" == false ]]; then exit 0; fi
+            sleep 60
           done
+          echo "::error::Timed out waiting for main push checks for $GITHUB_SHA after 180 minutes."
+          exit 1
   release:
     if: github.ref == 'refs/heads/main'
     needs: checks
