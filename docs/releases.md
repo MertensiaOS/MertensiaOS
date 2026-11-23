@@ -42,9 +42,11 @@ Complete the graphical and live Safe Browsing
 [Brave Origin acceptance checks](brave.md#acceptance-checks) before promoting a
 release; the headless VM probe does not cover these services.
 
-Run **Publish signed release** from GitHub Actions with a new version, such as
-`45.20261005.1`, and channel `testing` or `latest`, from `main`. The workflow
-requires the source tests and payload build first, then:
+Run **Publish signed release** from `main` in GitHub Actions and choose channel
+`testing` or `latest`. Leave the version field blank to generate a version such
+as `45.20261123.12.1` from the OS version, UTC date, workflow run number and run
+attempt. To choose the version yourself, supply an unused container tag. The
+workflow requires the source tests and payload build first, then:
 
 1. Builds, rechunks and validates a clean payload, then builds separately published, signed update and recovery fixtures from that rechunked payload.
 2. Exercises actual ISO installation, recovery boot, accounts, signed upgrade and rollback, then validates the clean payload, rejecting development/test access and altered trust configuration.
@@ -53,11 +55,12 @@ requires the source tests and payload build first, then:
 5. Builds the production ISO from that signed digest and uploads the ISO, checksum file and signed bundle as workflow artifacts.
 
 It refuses an existing version and serializes workflow releases. A failed
-signature or policy check leaves the update channel untouched; an incomplete
-version publication requires a new version on retry. A failure building the ISO
-after promotion leaves the verified payload published, so inspect the run before
-retrying. Workflow artifacts are retained for 30 days; download approved releases
-to your long-term distribution location.
+signature or policy check leaves the update channel untouched. A rerun generates
+a fresh version for the new attempt. If you supplied a manual tag and it was
+already published, start a new run with a fresh tag or leave the field blank.
+A failure building the ISO after promotion leaves the verified payload published,
+so inspect the run before retrying. Workflow artifacts are retained for 30 days;
+download approved releases to your long-term distribution location.
 
 ## Verification
 
