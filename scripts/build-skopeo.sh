@@ -24,5 +24,7 @@ path.write_text(spec.replace("\n%description\n", "\nPatch9999: skopeo-fulcio-bui
 PY
 
 dnf -y builddep "$build_root/SPECS/skopeo.spec"
-rpmbuild --define "_topdir $build_root" -bb "$build_root/SPECS/skopeo.spec"
+# Keep Go's build cache in the writable RPM workspace even if /root is unavailable.
+GOCACHE="$build_root/go-build-cache" \
+    rpmbuild --define "_topdir $build_root" -bb "$build_root/SPECS/skopeo.spec"
 cp "$build_root"/RPMS/*/skopeo-[0-9]*.rpm /out/
