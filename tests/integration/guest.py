@@ -668,8 +668,13 @@ def brave_checks():
     TEST_STATE.mkdir(parents=True, exist_ok=True)
     run(["useradd", "--system", "--no-log-init", "--create-home", "--home-dir", "/var/lib/mertensia-integration/browser-home", name])
     try:
-        result = run(["runuser", "-u", name, "--", "env", "-u", "WAYLAND_DISPLAY",
-                      "/usr/bin/python3", "-I",
+        # Detached browser helpers can outlive the probe. Wait for systemd to
+        # stop the entire control group before removing the disposable user.
+        result = run(["systemd-run", "--quiet", "--wait", "--pipe", "--collect",
+                      "--service-type=exec", f"--uid={name}",
+                      "--property=KillMode=control-group", "--property=RuntimeMaxSec=150s",
+                      "--property=TimeoutStopSec=10s", "--property=UnsetEnvironment=WAYLAND_DISPLAY",
+                      "--", "/usr/bin/python3", "-I",
                       "/usr/share/mertensia-integration/brave_probe.py"], timeout=180)
         return json.loads(result)
     finally:

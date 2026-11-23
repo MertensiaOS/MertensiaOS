@@ -62,7 +62,7 @@ class BraveProbeTests(unittest.TestCase):
 
         def run(argv, **kwargs):
             commands.append(argv)
-            if argv[0] == "runuser":
+            if argv[0] == "systemd-run":
                 raise RuntimeError("browser failed")
             return ""
 
@@ -74,8 +74,9 @@ class BraveProbeTests(unittest.TestCase):
                 guest.brave_checks()
         self.assertEqual(commands[-1], ["userdel", "--remove", "mertensia-browser-test"])
         browser_command = commands[1]
-        self.assertIn("-u", browser_command)
-        self.assertIn("mertensia-browser-test", browser_command)
+        self.assertIn("--uid=mertensia-browser-test", browser_command)
+        self.assertIn("--wait", browser_command)
+        self.assertIn("--property=KillMode=control-group", browser_command)
         self.assertNotIn("--no-sandbox", browser_command)
 
     def test_guest_refuses_live_image_and_existing_account(self):
