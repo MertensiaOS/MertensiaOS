@@ -608,6 +608,49 @@ class ReleaseScriptTests(unittest.TestCase):
         self.assertIn("Could not check", result.stderr)
         self.assert_no_push_or_promotion()
 
+    def test_workflow_resolves_one_version_for_publication_and_artifacts(self):
+        workflow = yaml.load((ROOT / ".github/workflows/release.yml").read_text(), Loader=yaml.BaseLoader)
+        self.assertEqual(workflow["on"]["workflow_dispatch"]["inputs"]["version"]["required"], "false")
+        steps = workflow["jobs"]["release"]["steps"]
+        resolve = next(step for step in steps if step.get("id") == "version")
+        publish = next(step for step in steps if step.get("id") == "publish")
+        upload = next(step for step in steps if step.get("name") == "Save installer and signed checksums")
+        self.assertEqual(publish["env"]["RELEASE_VERSION"], "${{ steps.version.outputs.version }}")
+        self.assertEqual(upload["with"]["name"], "mertensiaos-${{ steps.version.outputs.version }}")
+
+        date = self.bin / "date"
+        date.write_text('#!/bin/bash\n[[ "$*" == "-u +%Y%m%d" ]] && printf "20261123\\n"\n')
+        date.chmod(0o755)
+        os_release = ROOT / "system/config/identity/os-release"
+        version_id = next(line.split("=", 1)[1] for line in os_release.read_text().splitlines()
+                          if line.startswith("VERSION_ID="))
+        output = self.work / "github-output"
+
+        for override, attempt, expected in (
+            ("", "1", f"{version_id}.20261123.12.1"),
+            ("", "2", f"{version_id}.20261123.12.2"),
+            ("45.20261123.1", "1", "45.20261123.1"),
+            ("testing", "1", None),
+            ("45.1\nversion=latest", "1", None),
+        ):
+            with self.subTest(override=override, attempt=attempt):
+                output.unlink(missing_ok=True)
+                result = subprocess.run(
+                    ["bash", "-e", "-c", resolve["run"]], cwd=ROOT,
+                    env=self.environment | {
+                        "VERSION_OVERRIDE": override,
+                        "GITHUB_RUN_NUMBER": "12",
+                        "GITHUB_RUN_ATTEMPT": attempt,
+                        "GITHUB_OUTPUT": str(output),
+                    }, capture_output=True, text=True, timeout=20,
+                )
+                if expected is None:
+                    self.assertEqual(result.returncode, 2, result.stderr)
+                    self.assertFalse(output.exists())
+                else:
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    self.assertEqual(output.read_text(), f"version={expected}\n")
+
     def test_release_gates_and_publishes_the_rechunked_payload(self):
         workflow = yaml.safe_load((ROOT / ".github/workflows/release.yml").read_text())
         steps = workflow["jobs"]["release"]["steps"]

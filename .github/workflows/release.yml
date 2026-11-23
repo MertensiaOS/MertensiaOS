@@ -3,8 +3,8 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'New immutable version, e.g. 45.20261005.1'
-        required: true
+        description: 'Optional immutable version override (leave blank to generate)'
+        required: false
         type: string
       channel:
         description: 'Update channel to promote after verification'
@@ -35,6 +35,23 @@ jobs:
     timeout-minutes: 240
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Resolve release version
+        id: version
+        env:
+          VERSION_OVERRIDE: ${{ inputs.version }}
+        run: |
+          version="$VERSION_OVERRIDE"
+          if [[ -z "$version" ]]; then
+            unset VERSION_ID
+            source system/config/identity/os-release
+            version="${VERSION_ID:?Missing OS VERSION_ID}.$(date -u +%Y%m%d).${GITHUB_RUN_NUMBER:?}.${GITHUB_RUN_ATTEMPT:?}"
+          fi
+          if [[ ! "$version" =~ ^[a-zA-Z0-9_][a-zA-Z0-9_.-]{0,127}$ || "$version" == latest || "$version" == testing ]]; then
+            echo "Expected a valid container tag other than latest or testing" >&2
+            exit 2
+          fi
+          printf 'version=%s\n' "$version" >> "$GITHUB_OUTPUT"
+          printf 'Release version: %s\n' "$version"
       - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
         with:
           cosign-release: v3.0.6
@@ -96,7 +113,7 @@ jobs:
       - name: Publish, sign, verify and promote
         id: publish
         env:
-          RELEASE_VERSION: ${{ inputs.version }}
+          RELEASE_VERSION: ${{ steps.version.outputs.version }}
           RELEASE_CHANNEL: ${{ inputs.channel }}
           REGISTRY_AUTH_FILE: /root/.docker/config.json
         run: sudo --preserve-env=ACTIONS_ID_TOKEN_REQUEST_TOKEN,ACTIONS_ID_TOKEN_REQUEST_URL,GITHUB_ACTIONS,GITHUB_WORKFLOW_REF,GITHUB_OUTPUT,REGISTRY_AUTH_FILE bash scripts/publish-image.sh localhost/mertensiaos:release "$RELEASE_VERSION" "$RELEASE_CHANNEL"
@@ -115,7 +132,7 @@ jobs:
       - name: Save installer and signed checksums
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: mertensiaos-${{ inputs.version }}
+          name: mertensiaos-${{ steps.version.outputs.version }}
           path: |
             output/installer/mertensiaos-installer.iso
             output/installer/SHA256SUMS
