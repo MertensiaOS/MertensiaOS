@@ -15,7 +15,7 @@ jobs:
     runs-on: ubuntu-24.04
     container: registry.fedoraproject.org/fedora:45
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Install test dependencies
         run: dnf -y install python3 python3-gobject python3-cairo librsvg2 python3-dbus python3-pyyaml gjs gtk4 libadwaita openssl libxcrypt bash systemd iso-codes xkeyboard-config kbd tzdata gcc pam-devel pkgconf-pkg-config gtk4-devel libadwaita-devel
       - run: python3 scripts/check-source.py
@@ -26,7 +26,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Install container tools
         run: sudo apt-get update && sudo apt-get install -y podman skopeo
       - name: Build and lint production payload
@@ -37,7 +37,7 @@ jobs:
         run: sudo bash scripts/test-plymouth.sh localhost/mertensiaos:ci "$RUNNER_TEMP/plymouth-preview"
       - name: Collect Plymouth captures
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: plymouth-native-preview
           path: ${{ runner.temp }}/plymouth-preview
