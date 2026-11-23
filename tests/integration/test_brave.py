@@ -1,7 +1,9 @@
 """Host-side failure cases for guest browser diagnostics."""
 
 import copy
+import tempfile
 import unittest
+from pathlib import Path
 from unittest import mock
 
 from integration import brave_probe as probe, guest
@@ -62,7 +64,7 @@ class BraveProbeTests(unittest.TestCase):
 
         def run(argv, **kwargs):
             commands.append(argv)
-            if argv[0] == "systemd-run":
+            if argv[:2] == ["systemctl", "start"]:
                 raise RuntimeError("browser failed")
             return ""
 
@@ -72,12 +74,31 @@ class BraveProbeTests(unittest.TestCase):
              mock.patch.object(guest, "run", side_effect=run):
             with self.assertRaisesRegex(RuntimeError, "browser failed"):
                 guest.brave_checks()
-        self.assertEqual(commands[-1], ["userdel", "--remove", "mertensia-browser-test"])
-        browser_command = commands[1]
-        self.assertIn("--uid=mertensia-browser-test", browser_command)
-        self.assertIn("--wait", browser_command)
-        self.assertIn("--property=KillMode=control-group", browser_command)
-        self.assertNotIn("--no-sandbox", browser_command)
+        unit = "mertensia-integration-brave.service"
+        self.assertEqual(commands[1:], [
+            ["systemctl", "start", unit],
+            ["systemctl", "stop", unit],
+            ["userdel", "--remove", "mertensia-browser-test"],
+        ])
+
+    def test_guest_reads_fresh_probe_result_and_removes_it(self):
+        with tempfile.TemporaryDirectory() as directory:
+            state = Path(directory)
+            report = state / "brave-probe.json"
+            report.write_text('{"stale": true}')
+
+            def run(argv, **kwargs):
+                if argv[:2] == ["systemctl", "start"]:
+                    self.assertFalse(report.exists())
+                    report.write_text('{"page_rendered": true}')
+                return ""
+
+            with mock.patch.object(guest, "role", return_value="payload"), \
+                 mock.patch.object(guest, "TEST_STATE", state), \
+                 mock.patch.object(guest.subprocess, "run", return_value=mock.Mock(returncode=2)), \
+                 mock.patch.object(guest, "run", side_effect=run):
+                self.assertEqual(guest.brave_checks(), {"page_rendered": True})
+            self.assertFalse(report.exists())
 
     def test_guest_refuses_live_image_and_existing_account(self):
         with mock.patch.object(guest, "role", return_value="live"), mock.patch.object(guest, "run") as run:
