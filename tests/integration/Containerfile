@@ -14,6 +14,7 @@ COPY tests/integration/contract.json /usr/share/mertensia-integration/contract.j
 COPY tests/integration/iso.yaml /usr/share/mertensia-integration/iso.yaml
 COPY installer/config/iso.yaml /usr/share/mertensia-integration/graphical-iso.yaml
 COPY tests/integration/mertensia-integration.service /usr/lib/systemd/system/mertensia-integration.service
+COPY tests/integration/mertensia-integration-brave.service /usr/lib/systemd/system/mertensia-integration-brave.service
 COPY tests/integration/90-mertensia-integration.toml /usr/lib/bootc/install/90-mertensia-integration.toml
 COPY tests/integration/add_test_policy.py /usr/share/mertensia-integration/add_test_policy.py
 COPY tests/integration/health-failure.sh /usr/share/mertensia-integration/health-failure.sh

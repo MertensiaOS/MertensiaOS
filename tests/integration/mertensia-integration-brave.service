@@ -1,0 +1,14 @@
+[Unit]
+Description=Disposable MertensiaOS Brave Origin probe
+ConditionVirtualization=vm
+
+[Service]
+Type=oneshot
+User=mertensia-browser-test
+ExecStart=/usr/bin/python3 -I /usr/share/mertensia-integration/brave_probe.py
+UnsetEnvironment=WAYLAND_DISPLAY
+StandardOutput=truncate:/var/lib/mertensia-integration/brave-probe.json
+StandardError=journal+console
+KillMode=control-group
+TimeoutStartSec=150s
+TimeoutStopSec=10s

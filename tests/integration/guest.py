@@ -666,18 +666,19 @@ def brave_checks():
     require(subprocess.run(["getent", "passwd", name], capture_output=True).returncode == 2,
             "browser fixture account already exists")
     TEST_STATE.mkdir(parents=True, exist_ok=True)
+    output = TEST_STATE / "brave-probe.json"
+    output.unlink(missing_ok=True)
+    unit = "mertensia-integration-brave.service"
     run(["useradd", "--system", "--no-log-init", "--create-home", "--home-dir", "/var/lib/mertensia-integration/browser-home", name])
     try:
-        # Detached browser helpers can outlive the probe. Wait for systemd to
-        # stop the entire control group before removing the disposable user.
-        result = run(["systemd-run", "--quiet", "--wait", "--pipe", "--collect",
-                      "--service-type=exec", f"--uid={name}",
-                      "--property=KillMode=control-group", "--property=RuntimeMaxSec=150s",
-                      "--property=TimeoutStopSec=10s", "--property=UnsetEnvironment=WAYLAND_DISPLAY",
-                      "--", "/usr/bin/python3", "-I",
-                      "/usr/share/mertensia-integration/brave_probe.py"], timeout=180)
-        return json.loads(result)
+        try:
+            run(["systemctl", "start", unit], timeout=180)
+        finally:
+            # A detached browser helper can survive the probe itself.
+            run(["systemctl", "stop", unit], timeout=30)
+        return json.loads(output.read_text())
     finally:
+        output.unlink(missing_ok=True)
         run(["userdel", "--remove", name])
 
 
