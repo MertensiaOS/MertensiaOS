@@ -34,7 +34,7 @@ jobs:
     environment: release
     timeout-minutes: 240
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Resolve release version
         id: version
         env:
@@ -52,9 +52,9 @@ jobs:
           fi
           printf 'version=%s\n' "$version" >> "$GITHUB_OUTPUT"
           printf 'Release version: %s\n' "$version"
-      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+      - uses: sigstore/cosign-installer@756fe2d284c7292c4e9b62c8a28f1e5629c59532 # v4.1.3
         with:
-          cosign-release: v3.0.6
+          cosign-release: v3.1.4
           install-dir: /usr/local/bin
           use-sudo: 'true'
       - name: Install build and test tools
@@ -130,7 +130,7 @@ jobs:
           cosign sign-blob --yes --bundle output/installer/SHA256SUMS.sigstore.json output/installer/SHA256SUMS
           bash scripts/verify-release.sh --checksums output/installer/SHA256SUMS
       - name: Save installer and signed checksums
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: mertensiaos-${{ steps.version.outputs.version }}
           path: |
@@ -140,7 +140,7 @@ jobs:
           retention-days: 30
       - name: Collect test diagnostics
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: release-test-diagnostics
           path: |

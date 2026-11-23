@@ -18,7 +18,7 @@ checked-in Fulcio root and Rekor public key from the
 It rejects other registry pulls. The ordinary Podman policy rejects registry
 pulls by default and allows the local container store for development.
 
-Cosign 3.0.6 writes container signatures as legacy Sigstore attachments with
+Cosign 3.1.4 writes container signatures as legacy Sigstore attachments with
 Rekor v1 timestamps so Skopeo can verify them during bootc pulls. The ISO
 checksum file uses a Sigstore bundle. See the [Sigstore CI signing guide](https://docs.sigstore.dev/quickstart/quickstart-ci/)
 and the [Skopeo verifier backport](https://github.com/podman-container-tools/container-libs/pull/625).
@@ -64,7 +64,7 @@ download approved releases to your long-term distribution location.
 
 ## Verification
 
-Install Cosign 3.0.6 and Python 3. Verify a payload by its actual digest:
+Install Cosign 3.1.4 and Python 3. Verify a payload by its actual digest:
 
 ```sh
 bash scripts/verify-release.sh ghcr.io/mertensiaos/mertensiaos@sha256:REPLACE_WITH_64_HEX_DIGEST
