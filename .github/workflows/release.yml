@@ -20,9 +20,25 @@ concurrency:
 jobs:
   checks:
     if: github.ref == 'refs/heads/main'
-    uses: ./.github/workflows/ci.yml
     permissions:
-      contents: read
+      actions: read
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Require successful main push checks for the release commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          for workflow in ci.yml iso-smoke.yml; do
+            run=$(gh api --method GET "repos/$GITHUB_REPOSITORY/actions/workflows/$workflow/runs" \
+              -f branch=main -f event=push -f "head_sha=$GITHUB_SHA" \
+              --jq '.workflow_runs | max_by(.run_number) | if . == null then "missing" else "\(.status)/\(.conclusion // "none") \(.html_url)" end')
+            read -r result url <<< "$run"
+            if [[ "$result" != completed/success ]]; then
+              echo "::error::$workflow must pass on the main push for $GITHUB_SHA. Found $result${url:+ $url}. Wait for the run or resolve its failure before retrying."
+              exit 1
+            fi
+            echo "$workflow passed for $GITHUB_SHA: $url"
+          done
   release:
     if: github.ref == 'refs/heads/main'
     needs: checks
