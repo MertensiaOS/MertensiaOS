@@ -17,6 +17,8 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 OUTPUT_DIR="$ROOT_DIR/output/installer"
 CACHE_DIR="${MERTENSIA_ISO_CACHE_DIR:-$ROOT_DIR/.build/image-builder}"
 ISO="$OUTPUT_DIR/mertensiaos-installer.iso"
+source "$ROOT_DIR/scripts/installer-payload.sh"
+PAYLOAD_REF="$(installer_payload_ref "${MERTENSIA_BUILD_MODE:-development}" "$BASE_IMAGE")"
 
 bash "$ROOT_DIR/scripts/installer-image.sh"
 
@@ -27,12 +29,12 @@ mkdir -p "$OUTPUT_DIR" "$CACHE_DIR/store" "$CACHE_DIR/rpmmd"
 if ! podman image exists "$BUILDER_IMAGE"; then
   podman pull "$BUILDER_IMAGE"
 fi
-payload_id="$(podman image inspect --format '{{.Id}}' "$BASE_IMAGE")"
+payload_id="$(podman image inspect --format '{{.Id}}' "$PAYLOAD_REF")"
 installer_id="$(podman image inspect --format '{{.Id}}' "$INSTALLER_IMAGE")"
 builder_id="$(podman image inspect --format '{{.Id}}' "$BUILDER_IMAGE")"
 inputs=(
   "$payload_id" "$installer_id" "$builder_id"
-  "$BASE_IMAGE" "$INSTALLER_IMAGE"
+  "$BASE_IMAGE" "$PAYLOAD_REF" "$INSTALLER_IMAGE"
   "$(sha256sum "$ROOT_DIR/scripts/iso-image.sh" "$ROOT_DIR/scripts/iso-cache.py")"
 )
 if [[ "${MERTENSIA_FORCE_ISO_BUILD:-0}" != 1 ]] && \
@@ -57,7 +59,7 @@ podman run --rm \
       --rpmmd-cache /var/cache/image-builder/rpmmd \
       --with-buildlog --with-manifest \
       --bootc-ref "$INSTALLER_IMAGE" \
-      --bootc-installer-payload-ref "$BASE_IMAGE" \
+      --bootc-installer-payload-ref "$PAYLOAD_REF" \
       --bootc-default-fs ext4 \
       --output-dir /output \
       --output-name mertensiaos-installer \

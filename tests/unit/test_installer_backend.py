@@ -635,13 +635,18 @@ class InstallerBackendTests(unittest.TestCase):
             with self.assertRaises(protocol.InstallError):
                 images.load_config(config)
 
-    def test_production_config_requires_exact_repository_and_pinned_source(self):
+    def test_production_config_requires_exact_repository_and_a_release_payload(self):
         digest = "a" * 64
         valid_source = constants.IMAGE_REPOSITORY + "@sha256:" + digest
         valid_target = constants.IMAGE_REPOSITORY + ":latest"
+        embedded_source = "localhost/mertensiaos:iso-sha256-" + digest
         for mode, source, target, valid in (
             ("production", valid_source, valid_target, True),
             ("production", valid_source, valid_source, True),
+            ("production", embedded_source, valid_target, True),
+            ("production", "localhost/mertensiaos:base", valid_target, False),
+            ("production", embedded_source[:-1], valid_target, False),
+            ("production", embedded_source, embedded_source, False),
             ("production", valid_target, valid_target, False),
             ("production", valid_source, "ghcr.io/attacker/mertensiaos:latest", False),
             ("production", valid_source, constants.IMAGE_REPOSITORY + "-other:latest", False),
@@ -652,7 +657,7 @@ class InstallerBackendTests(unittest.TestCase):
                 path = Path(directory) / "install.conf"
                 path.write_text(f"BUILD_MODE={mode}\nSOURCE_IMAGE={source}\nTARGET_IMAGE={target}\n")
                 if valid:
-                    self.assertEqual(images.load_config(path)["SOURCE_IMAGE"], valid_source)
+                    self.assertEqual(images.load_config(path)["SOURCE_IMAGE"], source)
                 else:
                     with self.assertRaises(protocol.InstallError):
                         images.load_config(path)

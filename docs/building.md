@@ -114,7 +114,7 @@ storage costs behind this layout.
 ## Production
 
 Publish and sign the payload first, as described in [releases](releases.md).
-Use its immutable digest as the embedded payload and a signed channel tag as
+Use its immutable digest to select the embedded payload and a signed channel tag as
 the installed update target:
 
 ```sh
@@ -126,8 +126,10 @@ sudo env MERTENSIA_BUILD_MODE=production \
 
 Replace the digest placeholder with the actual release digest. Production mode
 verifies the signature against the pinned GitHub workflow identity before
-importing the exact digest into the local store. It refuses a local or
-foreign payload and does not rebuild the verified payload. Production installs
+importing the exact digest into the local store under a tag derived from that digest.
+Image Builder uses the local tag so it can change the layer representation
+when it copies the payload into the ISO. The build accepts only an official
+registry digest as input and does not rebuild the verified payload. Production installs
 also check target reachability before erasure and use bootc's enforced signature
 policy and fetch check. Networking is therefore required for production
 installation, even though the payload is embedded in the ISO.

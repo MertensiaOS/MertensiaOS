@@ -131,6 +131,22 @@ class ReleaseScriptTests(unittest.TestCase):
         if not shutil.which("bash"):
             raise unittest.SkipTest("release tests require bash")
 
+    def test_production_iso_embeds_verified_payload_under_a_digest_derived_tag(self):
+        helper = ROOT / "scripts/installer-payload.sh"
+        for mode, image, expected, code in (
+            ("production", IMMUTABLE_IMAGE, "localhost/mertensiaos:iso-sha256-" + "a" * 64, 0),
+            ("production", REPOSITORY + ":testing", "", 2),
+            ("production", "ghcr.io/another/mertensiaos@" + DIGEST, "", 2),
+            ("development", "localhost/mertensiaos:base", "localhost/mertensiaos:base", 0),
+        ):
+            with self.subTest(mode=mode, image=image):
+                result = subprocess.run(
+                    ["bash", "-c", 'source "$1"; installer_payload_ref "$2" "$3"', "_", str(helper), mode, image],
+                    capture_output=True, text=True, check=False,
+                )
+                self.assertEqual(result.returncode, code, result.stderr)
+                self.assertEqual(result.stdout.strip(), expected)
+
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory()
         self.addCleanup(self.temporary.cleanup)
