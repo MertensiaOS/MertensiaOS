@@ -53,8 +53,26 @@ class HarnessTests(unittest.TestCase):
                 return {"/sysroot/ostree/deploy": deployment_root, "/etc/containers/mertensia-bootc-policy.json": policy,
                         "/proc/sys/kernel/random/boot_id": boot_id}.get(str(value), actual_path(value))
 
+            mount_mode = "ro"
+            open_path = Path.open
+
+            def open_with_mount(path, mode="r", *args, **kwargs):
+                if path == origin and mode.startswith("w") and mount_mode == "ro":
+                    raise OSError(30, "Read-only file system", str(path))
+                return open_path(path, mode, *args, **kwargs)
+
             def run(args, **kwargs):
+                nonlocal mount_mode
+                if args[0] == "findmnt":
+                    self.assertEqual(args[-1], "/sysroot")
+                    return mount_mode + ",relatime"
+                if args[0] == "mount":
+                    self.assertEqual(args[-1], "/sysroot")
+                    remount, bind, mount_mode = args[2].split(",")
+                    self.assertEqual((remount, bind), ("remount", "bind"))
+                    self.assertIn(mount_mode, {"ro", "rw"})
                 if args[-1] == "bootc-fetch-apply-updates.service":
+                    self.assertEqual(mount_mode, "ro")
                     self.assertIn("ostree-image-signed:docker://" + repository + ":next", origin.read_text())
                     raise RuntimeError("download failed")
                 return ""
@@ -62,6 +80,7 @@ class HarnessTests(unittest.TestCase):
             identity = {"digest": "original", "status": {"status": {"booted": {
                 "ostree": {"stateroot": "default", "checksum": "abcd", "deploySerial": 0}}}}}
             with mock.patch.object(guest, "Path", side_effect=path), \
+                 mock.patch.object(Path, "open", open_with_mount), \
                  mock.patch.object(guest, "role", return_value="payload"), \
                  mock.patch.object(guest, "boot_health", return_value={"healthy": True}), \
                  mock.patch.object(guest, "boot_identity", return_value=identity), \
@@ -69,6 +88,7 @@ class HarnessTests(unittest.TestCase):
                 with self.assertRaisesRegex(RuntimeError, "download failed"):
                     guest.automatic_upgrade(repository + ":next")
             self.assertEqual(origin.read_text(), original)
+            self.assertEqual(mount_mode, "ro")
 
     def test_wrong_signer_check_requires_the_expected_fulcio_rejection(self):
         repository = "ghcr.io/example/mertensia-integration"
@@ -558,7 +578,7 @@ class GreenbootRecoveryTests(unittest.TestCase):
     def test_boot_mount_mode_is_restored_even_when_fixture_write_fails(self):
         with mock.patch.object(guest, "run", side_effect=["ro,relatime", "", ""]) as run:
             with self.assertRaises(OSError):
-                with guest.writable_boot():
+                with guest.writable_mount("/boot"):
                     raise OSError("injected write failure")
         self.assertEqual(run.call_args_list[-1].args[0], ["mount", "-o", "remount,ro", "/boot"])
 

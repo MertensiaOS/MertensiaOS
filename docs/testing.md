@@ -287,9 +287,10 @@ sudo scripts/test-iso.sh --build --require-upgrade \
 
 The guarded guest operation temporarily points only the disposable booted
 deployment's origin at that signed tag, invokes the unmodified production update
-service, and restores the origin even on failure. It checks signature policy,
-the staged digest, desktop status and unchanged boot identity, then the existing
-suite boots the update and verifies accounts and rollback. Recovery fixtures also
+service, and restores the origin even on failure. The harness temporarily
+remounts the guest's `/sysroot` writable for the two origin writes. It checks
+signature policy, the staged digest, desktop status and unchanged boot identity.
+The suite then boots the update and verifies accounts and rollback. Recovery fixtures also
 verify staging pauses after both GRUB fallback and Greenboot rollback, and that
 administrator acknowledgement does not itself change deployments. Offline runs
 without the tagged fixture explicitly report automatic staging as skipped.

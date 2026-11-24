@@ -291,16 +291,17 @@ def set_local_health_failure(enabled):
 
 
 @contextmanager
-def writable_boot():
-    options = run(["findmnt", "-nro", "OPTIONS", "--mountpoint", "/boot"]).strip().split(",")
+def writable_mount(mountpoint, *, bind=False):
+    options = run(["findmnt", "-nro", "OPTIONS", "--mountpoint", mountpoint]).strip().split(",")
     readonly = "ro" in options
+    remount = "remount,bind" if bind else "remount"
     if readonly:
-        run(["mount", "-o", "remount,rw", "/boot"])
+        run(["mount", "-o", f"{remount},rw", mountpoint])
     try:
         yield
     finally:
         if readonly:
-            run(["mount", "-o", "remount,ro", "/boot"])
+            run(["mount", "-o", f"{remount},ro", mountpoint])
 
 
 def stage_grub_failure(image):
@@ -332,7 +333,7 @@ def stage_grub_failure(image):
     backup = TEST_STATE / "grub-entry.json"
     require(not backup.exists(), "a GRUB failure fixture is already pending")
     backup.write_text(json.dumps({"name": entry.name, "text": text}))
-    with writable_boot():
+    with writable_mount("/boot"):
         entry.write_text("\n".join("linux /mertensia-integration-missing-kernel" if line.startswith("linux ") else line
                                    for line in text.splitlines()) + "\n")
     return result | {"grub_failure_staged": True}
@@ -343,7 +344,7 @@ def restore_grub_entry():
     value = json.loads(backup.read_text())
     require(Path(value["name"]).name == value["name"], "invalid test BLS backup")
     linux = next(line for line in value["text"].splitlines() if line.startswith("linux "))
-    with writable_boot():
+    with writable_mount("/boot"):
         for path in Path("/boot/loader/entries").glob("*.conf"):
             text = path.read_text()
             if "linux /mertensia-integration-missing-kernel" in text:
@@ -586,26 +587,32 @@ def automatic_upgrade(image):
     config.read_string(original.decode())
     require(config.has_option("origin", "container-image-reference"), "booted deployment has no container origin")
     boot_id = Path("/proc/sys/kernel/random/boot_id").read_text()
+    restore_origin = False
     try:
         # Offline test installation tracks a local image. Changing only this
         # test origin exercises the unmodified production updater, including
         # its signature checks, instead of replacing bootc with a test command.
         config.set("origin", "container-image-reference", "ostree-image-signed:docker://" + image)
-        with origin.open("w") as stream:
+        # The backing filesystem also serves writable mounts such as /var.
+        with writable_mount("/sysroot", bind=True), origin.open("w") as stream:
+            restore_origin = True
             config.write(stream, space_around_delimiters=False)
         run(["systemctl", "start", "bootc-fetch-apply-updates.service"], timeout=3900)
         after = boot_identity()
         staged = after["status"]["status"].get("staged")
-        require(isinstance(staged, dict), "automatic service did not stage the signed fixture")
+        published = json.loads(Path("/var/lib/mertensia/updates/status.json").read_text())
+        require(isinstance(staged, dict),
+                f"automatic service did not stage the signed fixture: {published.get('reason') or 'no reason reported'}")
         require(after["digest"] == before["digest"] and Path("/proc/sys/kernel/random/boot_id").read_text() == boot_id,
                 "automatic service changed the running deployment or restarted")
         require(staged["image"]["image"]["signature"] == "containerPolicy", "automatic update bypassed signatures")
-        published = json.loads(Path("/var/lib/mertensia/updates/status.json").read_text())
         require(published["staged_digest"] == staged["image"]["imageDigest"], "desktop update status is incorrect")
         return {"staged_digest": staged["image"]["imageDigest"], "no_restart": True,
                 "automatic_service": True, "signature_policy_enforced": True}
     finally:
-        origin.write_bytes(original)
+        if restore_origin:
+            with writable_mount("/sysroot", bind=True):
+                origin.write_bytes(original)
 
 
 def update_recovery_pause():
