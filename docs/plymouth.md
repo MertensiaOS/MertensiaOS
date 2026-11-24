@@ -66,7 +66,7 @@ The production ISO already includes `quiet rhgb`.
 Build the payload first, then run as the owner of its Podman image store:
 
 ```sh
-podman build -f Containerfile -t localhost/mertensiaos:base .
+python3 scripts/build-inputs.py build payload localhost/mertensiaos:base
 bash scripts/test-plymouth.sh localhost/mertensiaos:base /tmp/plymouth-preview
 ```
 

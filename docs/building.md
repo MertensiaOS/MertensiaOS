@@ -1,7 +1,6 @@
 # Building MertensiaOS
 
-Build on Linux x86_64 using Python 3.11 or newer and rootful Podman. The container build installs packages
-from Fedora repositories, and the ISO builder needs networking, privileged
+Build on Linux x86_64 using Python 3.11 or newer and rootful Podman. The container build uses a digest-pinned Fedora base and a retained RPM bundle. The ISO builder needs privileged
 container execution, loop devices and access to `/var/lib/containers/storage`.
 Install host tools with `sudo dnf install podman python3`. Build artifacts belong under
 `output/`; they are ignored by Git. Reserve ample space for image layers and
@@ -73,7 +72,7 @@ Fedora updates Settings; a failed patch or changed spec stops the build.
 | `MERTENSIA_TARGET_IMAGE` | Development: payload reference; production: `ghcr.io/mertensiaos/mertensiaos:latest` |
 | `MERTENSIA_SKIP_BASE_BUILD` | `1` reuses an existing development payload |
 | `MERTENSIA_BUILD_JOBS` | `4` independent container build stages in parallel; use `1` on memory-constrained builders |
-| `MERTENSIA_BUILDER_IMAGE` | Digest-pinned osbuild image-builder in `scripts/iso-image.sh` |
+| `MERTENSIA_BUILDER_IMAGE` | Image Builder from the lock. Development builds may override it |
 | `MERTENSIA_ISO_CACHE_DIR` | Persistent builder store and RPM metadata; defaults to `.build/image-builder` (use an absolute path for overrides) |
 | `MERTENSIA_FORCE_ISO_BUILD` | `1` assembles the ISO even when a verified identical output exists |
 
@@ -96,9 +95,8 @@ sudo env MERTENSIA_FORCE_ISO_BUILD=1 bash scripts/iso-image.sh
 ```
 
 Python application modules are copied after initramfs generation in both images,
-so application-only edits reuse the boot assets. The installer package transaction
-uses a persistent Podman DNF cache to reuse metadata and RPMs when its parent
-payload changes; this cache is mounted during the build and is not shipped.
+so application-only edits reuse the boot assets. The installer uses the same lock as the payload. Both builds verify the bundle's
+RPM checksums and upstream signatures and disable network access for build steps.
 
 Configuration inputs are collected in small `FROM scratch` stages and installed
 together using the mappings in `scripts/payload-files.json` and
@@ -134,17 +132,44 @@ also check target reachability before erasure and use bootc's enforced signature
 policy and fetch check. Networking is therefore required for production
 installation, even though the payload is embedded in the ISO.
 
-The image-builder container remains pinned by digest. Update that pin deliberately
-and run the ISO tests before accepting a builder update. The Fedora base tag and
-package repositories receive upstream changes; every release records its payload
-digest rather than claiming byte-for-byte rebuilds from moving upstream inputs.
+## Build-input lock
+
+[`build-inputs/lock.json`](../build-inputs/lock.json) pins the Fedora bootc x86_64
+manifest shared by all payload stages, Chunkah, Image Builder, and a retained
+GHCR bundle. It records each Fedora and Brave binary RPM and transitive dependency,
+each installer RPM, and the source RPMs and build dependencies for AccountsService,
+GNOME Settings and Skopeo. Transactions include the expected installed changes.
+The payload inventory includes packages inherited from Fedora bootc.
+
+The package bundle is pulled by digest. The build checks every RPM's SHA-256 and
+identity and verifies its signature with the Fedora release key from the pinned base
+or the checked-in Brave key. The build fails on missing artifacts, invalid
+signatures, changes to the RPM recipe, or a mismatched transaction or payload
+inventory. Production installers verify that the signed payload declares the same
+lock revision. Byte-for-byte OCI and ISO reproducibility is follow-up work.
+
+To resolve new inputs explicitly and publish a proposal, run **Check upstream build
+inputs** on `main` in GitHub Actions. Maintainers can also refresh changes to the RPM
+recipe on a feature branch. Use an empty, new snapshot directory and authenticate
+Podman to the project's public integration package with package write access.
+
+```sh
+sudo python3 scripts/build-inputs.py refresh .build/refresh .build/proposed-inputs.json
+sudo python3 scripts/build-inputs.py retain .build/refresh .build/proposed-inputs.json
+git diff -- build-inputs/
+```
+
+The retained `lock-*` tags in `mertensiaos-integration` keep the exact upstream RPM
+bytes available to older commits. Configure retention for disposable `run-*` tags
+separately and keep `lock-*` tags referenced in Git. For local replay, pass
+`--snapshot /path/to/retained-rpms` to the build wrapper. The same checks apply.
 
 ## Fresh-checkout validation
 
 ```sh
 python3 scripts/check-source.py
 python3 tests/run_tests.py
-sudo podman build --pull -f Containerfile -t localhost/mertensiaos:base .
+sudo python3 scripts/build-inputs.py build payload localhost/mertensiaos:base
 sudo bash scripts/validate-image.sh localhost/mertensiaos:base
 ```
 

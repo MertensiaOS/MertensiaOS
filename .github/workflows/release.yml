@@ -1,17 +1,18 @@
 name: Publish signed release
 on:
+  push:
+    branches: [main]
+    paths: [build-inputs/lock.json]
   workflow_dispatch:
     inputs:
       version:
         description: 'Optional immutable version override (leave blank to generate)'
         required: false
         type: string
-      channel:
-        description: 'Update channel to promote after verification'
-        default: latest
-        required: true
-        type: choice
-        options: [latest, testing]
+      promote_digest:
+        description: 'Promote this passing testing sha256 digest to latest after Brave acceptance'
+        required: false
+        type: string
 permissions:
   contents: read
 concurrency:
@@ -19,7 +20,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   release:
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' && !inputs.promote_digest
     permissions:
       actions: read
       contents: read
@@ -49,9 +50,22 @@ jobs:
           printf 'Release version: %s\n' "$version"
       - name: Install build and test tools
         run: sudo apt-get update && sudo apt-get install -y podman skopeo qemu-system-x86 qemu-utils ovmf swtpm xorriso python3
+      - uses: sigstore/cosign-installer@756fe2d284c7292c4e9b62c8a28f1e5629c59532 # v4.1.3
+        with:
+          cosign-release: v3.1.4
+          install-dir: /usr/local/bin
+          use-sudo: 'true'
+      - name: Resolve and verify the upgrade baseline
+        id: baseline
+        run: python3 scripts/release-channel.py baseline >> "$GITHUB_OUTPUT"
       - name: Build clean release payload
-        # Refresh RPMs even when the base image digest has not changed.
-        run: sudo podman build --pull --no-cache --jobs=2 -f Containerfile -t localhost/mertensiaos:release-unpacked .
+        env:
+          BASELINE: ${{ steps.baseline.outputs.channel }}@${{ steps.baseline.outputs.digest }}
+        run: |
+          sudo python3 scripts/build-inputs.py build payload localhost/mertensiaos:release-unpacked \
+            --label "org.opencontainers.image.revision=$GITHUB_SHA" \
+            --label "org.mertensiaos.release-order=$GITHUB_RUN_NUMBER.$GITHUB_RUN_ATTEMPT" \
+            --label "org.mertensiaos.upgrade-baseline=$BASELINE"
       - name: Rechunk and validate release payload
         run: sudo bash scripts/rechunk-image.sh localhost/mertensiaos:release-unpacked localhost/mertensiaos:release
       # Main push CI runs independently while the runner prepares the local payload.
@@ -79,11 +93,6 @@ jobs:
           done
           echo "::error::Timed out waiting for source and payload CI for $GITHUB_SHA after 180 minutes."
           exit 1
-      - uses: sigstore/cosign-installer@756fe2d284c7292c4e9b62c8a28f1e5629c59532 # v4.1.3
-        with:
-          cosign-release: v3.1.4
-          install-dir: /usr/local/bin
-          use-sudo: 'true'
       - name: Authenticate registry
         env:
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -130,21 +139,30 @@ jobs:
             --greenboot-failure-image "$FAILURE_IMAGE" --greenboot-transient-image "$TRANSIENT_IMAGE" \
             --require-greenboot-recovery \
             --work-dir "$RUNNER_TEMP/mertensia-release-test" --junit "$RUNNER_TEMP/mertensia-release-test/junit.xml"
-      - name: Publish, sign, verify and promote
+      - name: Publish and verify immutable signed candidate
         id: publish
         env:
           RELEASE_VERSION: ${{ steps.version.outputs.version }}
-          RELEASE_CHANNEL: ${{ inputs.channel }}
           REGISTRY_AUTH_FILE: /root/.docker/config.json
-        run: sudo --preserve-env=ACTIONS_ID_TOKEN_REQUEST_TOKEN,ACTIONS_ID_TOKEN_REQUEST_URL,GITHUB_ACTIONS,GITHUB_WORKFLOW_REF,GITHUB_OUTPUT,REGISTRY_AUTH_FILE bash scripts/publish-image.sh localhost/mertensiaos:release "$RELEASE_VERSION" "$RELEASE_CHANNEL"
-      - name: Build installer from verified release digest
+        run: sudo --preserve-env=ACTIONS_ID_TOKEN_REQUEST_TOKEN,ACTIONS_ID_TOKEN_REQUEST_URL,GITHUB_ACTIONS,GITHUB_WORKFLOW_REF,GITHUB_OUTPUT,REGISTRY_AUTH_FILE bash scripts/publish-image.sh localhost/mertensiaos:release "$RELEASE_VERSION"
+      - name: Gate on exact signed baseline to candidate upgrade and rollback
+        env:
+          CANDIDATE: ${{ steps.publish.outputs.image }}
+          BASELINE: ${{ steps.baseline.outputs.digest }}
+        run: |
+          sudo bash scripts/test-iso.sh --build --base-image localhost/mertensiaos:release \
+            --upgrade-image "$CANDIDATE" --require-upgrade \
+            --production-upgrade-from "ghcr.io/mertensiaos/mertensiaos@$BASELINE" \
+            --work-dir "$RUNNER_TEMP/mertensia-channel-test" --junit "$RUNNER_TEMP/mertensia-channel-test/junit.xml"
+      - name: Build installer and metadata from verified candidate
         env:
           RELEASE_IMAGE: ${{ steps.publish.outputs.image }}
-          RELEASE_CHANNEL: ${{ inputs.channel }}
+          RELEASE_DIGEST: ${{ steps.publish.outputs.digest }}
         run: |
-          sudo env "MERTENSIA_BUILD_MODE=production" "MERTENSIA_PAYLOAD_IMAGE=$RELEASE_IMAGE" "MERTENSIA_TARGET_IMAGE=ghcr.io/mertensiaos/mertensiaos:$RELEASE_CHANNEL" bash scripts/iso-image.sh
-          sudo bash -c 'cd output/installer && sha256sum mertensiaos-installer.iso > SHA256SUMS'
+          sudo env "MERTENSIA_BUILD_MODE=production" "MERTENSIA_PAYLOAD_IMAGE=$RELEASE_IMAGE" "MERTENSIA_TARGET_IMAGE=ghcr.io/mertensiaos/mertensiaos:latest" bash scripts/iso-image.sh
+          sudo python3 scripts/release-channel.py metadata "$RELEASE_DIGEST" output/installer/release.json
           sudo chown -R "$(id -u):$(id -g)" output/installer
+          (cd output/installer && sha256sum mertensiaos-installer.iso release.json > SHA256SUMS)
       - name: Sign installer checksums
         run: |
           cosign sign-blob --yes --bundle output/installer/SHA256SUMS.sigstore.json output/installer/SHA256SUMS
@@ -155,10 +173,16 @@ jobs:
           name: mertensiaos-${{ steps.version.outputs.version }}
           path: |
             output/installer/mertensiaos-installer.iso
+            output/installer/release.json
             output/installer/SHA256SUMS
             output/installer/SHA256SUMS.sigstore.json
-          compression-level: 0 # The bulk of the ISO is already compressed.
+          compression-level: 0
           retention-days: 30
+      - name: Promote passing candidate to testing
+        env:
+          RELEASE_DIGEST: ${{ steps.publish.outputs.digest }}
+          REGISTRY_AUTH_FILE: /root/.docker/config.json
+        run: sudo --preserve-env=REGISTRY_AUTH_FILE python3 scripts/release-channel.py testing "$RELEASE_DIGEST"
       - name: Collect test diagnostics
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -168,7 +192,44 @@ jobs:
             ${{ runner.temp }}/mertensia-release-test/result.json
             ${{ runner.temp }}/mertensia-release-test/junit.xml
             ${{ runner.temp }}/mertensia-release-test/*.log
+            ${{ runner.temp }}/mertensia-channel-test/result.json
+            ${{ runner.temp }}/mertensia-channel-test/junit.xml
+            ${{ runner.temp }}/mertensia-channel-test/*.log
           if-no-files-found: warn
       - name: Remove registry credentials
         if: always()
         run: sudo rm -f /root/.docker/config.json
+  promote:
+    if: github.ref == 'refs/heads/main' && github.event_name == 'workflow_dispatch' && inputs.promote_digest
+    runs-on: ubuntu-24.04
+    environment: stable
+    permissions:
+      actions: read
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: sudo apt-get update && sudo apt-get install -y skopeo
+      - uses: sigstore/cosign-installer@756fe2d284c7292c4e9b62c8a28f1e5629c59532 # v4.1.3
+        with:
+          cosign-release: v3.1.4
+      - name: Require protected stable environment
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api "repos/$GITHUB_REPOSITORY/environments/stable" \
+            | jq -e 'any(.protection_rules[]; .type == "required_reviewers" and (.reviewers | length > 0))'
+      - name: Promote the approved testing digest
+        env:
+          CANDIDATE: ${{ inputs.promote_digest }}
+          GHCR_TOKEN: ${{ github.token }}
+          GHCR_USER: ${{ github.actor }}
+          REGISTRY_AUTH_FILE: ${{ runner.temp }}/promotion-auth.json
+        run: |
+          printf '%s' "$GHCR_TOKEN" | skopeo login ghcr.io --username "$GHCR_USER" --password-stdin
+          python3 scripts/release-channel.py latest "$CANDIDATE"
+      - name: Remove registry credentials
+        if: always()
+        run: rm -f "$RUNNER_TEMP/promotion-auth.json"

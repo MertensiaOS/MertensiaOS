@@ -57,7 +57,7 @@ def main():
             cache = Path("/var/cache/libdnf5")
             for path in cache.rglob("*.rpm"):
                 path.unlink()
-            brave = ["--repofrompath=brave-browser,https://brave-browser-rpm-release.s3.brave.com/$basearch",
+            brave = ["--best", "--repofrompath=brave-browser,https://brave-browser-rpm-release.s3.brave.com/$basearch",
                      "--setopt=brave-browser.gpgcheck=1", f"--setopt=brave-browser.gpgkey=file://{BRAVE_KEY}",
                      "--setopt=brave-browser.includepkgs=brave-origin,brave-keyring"] if name == "brave" else []
             subprocess.run(["dnf", "-y", "--setopt=skip_if_unavailable=False", "--setopt=keepcache=True",

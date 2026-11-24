@@ -220,18 +220,16 @@ class HarnessTests(unittest.TestCase):
     def test_build_uses_production_files_and_separate_test_overlays(self):
         args = self.args("--build")
         commands, images = harness.build_commands(args, Path("/tmp/new-run"))
-        self.assertEqual(commands[0][commands[0].index("-f") + 1], str(harness.ROOT / "Containerfile"))
-        self.assertTrue(any(str(harness.ROOT / "Containerfile.installer") in command for command in commands))
-        self.assertTrue(any("BUILD_MODE=development" in command for command in commands))
+        self.assertEqual(commands[0][1:4], [str(harness.INPUT_BUILDER), "build", "payload"])
         self.assertTrue(any("INTEGRATION_ROLE=payload" in command for command in commands))
         self.assertTrue(any("INTEGRATION_ROLE=live" in command for command in commands))
         self.assertIn("bootc-generic-iso", commands[-1])
         self.assertIn(images["payload"], commands[-1])
         self.assertTrue(all("push" not in command for command in commands))
         self.assertTrue(all("Containerfile.dev" not in value for command in commands for value in command))
-        installer = next(command for command in commands if str(harness.ROOT / "Containerfile.installer") in command)
-        self.assertIn(f"BASE_IMAGE={images['base']}", installer)
-        self.assertIn(f"SOURCE_IMAGE={images['payload']}", installer)
+        installer = next(command for command in commands if command[1:4] == [str(harness.INPUT_BUILDER), "build", "installer"])
+        self.assertEqual(installer[installer.index("--parent") + 1], images["base"])
+        self.assertEqual(installer[installer.index("--source") + 1], images["payload"])
 
     def test_live_test_boot_retains_install_requirements_and_exposes_serial_diagnostics(self):
         def kernel_arguments(path):

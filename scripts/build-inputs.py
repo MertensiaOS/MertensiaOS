@@ -102,10 +102,6 @@ def build(kind, image, parent, snapshot, lock, *, refresh=False, args=()):
     mode = "rw" if refresh else "ro"
     options += ["--volume", f"{snapshot.resolve()}:/run/mertensia-lock:{mode}"]
     if kind == "payload":
-        if not refresh:
-            config = json.loads(CONFIG.read_text())
-            if any(lock["inputs"][name] != config[name] for name in config):
-                raise ValueError("Configure tool/Fedora updates through the lock refresh")
         options += ["--build-arg", f"FEDORA_BASE={lock['inputs']['base']}"]
         containerfile = "Containerfile"
     else:
@@ -116,6 +112,9 @@ def build(kind, image, parent, snapshot, lock, *, refresh=False, args=()):
 
 def normal_build(args):
     lock = read_lock()
+    config = json.loads(CONFIG.read_text())
+    if any(lock["inputs"][name] != config[name] for name in config):
+        raise ValueError("Configure tool/Fedora updates through the lock refresh")
     if lock["inputs"]["recipe"] != recipe():
         raise ValueError("RPM build recipe changed; refresh build-inputs/lock.json")
     options = ["--jobs", args.jobs, "--pull=missing"]
@@ -172,15 +171,17 @@ def refresh(args):
     collect(snapshot, args.draft, config, base, payload)
 
 
-def retain(args):
-    lock = json.loads(args.draft.read_text())
-    if LOCK.exists():
-        previous = read_lock()
-        if previous["inputs"] == lock["inputs"]:
-            print("Build inputs are unchanged")
-            return
-    verify_snapshot(lock, args.snapshot)
-    tag = f"{REPOSITORY}:lock-{input_id(lock)}"
+def retained_digest(tag):
+    command = ["skopeo", "inspect", "--no-tags", "--format", "{{.Digest}}", f"docker://{tag}"]
+    result = subprocess.run(command, cwd=ROOT, text=True, capture_output=True)
+    if not result.returncode:
+        return result.stdout.strip()
+    if re.search(r"manifest[ _]unknown|name[ _]unknown", result.stderr, re.I):
+        return None
+    raise ValueError(f"Unable to check the retained bundle: {result.stderr.strip()}")
+
+
+def publish_bundle(lock, args, tag):
     with tempfile.TemporaryDirectory(prefix="mertensia-bundle-") as work:
         context = Path(work) / "image"
         context.mkdir()
@@ -197,15 +198,32 @@ def retain(args):
                     os.link(previous, path)
                 else:
                     shutil.copyfile(args.snapshot / name / item["file"], path)
+                    os.utime(path, (0, 0))
                     files[item["sha256"]] = path
+            os.utime(group, (0, 0))
             if transaction["packages"]:
                 lines.append(f"COPY {name}/ /rpms/{name}/")
         (context / "Containerfile").write_text("\n".join(lines) + "\n")
         local = "localhost/mertensiaos:input-bundle"
-        run("podman", "build", "--network=none", "-t", local, str(context))
+        run("podman", "build", "--network=none", "--timestamp=0", "-t", local, str(context))
         result = Path(work) / "digest"
         run("podman", "push", "--digestfile", str(result), local, f"docker://{tag}")
-        lock["bundle"] = f"{REPOSITORY}@{result.read_text().strip()}"
+        return result.read_text().strip()
+
+
+def retain(args):
+    lock = json.loads(args.draft.read_text())
+    if LOCK.exists():
+        previous = read_lock()
+        if previous["inputs"] == lock["inputs"]:
+            print("Build inputs are unchanged")
+            return
+    verify_snapshot(lock, args.snapshot)
+    tag = f"{REPOSITORY}:lock-{input_id(lock)}"
+    retained = retained_digest(tag) or publish_bundle(lock, args, tag)
+    if not re.fullmatch(r"sha256:[a-f0-9]{64}", retained):
+        raise ValueError("Invalid retained bundle digest")
+    lock["bundle"] = f"{REPOSITORY}@{retained}"
     # Check the anonymously readable retention copy before changing the Git lock.
     with tempfile.TemporaryDirectory(prefix="mertensia-bundle-check-") as work:
         run("skopeo", "inspect", "--raw", "--no-creds", f"docker://{lock['bundle']}")
@@ -237,6 +255,7 @@ def main():
         if action == "refresh":
             command.add_argument("--jobs", default="2")
     commands.add_parser("revision")
+    commands.add_parser("check-retention")
     get = commands.add_parser("get")
     get.add_argument("name", choices=("base", "fedora", "chunkah", "image_builder"))
     args = cli.parse_args()
@@ -251,6 +270,8 @@ def main():
             retain(args)
         elif args.action == "revision":
             print(input_id(read_lock()))
+        elif args.action == "check-retention":
+            run("skopeo", "inspect", "--raw", "--no-creds", f"docker://{read_lock()['bundle']}")
         else:
             print(read_lock()["inputs"][args.name])
     except (OSError, ValueError, KeyError, subprocess.CalledProcessError) as error:

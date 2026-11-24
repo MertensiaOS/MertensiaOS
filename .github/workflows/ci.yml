@@ -17,7 +17,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Install test dependencies
-        run: dnf -y install python3 python3-gobject python3-cairo librsvg2 python3-dbus python3-pyyaml gjs gtk4 libadwaita openssl libxcrypt bash systemd iso-codes xkeyboard-config kbd tzdata gcc pam-devel pkgconf-pkg-config gtk4-devel libadwaita-devel
+        run: dnf -y install python3 python3-gobject python3-cairo librsvg2 python3-dbus python3-pyyaml python3-rpm gjs gtk4 libadwaita openssl libxcrypt bash systemd iso-codes xkeyboard-config kbd tzdata gcc pam-devel pkgconf-pkg-config gtk4-devel libadwaita-devel
       - run: python3 scripts/check-source.py
       - run: python3 tests/run_tests.py
         env:
@@ -31,7 +31,8 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y podman skopeo
       - name: Build and lint production payload
         run: |
-          sudo podman build --pull -f Containerfile -t localhost/mertensiaos:ci-unpacked .
+          sudo python3 scripts/build-inputs.py build payload localhost/mertensiaos:ci-unpacked
+          sudo python3 scripts/build-inputs.py build installer localhost/mertensiaos:ci-installer --parent localhost/mertensiaos:ci-unpacked
           sudo bash scripts/rechunk-image.sh localhost/mertensiaos:ci-unpacked localhost/mertensiaos:ci
       - name: Capture native Plymouth splash and recovery prompts
         run: sudo bash scripts/test-plymouth.sh localhost/mertensiaos:ci "$RUNNER_TEMP/plymouth-preview"

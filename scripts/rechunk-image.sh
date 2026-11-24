@@ -15,8 +15,7 @@ done
 if (( EUID != 0 )); then
   exec podman unshare bash "$ROOT_DIR/scripts/rechunk-image.sh" "$SOURCE" "$OUTPUT"
 fi
-# Chunkah v0.7.1, pinned to the image used in the local bandwidth trial.
-CHUNKAH=quay.io/coreos/chunkah:v0.7.1@sha256:a2c6ef1cbf47f0c2360fd3c8e580ada5c809f17b2ffc4b0bff9fa5083b980769
+CHUNKAH="$(python3 "$ROOT_DIR/scripts/build-inputs.py" get chunkah)"
 SOURCE_ID="$(podman image inspect --format '{{.Id}}' "$SOURCE")"
 if [[ "$(podman image inspect --format '{{index .Config.Labels "containers.bootc"}}' "$SOURCE_ID")" != 1 ]]; then
   echo "Source must be a bootc payload" >&2

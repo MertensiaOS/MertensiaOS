@@ -223,6 +223,27 @@ The release workflow prepares a signed update fixture in the separate public
 update/rollback sequence before publishing the clean production payload. Routine
 offline ISO runs can omit it; that omission remains visible as skipped coverage.
 
+## Exact release candidate upgrade gate
+
+Release CI runs this gate in addition to the signed integration-fixture suite.
+The harness installs to a disposable encrypted disk and persists the guarded test
+agent on that disk across deployments. It boots the signed baseline digest,
+checks the running digest, TPM unlock and Greenboot, and switches to the exact
+signed candidate using bootc's policy. It reboots, verifies the candidate digest
+and accounts, then rolls back and verifies the original digest again.
+
+```sh
+sudo scripts/test-iso.sh --build --base-image localhost/mertensiaos:release \
+  --production-upgrade-from ghcr.io/mertensiaos/mertensiaos@sha256:BASELINE_DIGEST \
+  --upgrade-image ghcr.io/mertensiaos/mertensiaos@sha256:CANDIDATE_DIGEST \
+  --require-upgrade --work-dir /var/tmp/mertensia-release-upgrade
+```
+
+Use real verified digest values. This gate reads from GHCR and writes only to the
+disposable VM. The signed production images contain no test agent. The automated
+suite still requires the [interactive Brave checks](brave.md#acceptance-checks)
+before stable promotion.
+
 ## Automatic updates and Flatpak permissions
 
 Run `scripts/previews/system.py --capture /tmp/system-preview` with the

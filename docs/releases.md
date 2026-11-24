@@ -31,46 +31,77 @@ unauthenticated clients. GHCR makes new packages private by default, so set
 visibility when provisioning the packages. The integration package contains
 instrumented test images. Apply a retention policy to its unique `run-*` tags.
 
+## Upstream changes
+
+**Check upstream build inputs** runs every four hours and supports manual dispatch
+from `main`. Its report compares the AMD64 Fedora bootc digest, the stable Fedora
+and Brave RPM inputs, Chunkah and Image Builder with the [build-input lock](building.md#build-input-lock).
+It checks stable Bodhi advisories against the RPM inventory of signed `latest` and
+the proposed payload. This includes packages inherited from Fedora bootc. The
+report distinguishes fixes present in the proposed payload from advisories that
+have yet to reach it. A failed upstream or registry request fails the workflow.
+
+Review the run summary or download `upstream-input-report` for the complete package
+and advisory diff. A changed resolution updates the single
+`automation/refresh-build-inputs` PR. PRs that include a Fedora security fix receive
+the `security` label. An unchanged resolution leaves Git and the release channels
+as they are. Dependabot proposes GitHub Actions updates separately.
+
+Use a dedicated repository bot account with a fine-grained PAT and repository
+**Contents**, **Pull requests** and **Issues** write access. Store it as
+`DEPENDENCY_REFRESH_TOKEN`. The bot must be allowed to run PR workflows under the
+repository Actions policy. The refresh verifies that both `ci.yml` and
+`iso-smoke.yml` start for the exact PR head. Make their checks required in the
+repository ruleset. The workflow uses its own `GITHUB_TOKEN` to write the RPM
+bundle and the PAT to push and open the PR so it gets normal PR events.
+[GitHub workflow-event authentication](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/trigger-a-workflow)
+
 ## Automated publication
 
-Release payload builds run up to two independent Podman stages in parallel and
-use `--pull --no-cache` to refresh RPMs, including Brave Origin, even when the
-Fedora base digest is unchanged. Publication requires a manual dispatch. The
-finished payload is then repacked with
-digest-pinned Chunkah into up to 128 content-based layers, reducing update
-downloads. This converts the inherited OSTree image to plain bootc while
-preserving its bootc metadata and release trust configuration. See the
-[Chunkah measurements and implementation](chunkah.md).
-Complete the graphical and live Safe Browsing
-[Brave Origin acceptance checks](brave.md#acceptance-checks) before promoting a
-release; the headless VM probe does not cover these services.
+Merging a changed lock generates a candidate automatically. To build a candidate
+manually, dispatch **Publish signed release** from `main` and leave
+`promote_digest` empty. You can override the version with an unused OCI tag.
+The default version includes the OS version, UTC date, workflow run number
+and attempt.
 
-Run **Publish signed release** from `main` in GitHub Actions and choose channel
-`testing` or `latest`. Leave the version field blank to generate a version such
-as `45.20261123.12.1` from the OS version, UTC date, workflow run number and run
-attempt. To choose the version yourself, supply an unused container tag.
+1. The workflow verifies the upgrade baseline, builds a single locked payload and
+   rechunks it with the pinned Chunkah container. It requires successful CI on the
+   exact source commit and runs the existing installation, signed upgrade, and
+   Greenboot gates on separate integration fixtures.
+2. It pushes and signs the immutable candidate. The release VM boots the exact
+   signed `latest` digest, stages and reboots into the candidate, and rolls back to
+   the prior digest. If the repository has never published `latest`, the gate uses
+   the existing signed `testing` digest. Signature failures and registry errors fail
+   the gate.
+3. It builds the production installer from the verified digest using the same RPM
+   lock and includes `release.json` with source commit, lock revision, installed
+   inventory, upgrade baseline and final OCI digest. The signed `SHA256SUMS` covers
+   the ISO and this metadata.
+4. The workflow advances `testing` only after these steps pass. An older run cannot
+   replace a newer candidate, and a change to the stable baseline invalidates
+   earlier candidates. Unsuccessful attempts can leave a signed, versioned tag
+   for diagnosis.
 
-1. Builds, rechunks and validates a clean payload while the independent `main` push CI can still be running.
-2. Waits up to 180 minutes for **Check source and build payload** to pass for the exact commit. If CI fails or the wait times out, resolve the issue and retry the release.
-3. Builds and publishes separately signed update and recovery fixtures from the rechunked payload, then exercises actual ISO installation, recovery boot, accounts, signed upgrade and rollback.
-4. Validates the clean payload again, publishes a new version tag, signs its immutable digest and verifies it with both Cosign and containers/image.
-5. Promotes the verified digest to the selected channel.
-6. Builds the production ISO from that signed digest and uploads the ISO, checksum file and signed bundle as a ZIP artifact with compression disabled because the ISO is mostly compressed already.
+### Promote to stable
 
-On 24 November 2026, the CI wait took about 11 minutes, the clean payload build
-took 21 minutes, and the integration ISO and VM gate took 40 minutes. SquashFS
-compression accounted for about 5½ minutes of that gate. In a separate local
-check, level-6 DEFLATE took 29 seconds to shrink a 3.0 GB installer ISO by
-about 2%. Use the Actions step durations to compare the updated workflow with
-this [baseline release run](https://github.com/MertensiaOS/MertensiaOS/actions/runs/45336445385).
+Configure the GitHub `stable` environment for `main` with required maintainer
+reviewers and disable self-review. The promotion job fails if reviewers are
+missing. Before approving, record the tested digest, Brave RPM version and the
+results of [hands-on Brave acceptance](brave.md#acceptance-checks).
 
-It refuses an existing version and serializes workflow releases. A failed
-signature or policy check leaves the update channel untouched. A rerun generates
-a fresh version for the new attempt. If you supplied a manual tag and it was
-already published, start a new run with a fresh tag or leave the field blank.
-A failure building the ISO after promotion leaves the verified payload published,
-so inspect the run before retrying. Workflow artifacts are retained for 30 days;
-download approved releases to your long-term distribution location.
+To try the candidate, update a disposable installed machine to the verified
+`testing` digest. For an installer targeting `testing`, check out the candidate's
+source commit and build the ISO with `MERTENSIA_TARGET_IMAGE=ghcr.io/mertensiaos/mertensiaos:testing`.
+The workflow's uploaded production ISO targets `latest` for stable distribution.
+
+Dispatch **Publish signed release** from `main` with the current passing
+`testing` SHA-256 in `promote_digest`. After the environment review, the job copies
+that exact signed digest to `latest`. It checks that `testing` still points to the
+approved candidate and that the upgrade baseline is still current. Promotion does
+not rebuild the payload or ISO.
+
+Workflow artifacts are retained for 30 days. Save approved installer artifacts and
+their signed metadata for long-term distribution.
 
 ## Verification
 
@@ -86,7 +117,7 @@ OS before moving the channel. Production ISO builds verify the signature and
 then import the same immutable digest into local container storage.
 
 For a downloaded ISO, use the verifier from a trusted project checkout. From
-the directory containing the three artifacts, pass the checksum file to the
+the directory containing the installer, metadata, checksums and signature bundle, pass the checksum file to the
 script, then verify the ISO bytes:
 
 ```sh

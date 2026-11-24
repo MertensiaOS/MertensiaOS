@@ -39,21 +39,15 @@ if [[ "$BUILD_MODE" == production ]]; then
 elif [[ "${MERTENSIA_SKIP_BASE_BUILD:-0}" != 1 ]]; then
   echo "> Building payload image: $BASE_IMAGE"
   payload_start=$SECONDS
-  podman build --jobs="$BUILD_JOBS" --pull -f "$ROOT_DIR/Containerfile" -t "$BASE_IMAGE" "$ROOT_DIR"
+  python3 "$ROOT_DIR/scripts/build-inputs.py" build payload "$BASE_IMAGE" --jobs "$BUILD_JOBS"
   echo "> Payload build: $((SECONDS - payload_start))s"
 fi
 
 echo "> Building installer image"
 installer_start=$SECONDS
-podman build \
-  --jobs="$BUILD_JOBS" \
-  --build-arg "BASE_IMAGE=$PAYLOAD_REF" \
-  --build-arg "SOURCE_IMAGE=$PAYLOAD_REF" \
-  --build-arg "TARGET_IMAGE=$TARGET_IMAGE" \
-  --build-arg "BUILD_MODE=$BUILD_MODE" \
-  -f "$ROOT_DIR/Containerfile.installer" \
-  -t "$INSTALLER_IMAGE" \
-  "$ROOT_DIR"
+python3 "$ROOT_DIR/scripts/build-inputs.py" build installer "$INSTALLER_IMAGE" \
+  --jobs "$BUILD_JOBS" --parent "$PAYLOAD_REF" --source "$PAYLOAD_REF" \
+  --target "$TARGET_IMAGE" --mode "$BUILD_MODE"
 echo "> Installer build: $((SECONDS - installer_start))s"
 
 echo "Done!"

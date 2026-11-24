@@ -37,7 +37,8 @@ ROOT = Path(__file__).resolve().parents[2]
 CONTRACT = json.loads(Path(__file__).with_name("contract.json").read_text())
 TOKEN = CONTRACT["token"]
 SERIAL = CONTRACT["disk_serial"]
-BUILDER = "ghcr.io/osbuild/image-builder@sha256:bb4bb67be80131bf149722b2e7dacc039434ee2b68abeb70c86c8221c8281f45"
+INPUT_BUILDER = ROOT / "scripts/build-inputs.py"
+OFFICIAL_DIGEST = re.compile(r"ghcr\.io/mertensiaos/mertensiaos@sha256:[a-f0-9]{64}")
 
 
 class HarnessError(RuntimeError):
@@ -169,19 +170,18 @@ def build_commands(args, work):
     target = args.target_image or payload
     commands = []
     if not args.base_image:
-        commands.append(["podman", "build", "--pull", "-f", str(ROOT / "Containerfile"), "-t", base, str(ROOT)])
+        commands.append([sys.executable, str(INPUT_BUILDER), "build", "payload", base])
     commands.append(["podman", "build", "--build-arg", f"BASE_IMAGE={base}", "--build-arg", "INTEGRATION_ROLE=payload",
                      "-f", str(ROOT / "tests/integration/Containerfile"), "-t", payload, str(ROOT)])
-    if args.upgrade_image:
+    if args.upgrade_image and not args.production_upgrade_from:
         commands[-1][2:2] = ["--build-arg", f"INTEGRATION_UPGRADE_IMAGE={args.upgrade_image}"]
     if args.upgrade_public_key:
         public = args.upgrade_public_key.read_bytes()
         if not public.startswith(b"-----BEGIN PUBLIC KEY-----") or b"PRIVATE KEY" in public:
             raise HarnessError("--upgrade-public-key must contain a PEM public signing key")
         commands[-1][2:2] = ["--build-arg", "INTEGRATION_PUBLIC_KEY_B64=" + base64.b64encode(public).decode()]
-    commands.append(["podman", "build", "--build-arg", f"BASE_IMAGE={base}", "--build-arg", f"SOURCE_IMAGE={payload}",
-                     "--build-arg", f"TARGET_IMAGE={target}", "--build-arg", "BUILD_MODE=development",
-                     "-f", str(ROOT / "Containerfile.installer"), "-t", installer_base, str(ROOT)])
+    commands.append([sys.executable, str(INPUT_BUILDER), "build", "installer", installer_base,
+                     "--parent", base, "--source", payload, "--target", target])
     commands.append(["podman", "build", "--build-arg", f"BASE_IMAGE={installer_base}", "--build-arg", "INTEGRATION_ROLE=live",
                      "-f", str(ROOT / "tests/integration/Containerfile"), "-t", installer, str(ROOT)])
     commands.append([
@@ -690,17 +690,33 @@ def run_suite(args, work, firmware, results):
         results.step("Restore networking after healthy offline boot", lambda: guest.command("networking", enabled=True))
         results.step("Verify persisted accounts and login integration after reboot", lambda: guest.command("login-checks", password=password))
         if args.upgrade_image:
-            results.step("Reject signed update with an incorrect signer", lambda: guest.command("reject-update", image=args.upgrade_image))
-            if args.automatic_update_image:
+            if args.production_upgrade_from:
+                results.step("Persist the test agent on this disposable disk", lambda: guest.command("persist-agent"))
+                results.step("Stage exact signed upgrade baseline",
+                             lambda: guest.command("upgrade", image=args.production_upgrade_from))
+                results.step("Power off before booting the upgrade baseline", guest.poweroff)
+                guest = None
+                results.step("Boot exact signed upgrade baseline", boot_installed)
+                original = results.step("Verify baseline root, TPM and Greenboot",
+                                        lambda: guest.command("root-checks", recovery_key=recovery))
+                if original["digest"] != args.production_upgrade_from.split("@")[1]:
+                    raise HarnessError("Booted digest differs from the verified release baseline")
+                results.step("Stage exact signed release candidate",
+                             lambda: guest.command("upgrade", image=args.upgrade_image))
+            elif args.automatic_update_image:
+                results.step("Reject signed update with an incorrect signer", lambda: guest.command("reject-update", image=args.upgrade_image))
                 results.step("Automatically stage signed update without restart",
                              lambda: guest.command("automatic-upgrade", image=args.automatic_update_image))
             else:
+                results.step("Reject signed update with an incorrect signer", lambda: guest.command("reject-update", image=args.upgrade_image))
                 results.step("Stage signed integration update", lambda: guest.command("upgrade", image=args.upgrade_image))
                 results.skip("Automatic OS update staging", "--automatic-update-image requires a signed tagged integration fixture")
             results.step("Power off before updated deployment boot", guest.poweroff)
             guest = None
             results.step("Boot updated deployment", boot_installed)
             upgraded = results.step("Verify updated root and recovery unlock", lambda: guest.command("root-checks", recovery_key=recovery))
+            if args.production_upgrade_from and upgraded["digest"] != args.upgrade_image.split("@")[1]:
+                raise HarnessError("Booted digest differs from the signed release candidate")
             if upgraded["digest"] == original["digest"]:
                 results.step("Verify upgrade changed deployment", lambda: (_ for _ in ()).throw(HarnessError("upgrade did not change the deployment digest")))
             else:
@@ -716,6 +732,10 @@ def run_suite(args, work, firmware, results):
             else:
                 results.step("Verify rollback restored deployment", lambda: {"digest": original["digest"]})
             results.step("Verify accounts survived rollback", lambda: guest.command("login-checks", password=password))
+            if args.production_upgrade_from:
+                results.step("Final clean poweroff after exact release rollback", guest.poweroff)
+                guest = None
+                return
         else:
             results.skip("Signed update and rollback", "--upgrade-image was not supplied; requires a distinct signed integration payload reachable from the guest")
         if args.greenboot_transient_image:
@@ -818,7 +838,8 @@ def parser():
     result.add_argument("--junit", type=Path, help="JUnit XML output for CI")
     result.add_argument("--base-image", help="existing production payload to overlay instead of building Containerfile")
     result.add_argument("--target-image", help="future installed update target; fixture defaults to local payload")
-    result.add_argument("--builder-image", default=BUILDER)
+    result.add_argument("--builder-image", default=json.loads((ROOT / "build-inputs/config.json").read_text())["image_builder"])
+    result.add_argument("--production-upgrade-from", help="exact signed latest digest to boot before staging the exact release candidate")
     result.add_argument("--upgrade-image", help="distinct signed integration payload for actual update and rollback tests")
     result.add_argument("--automatic-update-image", help="signed tagged healthy fixture for testing the production automatic staging service")
     result.add_argument("--upgrade-public-key", type=Path, help="trust this public key for the integration update repo in test overlays only (with --build)")
@@ -879,6 +900,13 @@ def main(argv=None):
                 cli.error("Greenboot fixtures must be distinct images in the same integration repository")
         except ValueError as error:
             cli.error(str(error))
+    if args.production_upgrade_from:
+        if (not args.build or not args.base_image or not args.upgrade_image
+                or not all(OFFICIAL_DIGEST.fullmatch(image) for image in (args.production_upgrade_from, args.upgrade_image))
+                or args.production_upgrade_from == args.upgrade_image
+                or any((args.upgrade_public_key, args.automatic_update_image,
+                        args.greenboot_failure_image, args.greenboot_transient_image))):
+            cli.error("production upgrade requires --build, a local candidate base and two distinct official digests")
     available = capabilities(args)
     if args.check:
         print(json.dumps(available, indent=2))
