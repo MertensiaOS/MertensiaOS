@@ -51,8 +51,9 @@ Use a dedicated repository bot account with a fine-grained PAT and repository
 **Contents**, **Pull requests** and **Issues** write access. Store it as
 `DEPENDENCY_REFRESH_TOKEN`. The bot must be allowed to run PR workflows under the
 repository Actions policy. The refresh verifies that both `ci.yml` and
-`iso-smoke.yml` start for the exact PR head. Make their checks required in the
-repository ruleset. The workflow uses its own `GITHUB_TOKEN` to write the RPM
+`iso-smoke.yml` start for the exact PR head. Require the source and payload checks
+in the `main` ruleset. ISO smoke runs on lock changes, and the release workflow
+independently requires the installation suite. The workflow uses its own `GITHUB_TOKEN` to write the RPM
 bundle and the PAT to push and open the PR so it gets normal PR events.
 [GitHub workflow-event authentication](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/trigger-a-workflow)
 

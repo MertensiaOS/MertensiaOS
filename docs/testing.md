@@ -239,8 +239,9 @@ sudo scripts/test-iso.sh --build --base-image localhost/mertensiaos:release \
   --require-upgrade --work-dir /var/tmp/mertensia-release-upgrade
 ```
 
-Use real verified digest values. This gate reads from GHCR and writes only to the
-disposable VM. The signed production images contain no test agent. The automated
+Use real verified digest values. To run this gate in GitHub Actions, dispatch
+**ISO installation smoke test** with `baseline_image` and `candidate_image`. This
+gate reads from GHCR and writes only to the disposable VM. The signed production images contain no test agent. The automated
 suite still requires the [interactive Brave checks](brave.md#acceptance-checks)
 before stable promotion.
 
