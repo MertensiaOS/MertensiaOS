@@ -100,9 +100,9 @@ def build(kind, image, parent, snapshot, lock, *, refresh=False, args=()):
     else:
         options += ["--network=none"]
     mode = "rw" if refresh else "ro"
-    # Older Buildah leaves the mount point in the image. Reuse Fedora's /mnt
-    # directory so the resulting payload has no extra runtime directories.
-    options += ["--volume", f"{snapshot.resolve()}:/mnt:{mode}"]
+    # Mount directly at Fedora's /mnt symlink target. Older crun cannot mount
+    # through the dangling symlink, and Buildah can leave mount points in /run.
+    options += ["--volume", f"{snapshot.resolve()}:/var/mnt:{mode}"]
     if kind == "payload":
         options += ["--build-arg", f"FEDORA_BASE={lock['inputs']['base']}"]
         containerfile = "Containerfile"

@@ -1311,7 +1311,7 @@
       "scripts/build-accountsservice.sh": "d281dc716a6fba076a1aa6239d0ab21f405e8a563e57589e6de021daa773825f",
       "scripts/build-gnome-control-center.sh": "1d92c1cfdfe643adad5e208205d06181eb5291d2a71180233b484ec1419e04d1",
       "scripts/build-skopeo.sh": "d182f90605ea041f43bd5916e983dee5acc266cfa548a704f7de2e447c97e8aa",
-      "scripts/locked-rpms.py": "6ded637d6d3576e1f61cd642d8c00ec686b6413370671162d77982bdc9cdc32a"
+      "scripts/locked-rpms.py": "74643b7e47b90e766e9b48b7111b8e9bfdcdf86ab67395d39895bcec8a7ae971"
     },
     "transactions": {
       "accountsservice-builddep": {
