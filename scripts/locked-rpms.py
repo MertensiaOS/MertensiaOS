@@ -9,7 +9,7 @@ import subprocess
 import sys
 import tempfile
 
-LOCK = Path("/run/mertensia-lock")
+LOCK = Path("/mnt")
 GPG = Path("/usr/share/pki/rpm-gpg/RPM-GPG-KEY-fedora-$release-x86_64")
 BRAVE_KEY = "/run/mertensia-brave.asc"
 QUERY = "%{NAME}\t%{EPOCHNUM}\t%{VERSION}\t%{RELEASE}\t%{ARCH}\t%{SOURCERPM}\n"
