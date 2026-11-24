@@ -13,14 +13,16 @@ environment to `main` and require review of changes to the workflow.
 The payload ships a Fedora Skopeo build with support for matching the Fulcio
 Build Signer URI. Its policy at `/etc/containers/mertensia-bootc-policy.json`
 trusts that workflow only for `ghcr.io/mertensiaos/mertensiaos`, using the
-checked-in Fulcio root and Rekor public key from the
+checked-in Fulcio root, Fulcio issuing intermediate and Rekor public key from the
 [public Sigstore trust root](https://github.com/sigstore/root-signing/blob/main/targets/trusted_root.json).
 It rejects other registry pulls. The ordinary Podman policy rejects registry
 pulls by default and allows the local container store for development.
 
 Cosign 3.1.4 writes container signatures as legacy Sigstore attachments with
-Rekor v1 timestamps so Skopeo can verify them during bootc pulls. The ISO
-checksum file uses a Sigstore bundle. See the [Sigstore CI signing guide](https://docs.sigstore.dev/quickstart/quickstart-ci/)
+Rekor v1 timestamps so Skopeo can verify them during bootc pulls. These
+attachments can omit the issuing certificate, so the local Fulcio bundle
+includes it. The ISO checksum file uses a Sigstore bundle.
+See the [Sigstore CI signing guide](https://docs.sigstore.dev/quickstart/quickstart-ci/)
 and the [Skopeo verifier backport](https://github.com/podman-container-tools/container-libs/pull/625).
 
 Allow the workflow's `GITHUB_TOKEN` to write packages. Both the official

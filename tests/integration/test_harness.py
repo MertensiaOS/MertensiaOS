@@ -70,6 +70,41 @@ class HarnessTests(unittest.TestCase):
                     guest.automatic_upgrade(repository + ":next")
             self.assertEqual(origin.read_text(), original)
 
+    def test_wrong_signer_check_requires_the_expected_fulcio_rejection(self):
+        repository = "ghcr.io/example/mertensia-integration"
+        signer = "https://github.com/example/mertensia/.github/workflows/release.yml@refs/heads/main"
+        mismatch = f'Required BuildSignerURI "{signer}-wrong-signer" not found (got "{signer}")'
+        with tempfile.TemporaryDirectory() as directory:
+            policy = Path(directory) / "policy.json"
+            original = json.dumps({"transports": {"docker": {repository: [
+                {"type": "sigstoreSigned", "fulcio": {"buildSignerURI": signer}},
+            ]}}})
+            policy.write_text(original)
+
+            for returncode, stderr, rejected in (
+                (1, mismatch, True),
+                (1, "A signature was required, but no signature exists", False),
+                (0, mismatch, False),
+            ):
+                with self.subTest(returncode=returncode, stderr=stderr):
+                    def switch(command, **kwargs):
+                        self.assertEqual(command, ["bootc", "switch", "--enforce-container-sigpolicy", repository + ":next"])
+                        self.assertIn(signer + "-wrong-signer", policy.read_text())
+                        return subprocess.CompletedProcess(command, returncode, stderr=stderr)
+
+                    with mock.patch.object(guest, "Path", return_value=policy), \
+                         mock.patch.object(guest, "role", return_value="payload"), \
+                         mock.patch.object(guest, "status", return_value={"status": {"staged": None}}), \
+                         mock.patch.object(guest.tempfile, "NamedTemporaryFile"), \
+                         mock.patch.object(guest.subprocess, "run", side_effect=switch):
+                        if rejected:
+                            self.assertTrue(guest.reject_wrong_signer(repository + ":next")["incorrect_signer_rejected"])
+                        else:
+                            with self.assertRaisesRegex(RuntimeError, f"got exit {returncode}:") as failure:
+                                guest.reject_wrong_signer(repository + ":next")
+                            self.assertIn(stderr, str(failure.exception))
+                    self.assertEqual(policy.read_text(), original)
+
     def test_existing_work_directory_is_rejected_without_changing_disk(self):
         with tempfile.TemporaryDirectory() as directory:
             work = Path(directory)
