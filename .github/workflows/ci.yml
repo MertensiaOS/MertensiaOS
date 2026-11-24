@@ -15,9 +15,9 @@ jobs:
     runs-on: ubuntu-24.04
     container: registry.fedoraproject.org/fedora:45
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Install test dependencies
-        run: dnf -y install python3 python3-gobject python3-cairo librsvg2 python3-dbus python3-pyyaml python3-rpm gjs gtk4 libadwaita openssl libxcrypt bash systemd iso-codes xkeyboard-config kbd tzdata gcc pam-devel pkgconf-pkg-config gtk4-devel libadwaita-devel
+        run: dnf -y install git python3 python3-gobject python3-cairo librsvg2 python3-dbus python3-pyyaml python3-rpm gjs gtk4 libadwaita openssl libxcrypt bash systemd iso-codes xkeyboard-config kbd tzdata gcc pam-devel pkgconf-pkg-config gtk4-devel libadwaita-devel
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - run: python3 scripts/check-source.py
       - run: python3 tests/run_tests.py
         env:
