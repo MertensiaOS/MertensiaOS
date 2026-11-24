@@ -636,22 +636,26 @@ def reject_wrong_signer(image):
     require(isinstance(scope, list) and any(rule.get("type") == "sigstoreSigned" for rule in scope),
             "integration repository has no signature verification rule")
     staged_before = status()["status"].get("staged")
+    expected_rejections = []
     with tempfile.NamedTemporaryFile(mode="w", dir="/run", prefix="integration-wrong-signer-") as key:
         for rule in scope:
             if "fulcio" in rule:
                 rule["fulcio"]["buildSignerURI"] += "-wrong-signer"
+                expected_rejections.append(f'Required BuildSignerURI "{rule["fulcio"]["buildSignerURI"]}" not found')
             elif rule.get("type") == "sigstoreSigned":
                 private = run(["openssl", "genpkey", "-algorithm", "EC", "-pkeyopt", "ec_paramgen_curve:prime256v1"])
                 key.write(run(["openssl", "pkey", "-pubout"], input_text=private))
                 key.flush()
                 rule["keyPath"] = key.name
+                expected_rejections.append("cryptographic signature verification failed")
         try:
             # Preserve the inode's production SELinux label and file mode.
             path.write_text(json.dumps(policy) + "\n")
             failed = subprocess.run(["bootc", "switch", "--enforce-container-sigpolicy", image],
                                     text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=2400)
-            require(failed.returncode != 0 and "signature" in failed.stderr.lower(),
-                    "update was not rejected for signature verification with an incorrect signer")
+            require(failed.returncode != 0 and any(reason in failed.stderr for reason in expected_rejections),
+                    f"expected bootc to reject the incorrect signer, got exit {failed.returncode}: "
+                    f"{failed.stderr.strip()[-4000:]}")
             require(status()["status"].get("staged") == staged_before,
                     "rejected update changed the staged deployment")
         finally:
