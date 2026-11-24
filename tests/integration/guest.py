@@ -758,8 +758,11 @@ def main():
                     run(["bootc", "rollback"])
                     result = {"rollback_staged": True}
                 elif command == "poweroff":
+                    # Queue shutdown outside this service's cgroup and leave
+                    # time to acknowledge it over the agent connection.
+                    run(["systemd-run", "--quiet", "--on-active=1s", "--timer-property=AccuracySec=1s",
+                         "/usr/bin/systemctl", "poweroff", "--no-block"], timeout=15)
                     send({"type": "result", "id": identifier, "ok": True, "result": {"poweroff": True}})
-                    subprocess.Popen(["systemctl", "poweroff", "--no-block"])
                     return
                 else:
                     raise RuntimeError(f"unsupported integration operation: {command}")
