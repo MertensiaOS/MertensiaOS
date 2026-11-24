@@ -33,9 +33,10 @@ instrumented test images. Apply a retention policy to its unique `run-*` tags.
 
 ## Automated publication
 
-Release payload builds use `podman build --pull --no-cache`, refreshing RPMs
-including Brave Origin even when the Fedora base digest is unchanged. Publication
-still requires a manual dispatch. The finished payload is then repacked with
+Release payload builds run up to two independent Podman stages in parallel and
+use `--pull --no-cache` to refresh RPMs, including Brave Origin, even when the
+Fedora base digest is unchanged. Publication requires a manual dispatch. The
+finished payload is then repacked with
 digest-pinned Chunkah into up to 128 content-based layers, reducing update
 downloads. This converts the inherited OSTree image to plain bootc while
 preserving its bootc metadata and release trust configuration. See the
@@ -47,17 +48,21 @@ release; the headless VM probe does not cover these services.
 Run **Publish signed release** from `main` in GitHub Actions and choose channel
 `testing` or `latest`. Leave the version field blank to generate a version such
 as `45.20261123.12.1` from the OS version, UTC date, workflow run number and run
-attempt. To choose the version yourself, supply an unused container tag. The
-release workflow waits up to 180 minutes for **Check source and build payload**
-to pass on the `main` push for the exact commit being released. If that run
-fails or the wait times out, resolve the issue and retry the release. The
-release workflow then:
+attempt. To choose the version yourself, supply an unused container tag.
 
-1. Builds, rechunks and validates a clean payload, then builds separately published, signed update and recovery fixtures from that rechunked payload.
-2. Exercises actual ISO installation, recovery boot, accounts, signed upgrade and rollback, then validates the clean payload, rejecting development/test access and altered trust configuration.
-3. Publishes a new version tag, signs its immutable digest and verifies it with both Cosign and containers/image.
-4. Promotes the verified digest to the selected channel.
-5. Builds the production ISO from that signed digest and uploads the ISO, checksum file and signed bundle as workflow artifacts.
+1. Builds, rechunks and validates a clean payload while the independent `main` push CI can still be running.
+2. Waits up to 180 minutes for **Check source and build payload** to pass for the exact commit. If CI fails or the wait times out, resolve the issue and retry the release.
+3. Builds and publishes separately signed update and recovery fixtures from the rechunked payload, then exercises actual ISO installation, recovery boot, accounts, signed upgrade and rollback.
+4. Validates the clean payload again, publishes a new version tag, signs its immutable digest and verifies it with both Cosign and containers/image.
+5. Promotes the verified digest to the selected channel.
+6. Builds the production ISO from that signed digest and uploads the ISO, checksum file and signed bundle as a ZIP artifact with compression disabled because the ISO is mostly compressed already.
+
+On 24 November 2026, the CI wait took about 11 minutes, the clean payload build
+took 21 minutes, and the integration ISO and VM gate took 40 minutes. SquashFS
+compression accounted for about 5½ minutes of that gate. In a separate local
+check, level-6 DEFLATE took 29 seconds to shrink a 3.0 GB installer ISO by
+about 2%. Use the Actions step durations to compare the updated workflow with
+this [baseline release run](https://github.com/MertensiaOS/MertensiaOS/actions/runs/45336445385).
 
 It refuses an existing version and serializes workflow releases. A failed
 signature or policy check leaves the update channel untouched. A rerun generates
