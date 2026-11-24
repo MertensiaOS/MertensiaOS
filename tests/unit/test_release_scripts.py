@@ -435,6 +435,7 @@ class ReleaseScriptTests(unittest.TestCase):
         build = next(step["run"] for step in steps if step.get("name") == "Build clean release payload")
         self.assertIn("--pull", shlex.split(build))
         self.assertIn("--no-cache", shlex.split(build))
+        self.assertIn("--jobs=2", shlex.split(build))
         self.assertNotIn("schedule", workflow.get("on", workflow.get(True, {})))
 
     def test_payload_validation_rejects_host_update_plugins(self):
@@ -669,9 +670,12 @@ class ReleaseScriptTests(unittest.TestCase):
 
     def test_release_gates_and_publishes_the_rechunked_payload(self):
         workflow = yaml.safe_load((ROOT / ".github/workflows/release.yml").read_text())
-        steps = workflow["jobs"]["release"]["steps"]
+        job = workflow["jobs"]["release"]
+        steps = job["steps"]
         build = next(step for step in steps if "podman build --pull --no-cache" in step.get("run", ""))
         rechunk = next(step for step in steps if "scripts/rechunk-image.sh" in step.get("run", ""))
+        checks = next(step for step in steps if "/actions/workflows/ci.yml/runs" in step.get("run", ""))
+        login = next(step for step in steps if "podman login" in step.get("run", ""))
         fixture = next(step for step in steps if step.get("id") == "fixture")
         gate = next(step for step in steps if "scripts/test-iso.sh" in step.get("run", ""))
         publish = next(step for step in steps if step.get("id") == "publish")
@@ -681,9 +685,11 @@ class ReleaseScriptTests(unittest.TestCase):
         self.assertIn("BASE_IMAGE=localhost/mertensiaos:release", fixture["run"])
         self.assertIn("--base-image localhost/mertensiaos:release", gate["run"])
         self.assertIn("scripts/publish-image.sh localhost/mertensiaos:release ", publish["run"])
-        order = [steps.index(step) for step in (build, rechunk, fixture, gate, publish)]
+        self.assertEqual(job["permissions"]["actions"], "read")
+        self.assertIn('-f branch=main -f event=push -f "head_sha=$GITHUB_SHA"', checks["run"])
+        order = [steps.index(step) for step in (build, rechunk, checks, login, fixture, gate, publish)]
         self.assertEqual(order, sorted(order))
-        for step in (rechunk, gate):
+        for step in (rechunk, checks, gate):
             self.assertNotIn("continue-on-error", step)
             self.assertNotIn("if", step)
         for step in steps:

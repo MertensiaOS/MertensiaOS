@@ -18,14 +18,45 @@ concurrency:
   group: mertensia-release
   cancel-in-progress: false
 jobs:
-  checks:
+  release:
     if: github.ref == 'refs/heads/main'
     permissions:
       actions: read
+      contents: read
+      packages: write
+      id-token: write
     runs-on: ubuntu-24.04
-    timeout-minutes: 185
+    environment: release
+    timeout-minutes: 360
     steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Resolve release version
+        id: version
+        env:
+          VERSION_OVERRIDE: ${{ inputs.version }}
+        run: |
+          version="$VERSION_OVERRIDE"
+          if [[ -z "$version" ]]; then
+            unset VERSION_ID
+            source system/config/identity/os-release
+            version="${VERSION_ID:?Missing OS VERSION_ID}.$(date -u +%Y%m%d).${GITHUB_RUN_NUMBER:?}.${GITHUB_RUN_ATTEMPT:?}"
+          fi
+          if [[ ! "$version" =~ ^[a-zA-Z0-9_][a-zA-Z0-9_.-]{0,127}$ || "$version" == latest || "$version" == testing ]]; then
+            echo "Expected a valid container tag other than latest or testing" >&2
+            exit 2
+          fi
+          printf 'version=%s\n' "$version" >> "$GITHUB_OUTPUT"
+          printf 'Release version: %s\n' "$version"
+      - name: Install build and test tools
+        run: sudo apt-get update && sudo apt-get install -y podman skopeo qemu-system-x86 qemu-utils ovmf swtpm xorriso python3
+      - name: Build clean release payload
+        # Refresh RPMs even when the base image digest has not changed.
+        run: sudo podman build --pull --no-cache --jobs=2 -f Containerfile -t localhost/mertensiaos:release-unpacked .
+      - name: Rechunk and validate release payload
+        run: sudo bash scripts/rechunk-image.sh localhost/mertensiaos:release-unpacked localhost/mertensiaos:release
+      # Main push CI runs independently while the runner prepares the local payload.
       - name: Wait for successful source and payload CI for the release commit
+        timeout-minutes: 185
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -48,47 +79,11 @@ jobs:
           done
           echo "::error::Timed out waiting for source and payload CI for $GITHUB_SHA after 180 minutes."
           exit 1
-  release:
-    if: github.ref == 'refs/heads/main'
-    needs: checks
-    permissions:
-      contents: read
-      packages: write
-      id-token: write
-    runs-on: ubuntu-24.04
-    environment: release
-    timeout-minutes: 240
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: Resolve release version
-        id: version
-        env:
-          VERSION_OVERRIDE: ${{ inputs.version }}
-        run: |
-          version="$VERSION_OVERRIDE"
-          if [[ -z "$version" ]]; then
-            unset VERSION_ID
-            source system/config/identity/os-release
-            version="${VERSION_ID:?Missing OS VERSION_ID}.$(date -u +%Y%m%d).${GITHUB_RUN_NUMBER:?}.${GITHUB_RUN_ATTEMPT:?}"
-          fi
-          if [[ ! "$version" =~ ^[a-zA-Z0-9_][a-zA-Z0-9_.-]{0,127}$ || "$version" == latest || "$version" == testing ]]; then
-            echo "Expected a valid container tag other than latest or testing" >&2
-            exit 2
-          fi
-          printf 'version=%s\n' "$version" >> "$GITHUB_OUTPUT"
-          printf 'Release version: %s\n' "$version"
       - uses: sigstore/cosign-installer@756fe2d284c7292c4e9b62c8a28f1e5629c59532 # v4.1.3
         with:
           cosign-release: v3.1.4
           install-dir: /usr/local/bin
           use-sudo: 'true'
-      - name: Install build and test tools
-        run: sudo apt-get update && sudo apt-get install -y podman skopeo qemu-system-x86 qemu-utils ovmf swtpm xorriso python3
-      - name: Build clean release payload
-        # Refresh RPMs even when the base image digest has not changed.
-        run: sudo podman build --pull --no-cache -f Containerfile -t localhost/mertensiaos:release-unpacked .
-      - name: Rechunk and validate release payload
-        run: sudo bash scripts/rechunk-image.sh localhost/mertensiaos:release-unpacked localhost/mertensiaos:release
       - name: Authenticate registry
         env:
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -162,6 +157,7 @@ jobs:
             output/installer/mertensiaos-installer.iso
             output/installer/SHA256SUMS
             output/installer/SHA256SUMS.sigstore.json
+          compression-level: 0 # The bulk of the ISO is already compressed.
           retention-days: 30
       - name: Collect test diagnostics
         if: always()
