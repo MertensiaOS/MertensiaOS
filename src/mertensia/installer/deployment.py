@@ -28,8 +28,9 @@ def load_config(path: Path = constants.CONFIG) -> dict[str, str]:
         repository = re.escape(constants.IMAGE_REPOSITORY)
         if not re.fullmatch(repository + r"(?:[:][\w][\w.-]{0,127}|@sha256:[a-f0-9]{64})", result["TARGET_IMAGE"]):
             raise commands.InstallError("Production TARGET_IMAGE must reference the MertensiaOS image repository.")
-        if not re.fullmatch(repository + r"@sha256:[a-f0-9]{64}", result["SOURCE_IMAGE"]):
-            raise commands.InstallError("Production SOURCE_IMAGE must be a pinned MertensiaOS image digest.")
+        source_references = rf"(?:{repository}@sha256:|localhost/mertensiaos:iso-sha256-)[a-f0-9]{{64}}"
+        if not re.fullmatch(source_references, result["SOURCE_IMAGE"]):
+            raise commands.InstallError("Production SOURCE_IMAGE must reference a verified MertensiaOS payload.")
     return result
 
 
