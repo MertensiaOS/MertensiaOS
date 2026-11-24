@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 # Rebuild Fedora's RPMs with the homed enumeration fix in a disposable stage.
 set -euo pipefail
+mode="${1:?Supply locked or refresh mode}"
 
 build_root=/build/accountsservice
 mkdir -p "$build_root" /out
-dnf download --source --destdir="$build_root" accountsservice
+python3 /build/locked-rpms.py "$mode" accountsservice-source source "$build_root" accountsservice
 sources=("$build_root"/accountsservice-*.src.rpm)
 test "${#sources[@]}" -eq 1
 release="$(rpm -qp --qf '%{RELEASE}' "${sources[0]}").mertensia2"
@@ -27,7 +28,7 @@ spec = spec.replace("\n%description\n", "\nPatch9999: accountsservice-homed-enum
 path.write_text(spec)
 PY
 
-dnf -y builddep "$build_root/SPECS/accountsservice.spec"
+python3 /build/locked-rpms.py "$mode" accountsservice-builddep builddep "$build_root/SPECS/accountsservice.spec"
 rpmbuild --define "_topdir $build_root" -bb "$build_root/SPECS/accountsservice.spec"
 cp "$build_root"/RPMS/*/accountsservice-[0-9]*.rpm \
    "$build_root"/RPMS/*/accountsservice-libs-[0-9]*.rpm /out/

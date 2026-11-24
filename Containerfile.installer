@@ -10,16 +10,17 @@ FROM scratch AS installer-applications
 COPY src/mertensia/installer /usr/lib/mertensia/python/mertensia/installer
 
 FROM scratch AS installer-build-scripts
-COPY scripts/configure-installer.sh scripts/install-image-files.py scripts/clean-desktop.py scripts/check-desktop-policy.py scripts/installer-files.json /
+COPY scripts/locked-rpms.py scripts/configure-installer.sh scripts/install-image-files.py scripts/clean-desktop.py scripts/check-desktop-policy.py scripts/installer-files.json /
 
 FROM ${BASE_IMAGE}
 
 ARG SOURCE_IMAGE=localhost/mertensiaos:base
 ARG TARGET_IMAGE=localhost/mertensiaos:base
 ARG BUILD_MODE=development
+ARG RPM_INPUT_MODE=locked
 
-RUN --mount=type=cache,id=mertensia-installer-dnf45,target=/var/cache/libdnf5,sharing=locked \
-    dnf -y --setopt=keepcache=True install \
+RUN --mount=type=bind,from=installer-build-scripts,source=/locked-rpms.py,target=/run/locked-rpms.py,ro \
+    python3 /run/locked-rpms.py "$RPM_INPUT_MODE" installer install \
     dracut-live \
     dracut-config-generic \
     dracut-network \

@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 # Build the Fedora Skopeo RPM with support for a pinned Fulcio workflow identity.
 set -euo pipefail
+mode="${1:?Supply locked or refresh mode}"
 
 build_root=/build/skopeo
 mkdir -p "$build_root" /out
-dnf download --source --destdir="$build_root" skopeo
+python3 /build/locked-rpms.py "$mode" skopeo-source source "$build_root" skopeo
 sources=("$build_root"/skopeo-*.src.rpm)
 test "${#sources[@]}" -eq 1
 release="$(rpm -qp --qf '%{RELEASE}' "${sources[0]}").mertensia1"
@@ -23,7 +24,7 @@ if count != 1 or "%autosetup" not in spec or "\n%description\n" not in spec:
 path.write_text(spec.replace("\n%description\n", "\nPatch9999: skopeo-fulcio-build-signer.patch\n\n%description\n", 1))
 PY
 
-dnf -y builddep "$build_root/SPECS/skopeo.spec"
+python3 /build/locked-rpms.py "$mode" skopeo-builddep builddep "$build_root/SPECS/skopeo.spec"
 # Keep Go's build cache in the writable RPM workspace even if /root is unavailable.
 GOCACHE="$build_root/go-build-cache" \
     rpmbuild --define "_topdir $build_root" -bb "$build_root/SPECS/skopeo.spec"
