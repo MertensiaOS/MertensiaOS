@@ -141,7 +141,9 @@ each installer RPM, and the source RPMs and build dependencies for AccountsServi
 GNOME Settings and Skopeo. Transactions include the expected installed changes.
 The payload inventory includes packages inherited from Fedora bootc.
 
-The package bundle is pulled by digest. The build checks every RPM's SHA-256 and
+If Quay cannot serve the base, the build tries the same manifest digest at
+`registry.fedoraproject.org/fedora-bootc`. The package bundle is also pulled by
+digest. The build checks every RPM's SHA-256 and
 identity and verifies its signature with the Fedora release key from the pinned base
 or the checked-in Brave key. The build fails on missing artifacts, invalid
 signatures, changes to the RPM recipe, or a mismatched transaction or payload

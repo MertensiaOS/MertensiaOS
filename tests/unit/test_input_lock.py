@@ -25,6 +25,21 @@ upstream = script("check-upstream")
 
 
 class LockTests(unittest.TestCase):
+    def test_unavailable_base_falls_back_to_the_same_manifest_at_fedora(self):
+        manifest = "sha256:" + "a" * 64
+        quay = f"quay.io/fedora/fedora-bootc@{manifest}"
+        mirror = f"registry.fedoraproject.org/fedora-bootc@{manifest}"
+        uncached = SimpleNamespace(returncode=1)
+        missing = SimpleNamespace(returncode=125, stderr="manifest unknown")
+        available = SimpleNamespace(returncode=0, stderr="")
+        with patch.object(inputs.subprocess, "run", side_effect=[uncached, uncached, missing, available]) as podman, \
+             patch.object(inputs.sys, "stderr"):
+            self.assertEqual(inputs.pull_base(quay), mirror)
+        self.assertEqual([call.args[0] for call in podman.call_args_list], [
+            ("podman", "image", "exists", quay), ("podman", "image", "exists", mirror),
+            ("podman", "pull", quay), ("podman", "pull", mirror),
+        ])
+
     def test_missing_and_modified_cached_artifacts_are_rejected(self):
         data = b"locked bytes"
         package = {"file": "example.rpm", "sha256": inputs.digest(data)}

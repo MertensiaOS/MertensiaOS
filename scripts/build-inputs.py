@@ -8,6 +8,7 @@ from pathlib import Path
 import re
 import shutil
 import subprocess
+import sys
 import tempfile
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -92,6 +93,25 @@ def get_inventory(image):
     return sorted(row for row in rows.splitlines() if not row.startswith("gpg-pubkey\t"))
 
 
+def pull_base(reference):
+    manifest = reference.rsplit("@", 1)[1]
+    mirror = f"registry.fedoraproject.org/fedora-bootc@{manifest}"
+    sources = (reference, mirror)
+    for source in sources:
+        result = subprocess.run(("podman", "image", "exists", source), cwd=ROOT)
+        if result.returncode == 0:
+            return source
+        if result.returncode != 1:
+            result.check_returncode()
+    for source in sources:
+        result = subprocess.run(("podman", "pull", source),
+                                cwd=ROOT, text=True, stderr=subprocess.PIPE)
+        if result.returncode == 0:
+            return source
+        print(result.stderr.rstrip(), file=sys.stderr)
+    raise ValueError(f"Unable to pull locked Fedora bootc manifest {manifest} from Quay or Fedora")
+
+
 def build(kind, image, parent, snapshot, lock, *, refresh=False, args=()):
     release = input_id(lock) if not refresh else "refresh"
     options = ["--security-opt", "label=disable", "--build-arg", f"INPUT_LOCK_REVISION={release}"]
@@ -104,7 +124,8 @@ def build(kind, image, parent, snapshot, lock, *, refresh=False, args=()):
     # through the dangling symlink, and Buildah can leave mount points in /run.
     options += ["--volume", f"{snapshot.resolve()}:/var/mnt:{mode}"]
     if kind == "payload":
-        options += ["--build-arg", f"FEDORA_BASE={lock['inputs']['base']}"]
+        base = pull_base(lock["inputs"]["base"])
+        options += ["--build-arg", f"FEDORA_BASE={base}"]
         containerfile = "Containerfile"
     else:
         options += ["--build-arg", f"BASE_IMAGE={parent}"]
