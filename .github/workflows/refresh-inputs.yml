@@ -65,15 +65,23 @@ jobs:
           printf '%s' "$GHCR_TOKEN" | sudo podman login --authfile "$auth" ghcr.io --username "$GITHUB_ACTOR" --password-stdin
           sudo env "REGISTRY_AUTH_FILE=$auth" python3 scripts/build-inputs.py retain "$RUNNER_TEMP/build-rpms" "$RUNNER_TEMP/inputs.json"
           sudo chown "$(id -u):$(id -g)" build-inputs/lock.json
-      - name: Open or update the dependency refresh PR
+      - name: Create dependency refresh installation token
+        id: refresh-token
+        if: steps.report.outputs.changed == 'true'
+        uses: actions/create-github-app-token@f418cff399f7aef4c2f0ad47e25ca7a6abbdd6fc # v3.4.0
+        with:
+          app-id: ${{ vars.DEPENDENCY_REFRESH_APP_ID }}
+          private-key: ${{ secrets.DEPENDENCY_REFRESH_APP_PRIVATE_KEY }}
+          permission-contents: write
+          permission-pull-requests: write
+          permission-issues: write
+      - name: Open or update the signed dependency refresh PR
         id: proposal
         if: steps.report.outputs.changed == 'true'
         env:
-          GH_TOKEN: ${{ secrets.DEPENDENCY_REFRESH_TOKEN }}
+          GH_TOKEN: ${{ steps.refresh-token.outputs.token }}
           SECURITY: ${{ steps.report.outputs.security }}
         run: |
-          : "${GH_TOKEN:?Configure DEPENDENCY_REFRESH_TOKEN for a dedicated bot account}"
-          gh api user --jq .login
           bash scripts/propose-input-refresh.sh "$RUNNER_TEMP/refresh-pr.md" "$SECURITY"
       - name: Verify required pull request workflows were triggered
         if: steps.proposal.outputs.head != ''
@@ -91,7 +99,7 @@ jobs:
               case "$status" in
                 requested/*|queued/*|pending/*|in_progress/*|completed/success) break ;;
                 action_required/*|waiting/*|completed/action_required)
-                  echo "::error::$workflow needs approval. Check that the refresh used the bot PAT."
+                  echo "::error::$workflow needs approval. Check the repository Actions policy for the dependency refresh app."
                   exit 1 ;;
               esac
               if (( SECONDS >= deadline )); then

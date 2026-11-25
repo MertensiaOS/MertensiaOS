@@ -143,36 +143,100 @@ class ProposalTests(unittest.TestCase):
             (lock / "config.json").write_text("{}")
             (lock / "lock.json").write_text("original")
             git("add", ".")
-            git("commit", "-qm", "Start")
+            git("commit", "--no-gpg-sign", "-qm", "Start")
             main = git("rev-parse", "HEAD")
             git("push", "origin", "main")
             gh = base / "gh"
-            gh.write_text("""#!/bin/bash
-printf '%s %s\\n' "$1" "$2" >> "$PR_LOG"
-case "$1 $2" in
-  'pr list') if [[ -f "$PR_STATE" ]]; then echo 16; fi ;;
-  'pr create') touch "$PR_STATE" ;;
-  'pr view') if [[ "$*" != *labels* ]]; then echo 16; fi ;;
-esac
+            gh.write_text("""#!/usr/bin/env python3
+import base64
+import json
+import os
+from pathlib import Path
+import subprocess
+import sys
+
+def git(*args):
+    return subprocess.check_output(["git", *args])
+
+def field(name):
+    return next(arg.split("=", 1)[1] for arg in args if arg.startswith(name + "="))
+
+args = sys.argv[1:]
+if args == ["auth", "setup-git"]:
+    sys.exit()
+if "--paginate" in args:
+    args.remove("--paginate")
+method, route = (args[2], args[3]) if args[1] == "--method" else ("GET", args[1])
+api = "repos/example/project"
+with open(os.environ["PR_LOG"], "a") as log:
+    print(method, route, file=log)
+if route == f"{api}/git/refs" and method == "POST":
+    git("push", "origin", f"{field('sha')}:{field('ref')}")
+elif route.startswith(f"{api}/git/refs/heads/") and method == "DELETE":
+    git("push", "origin", ":" + route.removeprefix(f"{api}/git/"))
+elif route == "graphql":
+    request = json.load(sys.stdin)["variables"]["input"]
+    branch = "refs/heads/" + request["branch"]["branchName"]
+    assert request["branch"]["repositoryNameWithOwner"] == "example/project"
+    parent = request["expectedHeadOid"]
+    assert git("ls-remote", "origin", branch).split()[0].decode() == parent
+    additions = request["fileChanges"]["additions"]
+    assert [entry["path"] for entry in additions] == ["build-inputs/lock.json"]
+    for entry in additions:
+        assert base64.b64decode(entry["contents"]) == Path(entry["path"]).read_bytes()
+    tree = git("write-tree").decode().strip()
+    commit = git("commit-tree", "--no-gpg-sign", tree, "-p", parent,
+                 "-m", request["message"]["headline"]).decode().strip()
+    git("push", "origin", f"{commit}:{branch}")
+    if os.environ.get("MOVE_REFRESH_BRANCH"):
+        git("push", "--force", "origin", f"{parent}:refs/heads/automation/refresh-build-inputs")
+    print(commit)
+elif route.startswith(f"{api}/commits/"):
+    print(os.environ.get("SIGNATURE_VERIFIED", "true"))
+elif route == f"{api}/pulls" and method == "GET":
+    if Path(os.environ["PR_STATE"]).exists():
+        print(16)
+elif route == f"{api}/pulls" and method == "POST":
+    Path(os.environ["PR_STATE"]).touch()
+    print(16)
+elif (method, route) not in {("PATCH", f"{api}/pulls/16"), ("GET", f"{api}/issues/16/labels")}:
+    sys.exit(f"Unexpected API request: {method} {route}")
 """)
             gh.chmod(0o755)
             env = os.environ | {"PATH": str(base) + os.pathsep + os.environ["PATH"],
                                 "GITHUB_SHA": main, "GITHUB_REPOSITORY": "example/project",
+                                "GITHUB_RUN_ID": "42", "GITHUB_RUN_ATTEMPT": "1",
                                 "GITHUB_OUTPUT": str(base / "outputs"), "PR_LOG": str(log),
                                 "PR_STATE": str(base / "state")}
-            head = None
-            for value in ("updated", "updated", "updated again"):
+
+            def propose(value, **overrides):
                 git("reset", "--hard", main)
                 (lock / "lock.json").write_text(value)
-                result = subprocess.run(["bash", str(ROOT / "scripts/propose-input-refresh.sh"), str(report), "false"],
-                                        cwd=checkout, env=env, text=True, capture_output=True)
+                return subprocess.run(["bash", str(ROOT / "scripts/propose-input-refresh.sh"), str(report), "false"],
+                                      cwd=checkout, env=env | overrides, text=True, capture_output=True)
+
+            def refresh_head():
+                return git("ls-remote", "--heads", "origin", "automation/refresh-build-inputs").split()[0]
+
+            heads = []
+            for value in ("updated", "updated", "updated again"):
+                result = propose(value)
                 self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-                observed = git("ls-remote", "--heads", "origin", "automation/refresh-build-inputs").split()[0]
-                if head is None:
-                    head = observed
-                elif value == "updated":
-                    self.assertEqual(head, observed)
-                else:
-                    self.assertNotEqual(head, observed)
-            self.assertEqual(log.read_text().splitlines().count("pr create"), 1)
-            self.assertEqual(log.read_text().splitlines().count("pr edit"), 2)
+                heads.append(refresh_head())
+            self.assertEqual(heads[0], heads[1])
+            self.assertNotEqual(heads[1], heads[2])
+
+            result = propose("unverified input", SIGNATURE_VERIFIED="false")
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("did not verify the signature", result.stderr)
+            self.assertEqual(refresh_head(), heads[2])
+
+            result = propose("concurrent update", MOVE_REFRESH_BRANCH="1")
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("stale info", result.stderr)
+            self.assertEqual(refresh_head(), main)
+            self.assertEqual(git("ls-remote", "--heads", "origin", "automation/refresh-signing/*"), "")
+            calls = log.read_text().splitlines()
+            self.assertEqual(calls.count("POST repos/example/project/pulls"), 1)
+            self.assertEqual(calls.count("PATCH repos/example/project/pulls/16"), 2)
+            self.assertEqual(calls.count("GET graphql"), 4)

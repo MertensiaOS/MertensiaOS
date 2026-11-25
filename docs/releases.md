@@ -47,14 +47,22 @@ and advisory diff. A changed resolution updates the single
 the `security` label. An unchanged resolution leaves Git and the release channels
 as they are. Dependabot proposes GitHub Actions updates separately.
 
-Use a dedicated repository bot account with a fine-grained PAT and repository
-**Contents**, **Pull requests** and **Issues** write access. Store it as
-`DEPENDENCY_REFRESH_TOKEN`. The bot must be allowed to run PR workflows under the
-repository Actions policy. The refresh verifies that both `ci.yml` and
-`iso-smoke.yml` start for the exact PR head. Require the source and payload checks
-in the `main` ruleset. ISO smoke runs on lock changes, and the release workflow
-independently requires the installation suite. The workflow uses its own `GITHUB_TOKEN` to write the RPM
-bundle and the PAT to push and open the PR so it gets normal PR events.
+Install a private GitHub App on this repository with **Contents**,
+**Pull requests** and **Issues** write access. Store its App ID as the Actions
+variable `DEPENDENCY_REFRESH_APP_ID` and its private key as the Actions secret
+`DEPENDENCY_REFRESH_APP_PRIVATE_KEY`. The workflow uses `GITHUB_TOKEN` to write
+the RPM bundle and a short-lived app installation token to update the refresh PR.
+
+GitHub signs the refresh commit on a temporary `automation/refresh-signing/*`
+branch based on the resolved `main` revision. The workflow checks the signature,
+parent and contents before updating `automation/refresh-build-inputs` with a Git
+lease. Repository rules must allow the app to create and delete the temporary
+branches and replace the refresh branch head.
+
+The refresh verifies that both `ci.yml` and `iso-smoke.yml` start for the exact
+PR head. Require the source and payload checks in the `main` ruleset. ISO smoke
+runs on lock changes, and the release workflow independently requires the
+installation suite.
 [GitHub workflow-event authentication](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/trigger-a-workflow)
 
 ## Automated publication
