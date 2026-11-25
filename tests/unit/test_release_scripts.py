@@ -184,7 +184,7 @@ class ReleaseScriptTests(unittest.TestCase):
 
     def publish(self, **environment):
         return self.run_script(
-            "publish-image.sh", "localhost/mertensia:release", "45.20261005.1", "latest",
+            "publish-image.sh", "localhost/mertensia:release", "45.20261005.1",
             **environment,
         )
 
@@ -327,7 +327,7 @@ class ReleaseScriptTests(unittest.TestCase):
         self.assertEqual(self.calls("cosign", "verify"), [])
         self.assert_no_promotion()
 
-    def test_version_is_validated_signed_and_verified_before_digest_promotion(self):
+    def test_version_is_validated_signed_and_verified_without_advancing_channels(self):
         result = self.publish()
         self.assertEqual(result.returncode, 0, result.stderr)
         records = self.commands()
@@ -350,12 +350,7 @@ class ReleaseScriptTests(unittest.TestCase):
         self.assertIn("/usr/bin/skopeo", native_verification["args"])
         self.assertIn(LOCAL_IMAGE_ID, native_verification["args"])
         self.assertIn(f"docker://{IMMUTABLE_IMAGE}", native_verification["args"])
-        promotion = self.calls("skopeo", "copy")[0]
-        self.assertEqual(promotion["args"][-5:], ["copy", "--preserve-digests", "--remove-signatures",
-                                                 f"docker://{IMMUTABLE_IMAGE}", f"docker://{REPOSITORY}:latest"])
-        ordered = [validation, push, signing, native_verification, verification, promotion]
-        self.assertEqual([records.index(record) for record in ordered],
-                         sorted(records.index(record) for record in ordered))
+        self.assert_no_promotion()
 
     def test_verify_release_checks_workflow_identity_and_only_imports_verified_digest(self):
         destination = "oci:" + str(self.work / "verified-image") + ":verified"
@@ -429,14 +424,14 @@ class ReleaseScriptTests(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assert_no_push_or_promotion()
 
-    def test_release_build_refreshes_rpms_without_scheduling_publication(self):
+    def test_release_uses_locked_inputs_and_runs_on_lock_changes(self):
         workflow = yaml.safe_load((ROOT / ".github/workflows/release.yml").read_text())
         steps = workflow["jobs"]["release"]["steps"]
         build = next(step["run"] for step in steps if step.get("name") == "Build clean release payload")
-        self.assertIn("--pull", shlex.split(build))
-        self.assertIn("--no-cache", shlex.split(build))
-        self.assertIn("--jobs=2", shlex.split(build))
-        self.assertNotIn("schedule", workflow.get("on", workflow.get(True, {})))
+        self.assertIn("scripts/build-inputs.py build payload", build)
+        events = workflow.get("on", workflow.get(True, {}))
+        self.assertEqual(events["push"]["paths"], ["build-inputs/lock.json"])
+        self.assertIn("workflow_dispatch", events)
 
     def test_payload_validation_rejects_host_update_plugins(self):
         payload = self.payload_fixture()
@@ -672,14 +667,14 @@ class ReleaseScriptTests(unittest.TestCase):
         workflow = yaml.safe_load((ROOT / ".github/workflows/release.yml").read_text())
         job = workflow["jobs"]["release"]
         steps = job["steps"]
-        build = next(step for step in steps if "podman build --pull --no-cache" in step.get("run", ""))
+        build = next(step for step in steps if "scripts/build-inputs.py build payload" in step.get("run", ""))
         rechunk = next(step for step in steps if "scripts/rechunk-image.sh" in step.get("run", ""))
         checks = next(step for step in steps if "/actions/workflows/ci.yml/runs" in step.get("run", ""))
         login = next(step for step in steps if "podman login" in step.get("run", ""))
         fixture = next(step for step in steps if step.get("id") == "fixture")
         gate = next(step for step in steps if "scripts/test-iso.sh" in step.get("run", ""))
         publish = next(step for step in steps if step.get("id") == "publish")
-        self.assertIn("-t localhost/mertensiaos:release-unpacked", build["run"])
+        self.assertIn("build payload localhost/mertensiaos:release-unpacked", build["run"])
         self.assertEqual(shlex.split(rechunk["run"])[-2:],
                          ["localhost/mertensiaos:release-unpacked", "localhost/mertensiaos:release"])
         self.assertIn("BASE_IMAGE=localhost/mertensiaos:release", fixture["run"])
@@ -687,9 +682,11 @@ class ReleaseScriptTests(unittest.TestCase):
         self.assertIn("scripts/publish-image.sh localhost/mertensiaos:release ", publish["run"])
         self.assertEqual(job["permissions"]["actions"], "read")
         self.assertIn('-f branch=main -f event=push -f "head_sha=$GITHUB_SHA"', checks["run"])
-        order = [steps.index(step) for step in (build, rechunk, checks, login, fixture, gate, publish)]
+        production_gate = next(step for step in steps if "--production-upgrade-from" in step.get("run", ""))
+        testing = next(step for step in steps if "release-channel.py testing" in step.get("run", ""))
+        order = [steps.index(step) for step in (build, rechunk, checks, login, fixture, gate, publish, production_gate, testing)]
         self.assertEqual(order, sorted(order))
-        for step in (rechunk, checks, gate):
+        for step in (rechunk, checks, gate, production_gate, testing):
             self.assertNotIn("continue-on-error", step)
             self.assertNotIn("if", step)
         for step in steps:
@@ -701,7 +698,7 @@ class ReleaseScriptTests(unittest.TestCase):
         workflow = yaml.safe_load((ROOT / ".github/workflows/release.yml").read_text())
         job = workflow["jobs"]["release"]
         self.assertEqual(job["permissions"]["id-token"], "write")
-        self.assertEqual(job["if"], "github.ref == 'refs/heads/main'")
+        self.assertIn("github.ref == 'refs/heads/main'", job["if"])
         steps = job["steps"]
         fixture = next(step for step in steps if step.get("id") == "fixture")
         gate = next(step for step in steps if "--require-greenboot-recovery" in step.get("run", ""))

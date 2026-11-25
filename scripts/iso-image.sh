@@ -12,8 +12,11 @@ fi
 
 BASE_IMAGE="${MERTENSIA_PAYLOAD_IMAGE:-localhost/mertensiaos:base}"
 INSTALLER_IMAGE="${MERTENSIA_INSTALLER_IMAGE:-localhost/mertensiaos:installer}"
-BUILDER_IMAGE="${MERTENSIA_BUILDER_IMAGE:-ghcr.io/osbuild/image-builder@sha256:bb4bb67be80131bf149722b2e7dacc039434ee2b68abeb70c86c8221c8281f45}"
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+BUILDER_IMAGE="${MERTENSIA_BUILDER_IMAGE:-$(python3 "$ROOT_DIR/scripts/build-inputs.py" get image_builder)}"
+if [[ "${MERTENSIA_BUILD_MODE:-development}" == production ]]; then
+  [[ "$BUILDER_IMAGE" == "$(python3 "$ROOT_DIR/scripts/build-inputs.py" get image_builder)" ]]
+fi
 OUTPUT_DIR="$ROOT_DIR/output/installer"
 CACHE_DIR="${MERTENSIA_ISO_CACHE_DIR:-$ROOT_DIR/.build/image-builder}"
 ISO="$OUTPUT_DIR/mertensiaos-installer.iso"

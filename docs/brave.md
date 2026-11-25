@@ -32,9 +32,9 @@ upstream defaults. For protected media, use Brave's
 ## Updates and rollback
 
 Brave Origin security fixes reach installed systems through signed bootc releases.
-They take effect after a restart. Release builds refresh Brave Origin from upstream's
-stable RPM repository even when Fedora's base digest is unchanged. The Brave
-repository is configured only for the image build. See
+They take effect after a restart. The upstream checker resolves Brave Origin from its signed stable RPM repository
+every four hours, including when the Fedora base digest is unchanged. Release
+builds install the verified RPM recorded in the reviewed build-input lock. See
 [automatic updates](updates.md) and [releases](releases.md).
 
 An OS rollback also rolls back Origin's executable while keeping the newer

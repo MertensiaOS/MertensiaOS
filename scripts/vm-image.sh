@@ -15,7 +15,7 @@ OUTPUT_DIR="$ROOT_DIR/output"
 DISK="$OUTPUT_DIR/mertensiaos.raw"
 
 echo "> Building base image"
-podman build --pull -f "$ROOT_DIR/Containerfile" -t "$BASE_IMAGE" "$ROOT_DIR"
+python3 "$ROOT_DIR/scripts/build-inputs.py" build payload "$BASE_IMAGE"
 
 echo "> Building dev image"
 podman build -f "$ROOT_DIR/Containerfile.dev" -t "$DEV_IMAGE" "$ROOT_DIR"

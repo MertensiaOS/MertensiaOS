@@ -6,9 +6,16 @@ on:
         description: Exercise production Plymouth boot and graphical recovery instead of the serial fixture
         type: boolean
         default: false
+      baseline_image:
+        description: Signed baseline digest for a release upgrade test
+        type: string
+      candidate_image:
+        description: Signed candidate digest for a release upgrade test
+        type: string
   pull_request:
     paths:
       - 'Containerfile*'
+      - 'build-inputs/**'
       - '.containerignore'
       - 'src/**'
       - 'branding/**'
@@ -35,9 +42,17 @@ jobs:
       - name: Build and test the actual ISO
         env:
           GRAPHICAL_BOOT: ${{ inputs.graphical_boot }}
+          BASELINE_IMAGE: ${{ inputs.baseline_image }}
+          CANDIDATE_IMAGE: ${{ inputs.candidate_image }}
         run: |
           args=(--build --work-dir "$RUNNER_TEMP/mertensia-iso-test" --junit "$RUNNER_TEMP/mertensia-iso-test/junit.xml")
           if [[ "$GRAPHICAL_BOOT" == true ]]; then args+=(--graphical-boot); fi
+          if [[ -n "$BASELINE_IMAGE" || -n "$CANDIDATE_IMAGE" ]]; then
+            [[ -n "$BASELINE_IMAGE" && -n "$CANDIDATE_IMAGE" ]]
+            sudo python3 scripts/build-inputs.py build payload localhost/mertensiaos:upgrade-test
+            args+=(--base-image localhost/mertensiaos:upgrade-test --require-upgrade
+              --production-upgrade-from "$BASELINE_IMAGE" --upgrade-image "$CANDIDATE_IMAGE")
+          fi
           sudo bash scripts/test-iso.sh "${args[@]}"
       - name: Collect diagnostics
         if: always()

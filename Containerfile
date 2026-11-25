@@ -1,32 +1,41 @@
-FROM quay.io/fedora/fedora-bootc:45 AS accountsservice-build
+ARG FEDORA_BASE
+ARG RPM_INPUT_MODE=locked
 
-RUN dnf -y install dnf5-plugins rpm-build gcc pam-devel
+FROM ${FEDORA_BASE} AS accountsservice-build
+ARG RPM_INPUT_MODE
+COPY scripts/locked-rpms.py /build/locked-rpms.py
+
+RUN python3 /build/locked-rpms.py "$RPM_INPUT_MODE" accountsservice-tools install dnf5-plugins rpm-build gcc pam-devel
 
 COPY system/patches/accountsservice-homed-enumeration.patch /build/accountsservice-homed-enumeration.patch
 
 COPY scripts/build-accountsservice.sh /build/build-accountsservice.sh
 
-RUN bash /build/build-accountsservice.sh
+RUN bash /build/build-accountsservice.sh "$RPM_INPUT_MODE"
 
 COPY system/pam/pam_mertensia_password.c /build/pam_mertensia_password.c
 RUN mkdir -p /pam-out && gcc -std=c11 -O2 -Wall -Wextra -Werror -fPIC -shared \
     -Wl,-z,relro,-z,now,-z,noexecstack -o /pam-out/pam_mertensia_password.so \
     /build/pam_mertensia_password.c -lpam
 
-FROM quay.io/fedora/fedora-bootc:45 AS gnome-control-center-build
+FROM ${FEDORA_BASE} AS gnome-control-center-build
+ARG RPM_INPUT_MODE
+COPY scripts/locked-rpms.py /build/locked-rpms.py
 
-RUN dnf -y install dnf5-plugins rpm-build
+RUN python3 /build/locked-rpms.py "$RPM_INPUT_MODE" gnome-control-center-tools install dnf5-plugins rpm-build
 COPY system/patches/gnome-control-center-mertensia-accounts.patch /build/gnome-control-center-mertensia-accounts.patch
 COPY system/gnome /build/gnome
 COPY scripts/build-gnome-control-center.sh /build/build-gnome-control-center.sh
-RUN bash /build/build-gnome-control-center.sh
+RUN bash /build/build-gnome-control-center.sh "$RPM_INPUT_MODE"
 
-FROM quay.io/fedora/fedora-bootc:45 AS skopeo-build
+FROM ${FEDORA_BASE} AS skopeo-build
+ARG RPM_INPUT_MODE
+COPY scripts/locked-rpms.py /build/locked-rpms.py
 
-RUN dnf -y install dnf5-plugins rpm-build
+RUN python3 /build/locked-rpms.py "$RPM_INPUT_MODE" skopeo-tools install dnf5-plugins rpm-build
 COPY system/patches/skopeo-fulcio-build-signer.patch /build/skopeo-fulcio-build-signer.patch
 COPY scripts/build-skopeo.sh /build/build-skopeo.sh
-RUN bash /build/build-skopeo.sh
+RUN bash /build/build-skopeo.sh "$RPM_INPUT_MODE"
 
 ## Stage file inputs on an empty filesystem to avoid diffing the full OS for each COPY.
 FROM scratch AS payload-files
@@ -43,11 +52,17 @@ COPY src/mertensia/updates /usr/lib/mertensia/python/mertensia/updates
 COPY src/mertensia/system /usr/lib/mertensia/python/mertensia/system
 
 FROM scratch AS payload-build-scripts
-COPY scripts/configure-payload.sh scripts/install-image-files.py scripts/clean-desktop.py scripts/check-desktop-policy.py scripts/payload-files.json /
+COPY scripts/locked-rpms.py scripts/configure-payload.sh scripts/install-image-files.py scripts/clean-desktop.py scripts/check-desktop-policy.py scripts/payload-files.json /
 
-FROM quay.io/fedora/fedora-bootc:45
+FROM ${FEDORA_BASE}
+ARG RPM_INPUT_MODE
+ARG INPUT_LOCK_REVISION
+LABEL org.mertensiaos.input-lock="${INPUT_LOCK_REVISION}"
 
-RUN dnf -y install \
+RUN --mount=type=bind,from=payload-build-scripts,source=/locked-rpms.py,target=/run/locked-rpms.py,ro \
+    python3 /run/locked-rpms.py "$RPM_INPUT_MODE" fedora-update upgrade
+RUN --mount=type=bind,from=payload-build-scripts,source=/locked-rpms.py,target=/run/locked-rpms.py,ro \
+    python3 /run/locked-rpms.py "$RPM_INPUT_MODE" payload-core install \
     openssl \
     fwupd \
     firewalld \
@@ -76,14 +91,15 @@ RUN dnf -y install \
     plymouth-graphics-libs \
     plymouth-plugin-two-step \
     plymouth-plugin-label \
-    plymouth-theme-spinner \
-    && dnf clean all
+    plymouth-theme-spinner
+
 
 COPY --from=accountsservice-build /out/ /tmp/mertensia-accountsservice/
 COPY --from=gnome-control-center-build /out/ /tmp/mertensia-gnome-control-center/
 COPY --from=accountsservice-build /pam-out/pam_mertensia_password.so /usr/lib64/security/pam_mertensia_password.so
 
-RUN dnf -y install \
+RUN --mount=type=bind,from=payload-build-scripts,source=/locked-rpms.py,target=/run/locked-rpms.py,ro \
+    python3 /run/locked-rpms.py "$RPM_INPUT_MODE" payload-desktop install \
     gdm \
     /tmp/mertensia-accountsservice/*.rpm \
     gnome-shell \
@@ -93,10 +109,11 @@ RUN dnf -y install \
     NetworkManager \
     xdg-desktop-portal \
     xdg-desktop-portal-gnome \
-    && rm -rf /tmp/mertensia-accountsservice /tmp/mertensia-gnome-control-center && dnf clean all
+    && rm -rf /tmp/mertensia-accountsservice /tmp/mertensia-gnome-control-center
 
 RUN --mount=type=bind,from=skopeo-build,source=/out,target=/run/mertensia-skopeo,ro \
-    dnf -y install /run/mertensia-skopeo/skopeo-*.rpm && dnf clean all
+    --mount=type=bind,from=payload-build-scripts,source=/locked-rpms.py,target=/run/locked-rpms.py,ro \
+    python3 /run/locked-rpms.py "$RPM_INPUT_MODE" payload-skopeo install /run/mertensia-skopeo/skopeo-*.rpm
 
 RUN authselect select local with-systemd-homed with-group-merging --force --nobackup && \
     authselect check && \
@@ -108,21 +125,19 @@ RUN systemctl enable NetworkManager.service && \
     systemctl enable gdm.service && \
     systemctl set-default graphical.target
 
-RUN dnf -y install \
+RUN --mount=type=bind,from=payload-build-scripts,source=/locked-rpms.py,target=/run/locked-rpms.py,ro \
+    python3 /run/locked-rpms.py "$RPM_INPUT_MODE" payload-apps install \
     flatpak \
     gnome-software \
     ptyxis \
     gnome-text-editor \
-    gnome-firmware \
-    && dnf clean all
+    gnome-firmware
+
 
 # Only the image build uses Brave's repository. Installed systems use bootc.
-RUN --mount=type=bind,from=payload-files,source=/system/config/brave,target=/run/mertensia-brave,ro \
-    dnf -y --best --repofrompath='brave-browser,https://brave-browser-rpm-release.s3.brave.com/$basearch' \
-      --setopt=brave-browser.gpgcheck=1 \
-      --setopt=brave-browser.gpgkey=file:///run/mertensia-brave/brave-core.asc \
-      --setopt=brave-browser.includepkgs=brave-origin,brave-keyring \
-      install brave-origin && dnf clean all
+RUN --mount=type=bind,from=payload-files,source=/system/config/brave/brave-core.asc,target=/run/mertensia-brave.asc,ro \
+    --mount=type=bind,from=payload-build-scripts,source=/locked-rpms.py,target=/run/locked-rpms.py,ro \
+    python3 /run/locked-rpms.py "$RPM_INPUT_MODE" brave install brave-origin
 
 RUN --mount=type=bind,from=payload-files,target=/run/mertensia-files,ro \
     --mount=type=bind,from=payload-build-scripts,target=/run/mertensia-build,ro \

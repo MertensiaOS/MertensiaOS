@@ -12,6 +12,7 @@ import json
 import os
 import pwd
 import re
+import shutil
 import shlex
 import subprocess
 import sys
@@ -30,6 +31,8 @@ TOKEN = CONTRACT["token"].encode()
 DISK = "/dev/vda"
 SERIAL = CONTRACT["disk_serial"]
 ROLE = Path("/usr/share/mertensia-integration/role")
+if not ROLE.exists():
+    ROLE = Path(__file__).with_name("role")
 ACCOUNT = "integration_admin"
 SECOND_ACCOUNT = "integration_user"
 ROOT_PARTITION = "/dev/vda3"
@@ -553,6 +556,20 @@ AccountsClient().change_password(request['username'], request['current'], reques
     pam_authenticate(username, password)
 
 
+def persist_agent():
+    require(role() == "payload", "only the installed disposable disk can persist its agent")
+    TEST_STATE.mkdir(mode=0o755, exist_ok=True)
+    for source, name in ((Path(__file__), "agent.py"), (CONTRACT_PATH, "contract.json"), (ROLE, "role")):
+        shutil.copyfile(source, TEST_STATE / name)
+    name = "mertensia-integration.service"
+    unit = (Path("/usr/lib/systemd/system") / name).read_text()
+    unit = unit.replace("/usr/libexec/mertensia-integration-agent", str(TEST_STATE / "agent.py"))
+    (Path("/etc/systemd/system") / name).write_text(unit)
+    run(["systemctl", "enable", "--force", name])
+    run(["systemctl", "disable", "--now", "bootc-fetch-apply-updates.timer"])
+    return {"agent_persisted": True}
+
+
 def stage_upgrade(image):
     require(role() == "payload", "upgrade requires the installed system")
     require(isinstance(image, str) and image and not image.startswith("-"), "invalid upgrade image")
@@ -731,6 +748,8 @@ def main():
                     result = login_checks(request["password"], check_wrong_password=request.get("check_wrong_password", False))
                 elif command == "reject-update":
                     result = reject_wrong_signer(request["image"])
+                elif command == "persist-agent":
+                    result = persist_agent()
                 elif command == "upgrade":
                     result = stage_upgrade(request["image"])
                 elif command == "automatic-upgrade":

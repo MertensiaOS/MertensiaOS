@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 # Retain Fedora packaging while replacing local account management with ours.
 set -euo pipefail
+mode="${1:?Supply locked or refresh mode}"
 
 build_root=/build/gnome-control-center
 mkdir -p "$build_root" /out
-dnf download --source --destdir="$build_root" gnome-control-center
+python3 /build/locked-rpms.py "$mode" gnome-control-center-source source "$build_root" gnome-control-center
 sources=("$build_root"/gnome-control-center-*.src.rpm)
 test "${#sources[@]}" -eq 1
 release="$(rpm -qp --qf '%{RELEASE}' "${sources[0]}").mertensia2"
@@ -32,7 +33,7 @@ if count != 1:
 path.write_text(spec)
 PY
 
-dnf -y builddep "$build_root/SPECS/gnome-control-center.spec"
+python3 /build/locked-rpms.py "$mode" gnome-control-center-builddep builddep "$build_root/SPECS/gnome-control-center.spec"
 rpmbuild --define "_topdir $build_root" -bb "$build_root/SPECS/gnome-control-center.spec"
 cp "$build_root"/RPMS/*/gnome-control-center-[0-9]*.rpm /out/
 # Some Fedora releases split directory ownership into a matching subpackage.

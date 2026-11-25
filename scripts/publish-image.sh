@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# Publish a version first, then promote its verified digest to the update channel.
+# Publish and verify an immutable release candidate.
 set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-LOCAL_IMAGE="${1:?Usage: publish-image.sh LOCAL_IMAGE VERSION [CHANNEL]}"
+LOCAL_IMAGE="${1:?Usage: publish-image.sh LOCAL_IMAGE VERSION}"
 VERSION="${2:?Supply an immutable version such as 45.20261005.1}"
-CHANNEL="${3:-latest}"
+[[ $# -eq 2 ]] || exit 2
 source "$ROOT_DIR/scripts/release-identity.sh"
 REPOSITORY="$RELEASE_REPOSITORY"
 if [[ "${GITHUB_WORKFLOW_REF:-}" != "${WORKFLOW_IDENTITY#https://github.com/}" ||
@@ -12,14 +12,8 @@ if [[ "${GITHUB_WORKFLOW_REF:-}" != "${WORKFLOW_IDENTITY#https://github.com/}" |
   echo "Release publishing requires OIDC from the trusted GitHub Actions workflow" >&2
   exit 2
 fi
-for tag in "$VERSION" "$CHANNEL"; do
-  if [[ ! "$tag" =~ ^[a-zA-Z0-9_][a-zA-Z0-9_.-]{0,127}$ ]]; then
-    echo "Invalid container tag" >&2
-    exit 2
-  fi
-done
-if [[ "$VERSION" == latest || "$VERSION" == testing || "$VERSION" == "$CHANNEL" ]]; then
-  echo "The immutable version cannot be a channel tag" >&2
+if [[ ! "$VERSION" =~ ^[a-zA-Z0-9_][a-zA-Z0-9_.-]{0,127}$ || "$VERSION" == latest || "$VERSION" == testing ]]; then
+  echo "Expected an immutable version tag" >&2
   exit 2
 fi
 for command in podman cosign skopeo python3; do
@@ -53,8 +47,8 @@ cosign sign --yes --new-bundle-format=false --use-signing-config=false "$IMAGE"
 # Exercise the installed verifier with an anonymous pull before moving the tag.
 podman run --rm --entrypoint /usr/bin/skopeo "$LOCAL_IMAGE_ID" copy \
   --src-no-creds --preserve-digests --remove-signatures "docker://$IMAGE" oci:/var/tmp/mertensia-verified:verified >/dev/null
-bash "$ROOT_DIR/scripts/verify-release.sh" "$IMAGE" "docker://$REPOSITORY:$CHANNEL"
-printf 'Published %s as %s and %s\n' "$IMAGE" "$VERSION" "$CHANNEL"
+bash "$ROOT_DIR/scripts/verify-release.sh" "$IMAGE"
+printf 'Published candidate %s as %s\n' "$IMAGE" "$VERSION"
 if [[ -n "${GITHUB_OUTPUT:-}" ]]; then
   printf 'image=%s\ndigest=%s\n' "$IMAGE" "$DIGEST" >>"$GITHUB_OUTPUT"
 fi
