@@ -1,22 +1,49 @@
 #!/usr/bin/env bash
-# Reconcile the single repository-owned refresh branch with the resolved lock.
+# Keep one dependency proposal for the main revision the lock was resolved on.
 set -euo pipefail
 body="${1:?Supply the release refresh report}"
 security="${2:?Supply the security classification}"
-branch=automation/refresh-build-inputs
+base="${GITHUB_SHA:?}"
+branch="automation/refresh-build-inputs-$base"
 repo="${GITHUB_REPOSITORY:?}"
 api="repos/$repo"
 title='build(deps): refresh locked upstream inputs'
 inputs=(build-inputs/lock.json build-inputs/config.json)
 
 gh auth setup-git
-git fetch origin main
-if [[ "$(git rev-parse FETCH_HEAD)" != "$GITHUB_SHA" ]]; then
-  echo 'main moved during upstream resolution. The next refresh uses its new revision.' >&2
-  exit 1
-fi
+check_main() {
+  local remote
+  remote=$(git ls-remote --exit-code origin refs/heads/main)
+  if [[ "${remote%%$'\t'*}" != "$base" ]]; then
+    echo 'main moved during upstream resolution. The next refresh uses its new revision.' >&2
+    exit 1
+  fi
+}
+
+open_proposals() {
+  gh api --method GET --paginate "$api/pulls" -f base=main -f state=open \
+    --jq '.[] | select(.head.repo.full_name == .base.repo.full_name)
+          | select(.head.ref | test("^automation/refresh-build-inputs(-[0-9a-f]{40})?$"))
+          | [.head.ref, .number] | @tsv'
+}
+
+close_superseded() {
+  local keep="$1" proposals ref number
+  proposals=$(open_proposals)
+  while IFS=$'\t' read -r ref number; do
+    [[ -n "$number" ]] || continue
+    if [[ "$ref" == "$keep" ]]; then
+      printf '%s\n' "$number"
+    else
+      gh api --method PATCH "$api/pulls/$number" -f state=closed >/dev/null
+    fi
+  done <<< "$proposals"
+}
+
+check_main
 git add -- "${inputs[@]}"
-if git diff --cached --quiet "$GITHUB_SHA" -- "${inputs[@]}"; then
+if git diff --cached --quiet "$base" -- "${inputs[@]}"; then
+  close_superseded ""
   echo 'Build inputs are unchanged'
   exit 0
 fi
@@ -26,27 +53,24 @@ verified() {
 }
 
 remote="$(git ls-remote --heads origin "refs/heads/$branch")"
-read -r previous _ <<< "$remote"
-head=
-if [[ -n "$previous" ]]; then
+previous="${remote%%$'\t'*}"
+if [[ -z "$previous" ]]; then
+  gh api --method POST "$api/git/refs" -f ref="refs/heads/$branch" -f sha="$base" >/dev/null
+  previous="$base"
+else
   git fetch origin "refs/heads/$branch"
-  if [[ "$(git rev-parse "$previous^")" == "$GITHUB_SHA" ]] &&
-    git diff --cached --quiet "$previous"; then
-    previous_verified=$(verified "$previous")
-    if [[ "$previous_verified" == true ]]; then
-      head="$previous"
-    fi
+  if [[ "$(git rev-parse FETCH_HEAD)" != "$previous" ]] ||
+    ! git merge-base --is-ancestor "$base" "$previous" ||
+    ! git diff --quiet "$base" "$previous" -- . ":(exclude)${inputs[0]}" ":(exclude)${inputs[1]}"; then
+    echo 'The refresh branch changed or contains commits outside the resolved build inputs.' >&2
+    exit 1
   fi
 fi
-if [[ -z "$head" ]]; then
-  # GitHub signs commits made through this mutation, which can only append to
-  # a branch. Stage it on the exact main revision before updating the PR ref.
-  staging="automation/refresh-signing/${GITHUB_RUN_ID:?}-${GITHUB_RUN_ATTEMPT:?}"
-  gh api --method POST "$api/git/refs" -f ref="refs/heads/$staging" -f sha="$GITHUB_SHA" >/dev/null
-  trap 'gh api --method DELETE "$api/git/refs/heads/$staging" >/dev/null ||
-    echo "Could not delete temporary signing branch $staging" >&2' EXIT
+
+head="$previous"
+if ! git diff --cached --quiet "$previous"; then
   head=$(
-    python3 - "$repo" "$staging" "$GITHUB_SHA" "$title" "${inputs[@]}" <<'PY' |
+    python3 - "$repo" "$branch" "$previous" "$title" "${inputs[@]}" <<'PY' |
 import base64
 import json
 import subprocess
@@ -76,26 +100,25 @@ json.dump({
 PY
     gh api graphql --input - --jq .data.createCommitOnBranch.commit.oid
   )
-  head_verified=$(verified "$head")
-  if [[ "$head_verified" != true ]]; then
-    echo 'GitHub did not verify the signature on the refresh commit.' >&2
+  git fetch origin "refs/heads/$branch"
+  if [[ "$(git rev-parse FETCH_HEAD)" != "$head" || "$(git rev-parse "$head^")" != "$previous" ]]; then
+    echo 'The refresh branch moved before the signed commit could be checked.' >&2
     exit 1
   fi
-  git fetch origin "refs/heads/$staging"
-  if [[ "$(git rev-parse FETCH_HEAD)" != "$head" || "$(git rev-parse "$head^")" != "$GITHUB_SHA" ]] ||
-    ! git diff --cached --quiet "$head"; then
-    echo 'The signed refresh commit does not match the expected parent and contents.' >&2
-    exit 1
-  fi
-  git push --force-with-lease="refs/heads/$branch:$previous" origin "$head:refs/heads/$branch"
 fi
-remote="$(git ls-remote --heads origin "refs/heads/$branch")"
+head_verified=$(verified "$head")
+if [[ "$head_verified" != true ]] || ! git diff --cached --quiet "$head"; then
+  echo 'The refresh commit is unverified or does not contain the resolved build inputs.' >&2
+  exit 1
+fi
+
+remote=$(git ls-remote --exit-code origin "refs/heads/$branch")
 if [[ "${remote%%$'\t'*}" != "$head" ]]; then
   echo 'The refresh branch moved before the PR could be updated.' >&2
   exit 1
 fi
-number=$(gh api --method GET "$api/pulls" -f base=main -f head="${repo%/*}:$branch" -f state=open \
-  --jq '.[0].number // empty')
+check_main
+number=$(close_superseded "$branch")
 if [[ -z "$number" ]]; then
   number=$(gh api --method POST "$api/pulls" -f base=main -f head="$branch" \
     -f title="$title" -F body="@$body" --jq .number)
@@ -115,4 +138,4 @@ else
     gh api --method DELETE "$labels/security" >/dev/null
   fi
 fi
-printf 'head=%s\nnumber=%s\n' "$head" "$number" >> "${GITHUB_OUTPUT:?}"
+printf 'head=%s\nbranch=%s\nnumber=%s\n' "$head" "$branch" "$number" >> "${GITHUB_OUTPUT:?}"

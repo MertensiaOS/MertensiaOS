@@ -42,10 +42,10 @@ report distinguishes fixes present in the proposed payload from advisories that
 have yet to reach it. A failed upstream or registry request fails the workflow.
 
 Review the run summary or download `upstream-input-report` for the complete package
-and advisory diff. A changed resolution updates the single
-`automation/refresh-build-inputs` PR. PRs that include a Fedora security fix receive
-the `security` label. An unchanged resolution leaves Git and the release channels
-as they are. Dependabot proposes GitHub Actions updates separately.
+and advisory diff. A changed resolution opens or updates one dependency refresh
+PR. PRs that include a Fedora security fix receive the `security` label. An
+unchanged resolution closes any outstanding refresh PR without changing its
+branch or the release channels. Dependabot proposes GitHub Actions updates separately.
 
 Install a private GitHub App on this repository with **Contents**,
 **Pull requests** and **Issues** write access. Store its App ID as the Actions
@@ -53,11 +53,13 @@ variable `DEPENDENCY_REFRESH_APP_ID` and its private key as the Actions secret
 `DEPENDENCY_REFRESH_APP_PRIVATE_KEY`. The workflow uses `GITHUB_TOKEN` to write
 the RPM bundle and a short-lived app installation token to update the refresh PR.
 
-GitHub signs the refresh commit on a temporary `automation/refresh-signing/*`
-branch based on the resolved `main` revision. The workflow checks the signature,
-parent and contents before updating `automation/refresh-build-inputs` with a Git
-lease. Repository rules must allow the app to create and delete the temporary
-branches and replace the refresh branch head.
+GitHub signs refresh commits and appends them to an
+`automation/refresh-build-inputs-<main SHA>` branch. The workflow checks the
+signature, parent and contents before reconciling the PR. Refreshes resolved
+against the same `main` revision reuse its branch and PR. When `main` advances,
+the next changed resolution starts a branch from the new revision and closes the
+superseded PR. Older branches remain available under the repository's branch
+deletion rule.
 
 The refresh verifies that both `ci.yml` and `iso-smoke.yml` start for the exact
 PR head. Require the source and payload checks in the `main` ruleset. ISO smoke
@@ -102,6 +104,9 @@ To try the candidate, update a disposable installed machine to the verified
 `testing` digest. For an installer targeting `testing`, check out the candidate's
 source commit and build the ISO with `MERTENSIA_TARGET_IMAGE=ghcr.io/mertensiaos/mertensiaos:testing`.
 The workflow's uploaded production ISO targets `latest` for stable distribution.
+If `latest` has never been published, wait for the first stable promotion before
+distributing that ISO. The production installer checks that its update target
+exists before modifying the disk.
 
 Dispatch **Publish signed release** from `main` with the current passing
 `testing` SHA-256 in `promote_digest`. After the environment review, the job copies

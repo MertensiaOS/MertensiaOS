@@ -67,7 +67,6 @@ jobs:
           sudo chown "$(id -u):$(id -g)" build-inputs/lock.json
       - name: Create dependency refresh installation token
         id: refresh-token
-        if: steps.report.outputs.changed == 'true'
         uses: actions/create-github-app-token@f418cff399f7aef4c2f0ad47e25ca7a6abbdd6fc # v3.4.0
         with:
           app-id: ${{ vars.DEPENDENCY_REFRESH_APP_ID }}
@@ -75,9 +74,8 @@ jobs:
           permission-contents: write
           permission-pull-requests: write
           permission-issues: write
-      - name: Open or update the signed dependency refresh PR
+      - name: Reconcile the signed dependency refresh PR
         id: proposal
-        if: steps.report.outputs.changed == 'true'
         env:
           GH_TOKEN: ${{ steps.refresh-token.outputs.token }}
           SECURITY: ${{ steps.report.outputs.security }}
@@ -89,12 +87,13 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           HEAD_SHA: ${{ steps.proposal.outputs.head }}
+          HEAD_BRANCH: ${{ steps.proposal.outputs.branch }}
         run: |
           for workflow in ci.yml iso-smoke.yml; do
             deadline=$((SECONDS + 120))
             while true; do
               status=$(gh api --method GET "repos/$GITHUB_REPOSITORY/actions/workflows/$workflow/runs" \
-                -f event=pull_request -f branch=automation/refresh-build-inputs -f "head_sha=$HEAD_SHA" \
+                -f event=pull_request -f "branch=$HEAD_BRANCH" -f "head_sha=$HEAD_SHA" \
                 --jq '.workflow_runs[0] | if . == null then "" else "\(.status)/\(.conclusion // "none")" end')
               case "$status" in
                 requested/*|queued/*|pending/*|in_progress/*|completed/success) break ;;

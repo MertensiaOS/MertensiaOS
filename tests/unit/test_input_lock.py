@@ -136,7 +136,7 @@ class ChannelTests(unittest.TestCase):
 
 
 class ProposalTests(unittest.TestCase):
-    def test_repeated_updates_reuse_the_same_branch_and_pr(self):
+    def test_refreshes_keep_one_open_pr_under_protected_branch_rules(self):
         with tempfile.TemporaryDirectory() as work:
             base = Path(work)
             checkout = base / "checkout"
@@ -150,6 +150,8 @@ class ProposalTests(unittest.TestCase):
 
             git("init", "-q", "-b", "main")
             git("init", "-q", "--bare", str(base / "upstream"))
+            git("-C", str(base / "upstream"), "config", "receive.denyNonFastForwards", "true")
+            git("-C", str(base / "upstream"), "config", "receive.denyDeletes", "true")
             git("remote", "add", "origin", str(base / "upstream"))
             git("config", "user.name", "Test")
             git("config", "user.email", "test@example.com")
@@ -187,14 +189,18 @@ with open(os.environ["PR_LOG"], "a") as log:
     print(method, route, file=log)
 if route == f"{api}/git/refs" and method == "POST":
     git("push", "origin", f"{field('sha')}:{field('ref')}")
-elif route.startswith(f"{api}/git/refs/heads/") and method == "DELETE":
-    git("push", "origin", ":" + route.removeprefix(f"{api}/git/"))
 elif route == "graphql":
     request = json.load(sys.stdin)["variables"]["input"]
     branch = "refs/heads/" + request["branch"]["branchName"]
     assert request["branch"]["repositoryNameWithOwner"] == "example/project"
     parent = request["expectedHeadOid"]
-    assert git("ls-remote", "origin", branch).split()[0].decode() == parent
+    if os.environ.get("MOVE_REFRESH_BRANCH"):
+        prior_tree = git("rev-parse", f"{parent}^{{tree}}").decode().strip()
+        competing = git("commit-tree", "--no-gpg-sign", prior_tree, "-p", parent,
+                        "-m", "Concurrent update").decode().strip()
+        git("push", "origin", f"{competing}:{branch}")
+    if git("ls-remote", "origin", branch).split()[0].decode() != parent:
+        sys.exit("expected head mismatch")
     additions = request["fileChanges"]["additions"]
     assert [entry["path"] for entry in additions] == ["build-inputs/lock.json"]
     for entry in additions:
@@ -203,24 +209,33 @@ elif route == "graphql":
     commit = git("commit-tree", "--no-gpg-sign", tree, "-p", parent,
                  "-m", request["message"]["headline"]).decode().strip()
     git("push", "origin", f"{commit}:{branch}")
-    if os.environ.get("MOVE_REFRESH_BRANCH"):
-        git("push", "--force", "origin", f"{parent}:refs/heads/automation/refresh-build-inputs")
     print(commit)
 elif route.startswith(f"{api}/commits/"):
     print(os.environ.get("SIGNATURE_VERIFIED", "true"))
-elif route == f"{api}/pulls" and method == "GET":
-    if Path(os.environ["PR_STATE"]).exists():
-        print(16)
-elif route == f"{api}/pulls" and method == "POST":
-    Path(os.environ["PR_STATE"]).touch()
-    print(16)
-elif (method, route) not in {("PATCH", f"{api}/pulls/16"), ("GET", f"{api}/issues/16/labels")}:
+elif route == f"{api}/pulls" or route.startswith(f"{api}/pulls/"):
+    state = Path(os.environ["PR_STATE"])
+    proposals = json.loads(state.read_text()) if state.exists() else []
+    if method == "GET":
+        for proposal in proposals:
+            if proposal["open"]:
+                print(proposal["ref"], proposal["number"], sep=chr(9))
+    elif method == "POST":
+        assert not any(proposal["open"] for proposal in proposals)
+        number = 16 + len(proposals)
+        proposals.append({"ref": field("head"), "number": number, "open": True})
+        state.write_text(json.dumps(proposals))
+        print(number)
+    elif method == "PATCH" and "state=closed" in args:
+        proposal = next(proposal for proposal in proposals if route.endswith("/" + str(proposal["number"])))
+        assert proposal["open"]
+        proposal["open"] = False
+        state.write_text(json.dumps(proposals))
+elif method != "GET" or not route.endswith("/labels"):
     sys.exit(f"Unexpected API request: {method} {route}")
 """)
             gh.chmod(0o755)
             env = os.environ | {"PATH": str(base) + os.pathsep + os.environ["PATH"],
-                                "GITHUB_SHA": main, "GITHUB_REPOSITORY": "example/project",
-                                "GITHUB_RUN_ID": "42", "GITHUB_RUN_ATTEMPT": "1",
+                                "GITHUB_REPOSITORY": "example/project",
                                 "GITHUB_OUTPUT": str(base / "outputs"), "PR_LOG": str(log),
                                 "PR_STATE": str(base / "state")}
 
@@ -228,30 +243,60 @@ elif (method, route) not in {("PATCH", f"{api}/pulls/16"), ("GET", f"{api}/issue
                 git("reset", "--hard", main)
                 (lock / "lock.json").write_text(value)
                 return subprocess.run(["bash", str(ROOT / "scripts/propose-input-refresh.sh"), str(report), "false"],
-                                      cwd=checkout, env=env | overrides, text=True, capture_output=True)
+                                      cwd=checkout, env=env | {"GITHUB_SHA": main} | overrides,
+                                      text=True, capture_output=True)
 
-            def refresh_head():
-                return git("ls-remote", "--heads", "origin", "automation/refresh-build-inputs").split()[0]
+            def refresh_ref():
+                return f"automation/refresh-build-inputs-{main}"
+
+            def refresh_head(ref):
+                return git("ls-remote", "--heads", "origin", ref).split()[0]
+
+            first_ref = refresh_ref()
 
             heads = []
             for value in ("updated", "updated", "updated again"):
                 result = propose(value)
                 self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-                heads.append(refresh_head())
+                heads.append(refresh_head(first_ref))
             self.assertEqual(heads[0], heads[1])
             self.assertNotEqual(heads[1], heads[2])
+            self.assertEqual(git("rev-parse", f"{heads[2]}^"), heads[1])
 
-            result = propose("unverified input", SIGNATURE_VERIFIED="false")
+            result = propose("updated again", SIGNATURE_VERIFIED="false")
             self.assertNotEqual(result.returncode, 0)
-            self.assertIn("did not verify the signature", result.stderr)
-            self.assertEqual(refresh_head(), heads[2])
+            self.assertIn("refresh commit is unverified", result.stderr)
+            self.assertEqual(refresh_head(first_ref), heads[2])
 
             result = propose("concurrent update", MOVE_REFRESH_BRANCH="1")
             self.assertNotEqual(result.returncode, 0)
-            self.assertIn("stale info", result.stderr)
-            self.assertEqual(refresh_head(), main)
-            self.assertEqual(git("ls-remote", "--heads", "origin", "automation/refresh-signing/*"), "")
+            self.assertIn("expected head mismatch", result.stderr)
+            competing = refresh_head(first_ref)
+            self.assertEqual(git("rev-parse", f"{competing}^"), heads[2])
+
+            old_main = main
+            git("reset", "--hard", main)
+            git("commit", "--no-gpg-sign", "--allow-empty", "-qm", "Advance main")
+            main = git("rev-parse", "HEAD")
+            git("push", "origin", "main")
+            result = propose("resolved on old main", GITHUB_SHA=old_main)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("main moved during upstream resolution", result.stderr)
+
+            result = propose("resolved on new main")
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            second_ref = refresh_ref()
+            self.assertNotEqual(first_ref, second_ref)
+            self.assertEqual(git("rev-parse", f"{refresh_head(second_ref)}^"), main)
+            self.assertEqual(refresh_head(first_ref), competing)
+            proposals = json.loads((base / "state").read_text())
+            self.assertEqual([proposal["ref"] for proposal in proposals if proposal["open"]], [second_ref])
+
+            result = propose("original")
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertFalse(any(proposal["open"] for proposal in json.loads((base / "state").read_text())))
+            self.assertTrue(refresh_head(second_ref))
             calls = log.read_text().splitlines()
-            self.assertEqual(calls.count("POST repos/example/project/pulls"), 1)
-            self.assertEqual(calls.count("PATCH repos/example/project/pulls/16"), 2)
+            self.assertEqual(calls.count("POST repos/example/project/pulls"), 2)
+            self.assertEqual(calls.count("PATCH repos/example/project/pulls/16"), 3)
             self.assertEqual(calls.count("GET graphql"), 4)
