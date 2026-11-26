@@ -82,8 +82,10 @@ elif command == "podman":
         script = script.replace("'ExecStart=" + root + "/usr/bin/mertensia-update", "'ExecStart=/usr/bin/mertensia-update")
         script = script.replace("test -x /usr/bin/brave-origin-stable",
                                 "test -x " + root + "/usr/bin/brave-origin-stable")
-        # Relocated fixtures belong to the test runner; production requires root.
-        script = script.replace("expected_owner = 0", "expected_owner = " + str(os.getuid()))
+        # Model container ownership using the relocated payload's UID and GID.
+        metadata = Path(root).stat()
+        script = script.replace("expected_owner = 0", f"expected_owner = {metadata.st_uid}")
+        script = script.replace("metadata.st_gid != expected_owner", f"metadata.st_gid != {metadata.st_gid}")
         result = subprocess.run(["bash", "-euc", script, *args[script_index + 1:]])
         sys.exit(result.returncode)
     if args[0] == "push":
@@ -217,6 +219,10 @@ class ReleaseScriptTests(unittest.TestCase):
             shutil.copyfile(source, destination)
             if target.startswith(("usr/libexec/", "usr/lib/greenboot/", "usr/bin/")):
                 destination.chmod(0o755)
+            elif target.startswith("etc/brave/policies/"):
+                destination.parent.parent.chmod(0o755)
+                destination.parent.chmod(0o755)
+                destination.chmod(0o644)
         plugin = payload / "usr/lib64/gnome-software/plugins-23/libgs_plugin_flatpak.so"
         plugin.parent.mkdir(parents=True)
         plugin.touch()
