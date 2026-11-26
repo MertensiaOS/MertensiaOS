@@ -1,5 +1,5 @@
 {
   "fedora": 45,
-  "chunkah": "quay.io/coreos/chunkah:v0.7.1@sha256:a2c6ef1cbf47f0c2360fd3c8e580ada5c809f17b2ffc4b0bff9fa5083b980769",
-  "image_builder": "ghcr.io/osbuild/image-builder@sha256:bb4bb67be80131bf149722b2e7dacc039434ee2b68abeb70c86c8221c8281f45"
+  "chunkah": "quay.io/coreos/chunkah:v0.7.1@sha256:71e593421c5de7dcc7c8c5c50e98d3bac572055a76f399f61a491d123c20a523",
+  "image_builder": "ghcr.io/osbuild/image-builder@sha256:66851f5ab08495b189334fb61d5baf5a10cd153fb634b167041944240d0a7381"
 }

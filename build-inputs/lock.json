@@ -1,10 +1,10 @@
 {
-  "bundle": "ghcr.io/mertensiaos/mertensiaos-integration@sha256:14e9d6f854c9b8ef51f3d361b3ba3402e42a834ca057fa6f68cdb7f13ff4f0e5",
+  "bundle": "ghcr.io/mertensiaos/mertensiaos-integration@sha256:ec4cf387426350dede8f9fb22ec67865108e86580301503b20cfb8effbbb4e3c",
   "inputs": {
-    "base": "quay.io/fedora/fedora-bootc@sha256:71eb8f69409aa7e9c7a24e273a5cb6326ee44e0c251878a665cc68dd94bb5ecf",
-    "chunkah": "quay.io/coreos/chunkah:v0.7.1@sha256:a2c6ef1cbf47f0c2360fd3c8e580ada5c809f17b2ffc4b0bff9fa5083b980769",
+    "base": "quay.io/fedora/fedora-bootc@sha256:bf0f127b2fb2432bb48bf730406ec94fbf8943ab987cfdadca2de6d84426bbc9",
+    "chunkah": "quay.io/coreos/chunkah:v0.7.1@sha256:71e593421c5de7dcc7c8c5c50e98d3bac572055a76f399f61a491d123c20a523",
     "fedora": 45,
-    "image_builder": "ghcr.io/osbuild/image-builder@sha256:bb4bb67be80131bf149722b2e7dacc039434ee2b68abeb70c86c8221c8281f45",
+    "image_builder": "ghcr.io/osbuild/image-builder@sha256:66851f5ab08495b189334fb61d5baf5a10cd153fb634b167041944240d0a7381",
     "payload_inventory": [
       "7zip\t0\t26.06\t1.fc45\tx86_64\t7zip-26.06-1.fc45.src.rpm",
       "ModemManager-glib\t0\t1.24.2\t5.fc45\tx86_64\tModemManager-1.24.2-5.fc45.src.rpm",
@@ -58,7 +58,7 @@
       "bootc\t0\t1.17.1\t1.fc45\tx86_64\tbootc-1.17.1-1.fc45.src.rpm",
       "bootupd\t0\t0.3.2\t1.fc45\tx86_64\trust-bootupd-0.3.2-1.fc45.src.rpm",
       "brave-keyring\t0\t1.19\t1\tnoarch\tbrave-keyring-1.19-1.src.rpm",
-      "brave-origin\t0\t1.100.58\t1\tx86_64\tbrave-origin-1.100.58-1.src.rpm",
+      "brave-origin\t0\t1.100.59\t1\tx86_64\tbrave-origin-1.100.59-1.src.rpm",
       "brcmfmac-firmware\t0\t20261019\t1.fc45\tnoarch\tlinux-firmware-20261019-1.fc45.src.rpm",
       "btrfs-progs\t0\t7.1\t1.fc45\tx86_64\tbtrfs-progs-7.1-1.fc45.src.rpm",
       "bubblewrap\t0\t0.13.1\t1.fc45\tx86_64\tbubblewrap-0.13.1-1.fc45.src.rpm",
@@ -2620,7 +2620,7 @@
       "brave": {
         "added": [
           "brave-keyring\t0\t1.19\t1\tnoarch\tbrave-keyring-1.19-1.src.rpm",
-          "brave-origin\t0\t1.100.58\t1\tx86_64\tbrave-origin-1.100.58-1.src.rpm",
+          "brave-origin\t0\t1.100.59\t1\tx86_64\tbrave-origin-1.100.59-1.src.rpm",
           "desktop-file-utils\t0\t0.28\t8.fc45\tx86_64\tdesktop-file-utils-0.28-8.fc45.src.rpm",
           "dns-root-data\t0\t2026260100\t5.fc45\tnoarch\tdns-root-data-2026260100-5.fc45.src.rpm",
           "emacs-filesystem\t1\t30.2\t3.fc45\tx86_64\temacs-filesystem-30.2-3.fc45.src.rpm",
@@ -2644,9 +2644,9 @@
             "sha256": "f416dcf7f3c0c6c26c2c3c915e733ba2a93ae0cf21686b1bfc18fcae8907256b"
           },
           {
-            "file": "brave-origin-1.100.58-1.x86_64.rpm",
-            "rpm": "brave-origin\t0\t1.100.58\t1\tx86_64\tbrave-origin-1.100.58-1.src.rpm",
-            "sha256": "b835c50286fa4c03058c3111f3b6bfee610b907d055cc2f9291cee50b0d14e32"
+            "file": "brave-origin-1.100.59-1.x86_64.rpm",
+            "rpm": "brave-origin\t0\t1.100.59\t1\tx86_64\tbrave-origin-1.100.59-1.src.rpm",
+            "sha256": "69b3f72a1e0fcec739aff4862f67152db49c6b0bd99a9b75088e794328999bb0"
           },
           {
             "file": "desktop-file-utils-0.28-8.fc45.x86_64.rpm",
@@ -2727,33 +2727,9 @@
         "removed": []
       },
       "fedora-update": {
-        "added": [
-          "openssh\t0\t10.6p1\t1.fc45\tx86_64\topenssh-10.6p1-1.fc45.src.rpm",
-          "openssh-clients\t0\t10.6p1\t1.fc45\tx86_64\topenssh-10.6p1-1.fc45.src.rpm",
-          "openssh-server\t0\t10.6p1\t1.fc45\tx86_64\topenssh-10.6p1-1.fc45.src.rpm"
-        ],
-        "packages": [
-          {
-            "file": "openssh-10.6p1-1.fc45.x86_64.rpm",
-            "rpm": "openssh\t0\t10.6p1\t1.fc45\tx86_64\topenssh-10.6p1-1.fc45.src.rpm",
-            "sha256": "fce48605d74ec669de31cf1d240ad4771055c6ba9de64fa02e331bdad7a2a90b"
-          },
-          {
-            "file": "openssh-clients-10.6p1-1.fc45.x86_64.rpm",
-            "rpm": "openssh-clients\t0\t10.6p1\t1.fc45\tx86_64\topenssh-10.6p1-1.fc45.src.rpm",
-            "sha256": "f056455d54c38ffd4b0bad47458bda4bec863538679ea2298cf81c077fef2903"
-          },
-          {
-            "file": "openssh-server-10.6p1-1.fc45.x86_64.rpm",
-            "rpm": "openssh-server\t0\t10.6p1\t1.fc45\tx86_64\topenssh-10.6p1-1.fc45.src.rpm",
-            "sha256": "b386ddd0cce507833e0b747e5af6e37b8b68adab9a95f818f03a22105a404dd9"
-          }
-        ],
-        "removed": [
-          "openssh\t0\t10.5p1\t1.fc45\tx86_64\topenssh-10.5p1-1.fc45.src.rpm",
-          "openssh-clients\t0\t10.5p1\t1.fc45\tx86_64\topenssh-10.5p1-1.fc45.src.rpm",
-          "openssh-server\t0\t10.5p1\t1.fc45\tx86_64\topenssh-10.5p1-1.fc45.src.rpm"
-        ]
+        "added": [],
+        "packages": [],
+        "removed": []
       },
       "gnome-control-center-builddep": {
         "added": [
