@@ -1,10 +1,10 @@
 {
-  "bundle": "ghcr.io/mertensiaos/mertensiaos-integration@sha256:6b30c1830fd0b8a7dc26d66124202adb4ecf7e196fbceaa8505b4ef2d0611b92",
+  "bundle": "ghcr.io/mertensiaos/mertensiaos-integration@sha256:583b16649c4753f93e3d3d0e555822d692911de71d74e0299694d12565bd3afc",
   "inputs": {
-    "base": "quay.io/fedora/fedora-bootc@sha256:85555c5243e31859800ba9c4b3de11d02614d3929df911a8818c720ff6e5aa3d",
+    "base": "quay.io/fedora/fedora-bootc@sha256:30c120e9b7ad3d7c94ae9ead413025f316775adf94f8d5fb3f9a62f808f0763a",
     "chunkah": "quay.io/coreos/chunkah:v0.7.1@sha256:71e593421c5de7dcc7c8c5c50e98d3bac572055a76f399f61a491d123c20a523",
     "fedora": 45,
-    "image_builder": "ghcr.io/osbuild/image-builder@sha256:66851f5ab08495b189334fb61d5baf5a10cd153fb634b167041944240d0a7381",
+    "image_builder": "ghcr.io/osbuild/image-builder@sha256:9001c32779a0778c86e3bc01ed0a21b98575d79f2fc8fb0132a033993568bcd9",
     "payload_inventory": [
       "7zip\t0\t26.06\t1.fc45\tx86_64\t7zip-26.06-1.fc45.src.rpm",
       "ModemManager-glib\t0\t1.24.2\t5.fc45\tx86_64\tModemManager-1.24.2-5.fc45.src.rpm",
@@ -573,7 +573,7 @@
       "gpgmepp\t1\t2.0.0\t2.fc45\tx86_64\tgpgmepp-2.0.0-2.fc45.src.rpm",
       "graphene\t0\t1.10.8\t6.fc45\tx86_64\tgraphene-1.10.8-6.fc45.src.rpm",
       "graphite2\t0\t1.3.14\t22.fc45\tx86_64\tgraphite2-1.3.14-22.fc45.src.rpm",
-      "greenboot\t0\t0.16.4\t0.fc45\tx86_64\tgreenboot-rs-0.16.4-0.fc45.src.rpm",
+      "greenboot\t0\t0.16.6\t0.fc45\tx86_64\tgreenboot-rs-0.16.6-0.fc45.src.rpm",
       "grep\t0\t3.12\t4.fc45\tx86_64\tgrep-3.12-4.fc45.src.rpm",
       "groff-base\t0\t1.24.1\t2.fc45\tx86_64\tgroff-1.24.1-2.fc45.src.rpm",
       "grub2-common\t1\t2.12\t83.fc45\tnoarch\tgrub2-2.12-83.fc45.src.rpm",
@@ -665,12 +665,12 @@
       "kbd-legacy\t0\t2.10.0\t3.fc45\tnoarch\tkbd-2.10.0-3.fc45.src.rpm",
       "kbd-misc\t0\t2.10.0\t3.fc45\tnoarch\tkbd-2.10.0-3.fc45.src.rpm",
       "kdump-utils\t0\t1.0.61\t2.fc45\tx86_64\tkdump-utils-1.0.61-2.fc45.src.rpm",
-      "kernel\t0\t7.3.4\t300.fc45\tx86_64\tkernel-7.3.4-300.fc45.src.rpm",
-      "kernel-core\t0\t7.3.4\t300.fc45\tx86_64\tkernel-7.3.4-300.fc45.src.rpm",
-      "kernel-modules\t0\t7.3.4\t300.fc45\tx86_64\tkernel-7.3.4-300.fc45.src.rpm",
-      "kernel-modules-core\t0\t7.3.4\t300.fc45\tx86_64\tkernel-7.3.4-300.fc45.src.rpm",
-      "kernel-tools\t0\t7.3.4\t300.fc45\tx86_64\tkernel-7.3.4-300.fc45.src.rpm",
-      "kernel-tools-libs\t0\t7.3.4\t300.fc45\tx86_64\tkernel-7.3.4-300.fc45.src.rpm",
+      "kernel\t0\t7.3.6\t300.fc45\tx86_64\tkernel-7.3.6-300.fc45.src.rpm",
+      "kernel-core\t0\t7.3.6\t300.fc45\tx86_64\tkernel-7.3.6-300.fc45.src.rpm",
+      "kernel-modules\t0\t7.3.6\t300.fc45\tx86_64\tkernel-7.3.6-300.fc45.src.rpm",
+      "kernel-modules-core\t0\t7.3.6\t300.fc45\tx86_64\tkernel-7.3.6-300.fc45.src.rpm",
+      "kernel-tools\t0\t7.3.6\t300.fc45\tx86_64\tkernel-7.3.6-300.fc45.src.rpm",
+      "kernel-tools-libs\t0\t7.3.6\t300.fc45\tx86_64\tkernel-7.3.6-300.fc45.src.rpm",
       "kexec-tools\t0\t2.0.32\t4.fc45\tx86_64\tkexec-tools-2.0.32-4.fc45.src.rpm",
       "keyutils\t0\t1.6.3\t8.fc45\tx86_64\tkeyutils-1.6.3-8.fc45.src.rpm",
       "keyutils-libs\t0\t1.6.3\t8.fc45\tx86_64\tkeyutils-1.6.3-8.fc45.src.rpm",
@@ -816,7 +816,7 @@
       "libipa_hbac\t0\t2.13.2\t2.fc45\tx86_64\tsssd-2.13.2-2.fc45.src.rpm",
       "libjose\t0\t14\t8.fc45\tx86_64\tjose-14-8.fc45.src.rpm",
       "libjpeg-turbo\t0\t3.1.4.1\t2.fc45\tx86_64\tlibjpeg-turbo-3.1.4.1-2.fc45.src.rpm",
-      "libjxl\t1\t0.11.2\t2.fc45\tx86_64\tjpegxl-0.11.2-2.fc45.src.rpm",
+      "libjxl\t1\t0.11.2\t3.fc45\tx86_64\tjpegxl-0.11.2-3.fc45.src.rpm",
       "libkcapi\t0\t1.5.1\t2.fc45\tx86_64\tlibkcapi-1.5.1-2.fc45.src.rpm",
       "libkcapi-hasher\t0\t1.5.1\t2.fc45\tx86_64\tlibkcapi-1.5.1-2.fc45.src.rpm",
       "libkcapi-hmaccalc\t0\t1.5.1\t2.fc45\tx86_64\tlibkcapi-1.5.1-2.fc45.src.rpm",
@@ -872,7 +872,7 @@
       "libpwquality\t0\t1.4.5\t18.fc45\tx86_64\tlibpwquality-1.4.5-18.fc45.src.rpm",
       "libqmi\t0\t1.36.0\t4.fc45\tx86_64\tlibqmi-1.36.0-4.fc45.src.rpm",
       "libqrtr-glib\t0\t1.2.2\t10.fc45\tx86_64\tlibqrtr-glib-1.2.2-10.fc45.src.rpm",
-      "librepo\t0\t1.22.0\t1.fc45\tx86_64\tlibrepo-1.22.0-1.fc45.src.rpm",
+      "librepo\t0\t1.22.1\t1.fc45\tx86_64\tlibrepo-1.22.1-1.fc45.src.rpm",
       "libreport-filesystem\t0\t2.17.15\t14.fc45\tnoarch\tlibreport-2.17.15-14.fc45.src.rpm",
       "librsvg2\t0\t2.63.2\t2.fc45\tx86_64\tlibrsvg2-2.63.2-2.fc45.src.rpm",
       "libsbc\t0\t2.2\t1.fc45\tx86_64\tsbc-2.2-1.fc45.src.rpm",
@@ -953,11 +953,11 @@
       "libyuv\t0\t0\t0.63.20260213git6067afd.fc45\tx86_64\tlibyuv-0-0.63.20260213git6067afd.fc45.src.rpm",
       "libzen\t0\t0.4.41\t11.fc45\tx86_64\tlibzen-0.4.41-11.fc45.src.rpm",
       "libzip\t0\t1.12.1\t1.fc45\tx86_64\tlibzip-1.12.1-1.fc45.src.rpm",
-      "libzstd\t0\t1.5.7\t6.fc45\tx86_64\tzstd-1.5.7-6.fc45.src.rpm",
+      "libzstd\t0\t1.6.0\t1.fc45\tx86_64\tzstd-1.6.0-1.fc45.src.rpm",
       "linux-firmware\t0\t20261019\t1.fc45\tnoarch\tlinux-firmware-20261019-1.fc45.src.rpm",
       "linux-firmware-whence\t0\t20261019\t1.fc45\tnoarch\tlinux-firmware-20261019-1.fc45.src.rpm",
-      "llvm-filesystem\t0\t23.1.5\t2.fc45\tx86_64\tllvm-23.1.5-2.fc45.src.rpm",
-      "llvm-libs\t0\t23.1.5\t2.fc45\tx86_64\tllvm-23.1.5-2.fc45.src.rpm",
+      "llvm-filesystem\t0\t23.1.6\t1.fc45\tx86_64\tllvm-23.1.6-1.fc45.src.rpm",
+      "llvm-libs\t0\t23.1.6\t1.fc45\tx86_64\tllvm-23.1.6-1.fc45.src.rpm",
       "lm_sensors-libs\t0\t3.6.0\t25.fc45\tx86_64\tlm_sensors-3.6.0-25.fc45.src.rpm",
       "lmdb-libs\t0\t0.9.34\t3.fc45\tx86_64\tlmdb-0.9.34-3.fc45.src.rpm",
       "localsearch\t0\t3.12.0\t2.fc45\tx86_64\tlocalsearch-3.12.0-2.fc45.src.rpm",
@@ -1020,13 +1020,13 @@
       "ngtcp2-crypto-ossl\t0\t1.22.1\t3.fc45\tx86_64\tngtcp2-1.22.1-3.fc45.src.rpm",
       "nilfs-utils\t0\t2.2.11\t9.fc45\tx86_64\tnilfs-utils-2.2.11-9.fc45.src.rpm",
       "npth\t0\t1.8\t5.fc45\tx86_64\tnpth-1.8-5.fc45.src.rpm",
-      "nspr\t0\t4.39.0\t10.fc45\tx86_64\tnss-3.133.0-1.fc45.src.rpm",
-      "nss\t0\t3.133.0\t1.fc45\tx86_64\tnss-3.133.0-1.fc45.src.rpm",
+      "nspr\t0\t4.41.0\t1.fc45\tx86_64\tnss-3.134.0-1.fc45.src.rpm",
+      "nss\t0\t3.134.0\t1.fc45\tx86_64\tnss-3.134.0-1.fc45.src.rpm",
       "nss-altfiles\t0\t2.23.0\t10.fc45\tx86_64\tnss-altfiles-2.23.0-10.fc45.src.rpm",
-      "nss-softokn\t0\t3.133.0\t1.fc45\tx86_64\tnss-3.133.0-1.fc45.src.rpm",
-      "nss-softokn-freebl\t0\t3.133.0\t1.fc45\tx86_64\tnss-3.133.0-1.fc45.src.rpm",
-      "nss-sysinit\t0\t3.133.0\t1.fc45\tx86_64\tnss-3.133.0-1.fc45.src.rpm",
-      "nss-util\t0\t3.133.0\t1.fc45\tx86_64\tnss-3.133.0-1.fc45.src.rpm",
+      "nss-softokn\t0\t3.134.0\t1.fc45\tx86_64\tnss-3.134.0-1.fc45.src.rpm",
+      "nss-softokn-freebl\t0\t3.134.0\t1.fc45\tx86_64\tnss-3.134.0-1.fc45.src.rpm",
+      "nss-sysinit\t0\t3.134.0\t1.fc45\tx86_64\tnss-3.134.0-1.fc45.src.rpm",
+      "nss-util\t0\t3.134.0\t1.fc45\tx86_64\tnss-3.134.0-1.fc45.src.rpm",
       "ntfs-3g\t2\t2026.2.25\t3.fc45\tx86_64\tntfs-3g-2026.2.25-3.fc45.src.rpm",
       "ntfs-3g-libs\t2\t2026.2.25\t3.fc45\tx86_64\tntfs-3g-2026.2.25-3.fc45.src.rpm",
       "ntfs-3g-system-compression\t0\t1.1\t3.fc45\tx86_64\tntfs-3g-system-compression-1.1-3.fc45.src.rpm",
@@ -1070,14 +1070,14 @@
       "pcre2-syntax\t0\t10.49\t1.fc45\tnoarch\tpcre2-10.49-1.fc45.src.rpm",
       "pinentry\t0\t1.3.3\t2.fc45\tx86_64\tpinentry-1.3.3-2.fc45.src.rpm",
       "pinentry-gnome3\t0\t1.3.3\t2.fc45\tx86_64\tpinentry-1.3.3-2.fc45.src.rpm",
-      "pipewire\t0\t1.6.11\t1.fc45\tx86_64\tpipewire-1.6.11-1.fc45.src.rpm",
-      "pipewire-alsa\t0\t1.6.11\t1.fc45\tx86_64\tpipewire-1.6.11-1.fc45.src.rpm",
-      "pipewire-gstreamer\t0\t1.6.11\t1.fc45\tx86_64\tpipewire-1.6.11-1.fc45.src.rpm",
-      "pipewire-jack-audio-connection-kit\t0\t1.6.11\t1.fc45\tx86_64\tpipewire-1.6.11-1.fc45.src.rpm",
-      "pipewire-jack-audio-connection-kit-libs\t0\t1.6.11\t1.fc45\tx86_64\tpipewire-1.6.11-1.fc45.src.rpm",
-      "pipewire-libs\t0\t1.6.11\t1.fc45\tx86_64\tpipewire-1.6.11-1.fc45.src.rpm",
-      "pipewire-plugin-libcamera\t0\t1.6.11\t1.fc45\tx86_64\tpipewire-1.6.11-1.fc45.src.rpm",
-      "pipewire-pulseaudio\t0\t1.6.11\t1.fc45\tx86_64\tpipewire-1.6.11-1.fc45.src.rpm",
+      "pipewire\t0\t1.6.12\t1.fc45\tx86_64\tpipewire-1.6.12-1.fc45.src.rpm",
+      "pipewire-alsa\t0\t1.6.12\t1.fc45\tx86_64\tpipewire-1.6.12-1.fc45.src.rpm",
+      "pipewire-gstreamer\t0\t1.6.12\t1.fc45\tx86_64\tpipewire-1.6.12-1.fc45.src.rpm",
+      "pipewire-jack-audio-connection-kit\t0\t1.6.12\t1.fc45\tx86_64\tpipewire-1.6.12-1.fc45.src.rpm",
+      "pipewire-jack-audio-connection-kit-libs\t0\t1.6.12\t1.fc45\tx86_64\tpipewire-1.6.12-1.fc45.src.rpm",
+      "pipewire-libs\t0\t1.6.12\t1.fc45\tx86_64\tpipewire-1.6.12-1.fc45.src.rpm",
+      "pipewire-plugin-libcamera\t0\t1.6.12\t1.fc45\tx86_64\tpipewire-1.6.12-1.fc45.src.rpm",
+      "pipewire-pulseaudio\t0\t1.6.12\t1.fc45\tx86_64\tpipewire-1.6.12-1.fc45.src.rpm",
       "pixman\t0\t0.46.2\t4.fc45\tx86_64\tpixman-0.46.2-4.fc45.src.rpm",
       "pkcs11-provider\t0\t1.3.0\t1.fc45\tx86_64\tpkcs11-provider-1.3.0-1.fc45.src.rpm",
       "pkgconf\t0\t2.5.1\t2.fc45\tx86_64\tpkgconf-2.5.1-2.fc45.src.rpm",
@@ -1137,7 +1137,7 @@
       "python3-nftables\t1\t1.1.6\t4.fc45\tnoarch\tnftables-1.1.6-4.fc45.src.rpm",
       "python3-packaging\t0\t26.2\t4.fc45\tnoarch\tpython-packaging-26.2-4.fc45.src.rpm",
       "python3-pam\t0\t2.0.2\t20.fc45\tnoarch\tpython-pam-2.0.2-20.fc45.src.rpm",
-      "python3-perf\t0\t7.3.4\t300.fc45\tx86_64\tkernel-7.3.4-300.fc45.src.rpm",
+      "python3-perf\t0\t7.3.6\t300.fc45\tx86_64\tkernel-7.3.6-300.fc45.src.rpm",
       "python3-pexpect\t0\t4.9.0\t19.fc45\tnoarch\tpython-pexpect-4.9.0-19.fc45.src.rpm",
       "python3-policycoreutils\t0\t3.11\t2.fc45\tnoarch\tpolicycoreutils-3.11-2.fc45.src.rpm",
       "python3-ptyprocess\t0\t0.7.0\t17.fc45\tnoarch\tpython-ptyprocess-0.7.0-17.fc45.src.rpm",
@@ -1301,7 +1301,7 @@
       "zchunk-libs\t0\t1.5.5\t1.fc45\tx86_64\tzchunk-1.5.5-1.fc45.src.rpm",
       "zlib-ng-compat\t0\t2.3.3\t6.fc45\tx86_64\tzlib-ng-2.3.3-6.fc45.src.rpm",
       "zram-generator\t0\t1.2.1\t6.fc45\tx86_64\tzram-generator-1.2.1-6.fc45.src.rpm",
-      "zstd\t0\t1.5.7\t6.fc45\tx86_64\tzstd-1.5.7-6.fc45.src.rpm",
+      "zstd\t0\t1.6.0\t1.fc45\tx86_64\tzstd-1.6.0-1.fc45.src.rpm",
       "zvbi\t0\t0.2.46\t1.fc45\tx86_64\tzvbi-0.2.46-1.fc45.src.rpm"
     ],
     "recipe": {
@@ -2749,12 +2749,12 @@
           "annobin-docs\t0\t13.28\t1.fc45\tnoarch\tannobin-13.28-1.fc45.src.rpm",
           "annobin-plugin-gcc\t0\t13.28\t1.fc45\tx86_64\tannobin-13.28-1.fc45.src.rpm",
           "aribb24\t0\t1.0.3^20160216git5e9be27\t6.fc45\tx86_64\taribb24-1.0.3^20160216git5e9be27-6.fc45.src.rpm",
-          "at-spi2-atk\t0\t2.62.1\t1.fc45\tx86_64\tat-spi2-core-2.62.1-1.fc45.src.rpm",
-          "at-spi2-atk-devel\t0\t2.62.1\t1.fc45\tx86_64\tat-spi2-core-2.62.1-1.fc45.src.rpm",
-          "at-spi2-core\t0\t2.62.1\t1.fc45\tx86_64\tat-spi2-core-2.62.1-1.fc45.src.rpm",
-          "at-spi2-core-devel\t0\t2.62.1\t1.fc45\tx86_64\tat-spi2-core-2.62.1-1.fc45.src.rpm",
-          "atk\t0\t2.62.1\t1.fc45\tx86_64\tat-spi2-core-2.62.1-1.fc45.src.rpm",
-          "atk-devel\t0\t2.62.1\t1.fc45\tx86_64\tat-spi2-core-2.62.1-1.fc45.src.rpm",
+          "at-spi2-atk\t0\t2.62.2\t1.fc45\tx86_64\tat-spi2-core-2.62.2-1.fc45.src.rpm",
+          "at-spi2-atk-devel\t0\t2.62.2\t1.fc45\tx86_64\tat-spi2-core-2.62.2-1.fc45.src.rpm",
+          "at-spi2-core\t0\t2.62.2\t1.fc45\tx86_64\tat-spi2-core-2.62.2-1.fc45.src.rpm",
+          "at-spi2-core-devel\t0\t2.62.2\t1.fc45\tx86_64\tat-spi2-core-2.62.2-1.fc45.src.rpm",
+          "atk\t0\t2.62.2\t1.fc45\tx86_64\tat-spi2-core-2.62.2-1.fc45.src.rpm",
+          "atk-devel\t0\t2.62.2\t1.fc45\tx86_64\tat-spi2-core-2.62.2-1.fc45.src.rpm",
           "autoconf\t0\t2.73\t4.fc45\tnoarch\tautoconf-2.73-4.fc45.src.rpm",
           "automake\t0\t1.18.1\t5.fc45\tnoarch\tautomake-1.18.1-5.fc45.src.rpm",
           "avahi-devel\t0\t0.9~rc2\t9.fc45\tx86_64\tavahi-0.9~rc2-9.fc45.src.rpm",
@@ -2862,8 +2862,8 @@
           "gtk2-devel\t0\t2.24.33\t28.fc45\tx86_64\tgtk2-2.24.33-28.fc45.src.rpm",
           "gtk3\t0\t3.24.52\t6.fc45\tx86_64\tgtk3-3.24.52-6.fc45.src.rpm",
           "gtk3-devel\t0\t3.24.52\t6.fc45\tx86_64\tgtk3-3.24.52-6.fc45.src.rpm",
-          "gtk4\t0\t4.24.1\t1.fc45\tx86_64\tgtk4-4.24.1-1.fc45.src.rpm",
-          "gtk4-devel\t0\t4.24.1\t1.fc45\tx86_64\tgtk4-4.24.1-1.fc45.src.rpm",
+          "gtk4\t0\t4.24.2\t1.fc45\tx86_64\tgtk4-4.24.2-1.fc45.src.rpm",
+          "gtk4-devel\t0\t4.24.2\t1.fc45\tx86_64\tgtk4-4.24.2-1.fc45.src.rpm",
           "gupnp\t0\t1.6.10\t4.fc45\tx86_64\tgupnp-1.6.10-4.fc45.src.rpm",
           "gupnp-igd\t0\t1.6.0\t15.fc45\tx86_64\tgupnp-igd-1.6.0-15.fc45.src.rpm",
           "gweather-locations\t0\t2026.2\t5.fc45\tx86_64\tgweather-locations-2026.2-5.fc45.src.rpm",
@@ -2950,7 +2950,7 @@
           "libcue\t0\t2.4.2\t2.fc45\tx86_64\tlibcue-2.4.2-2.fc45.src.rpm",
           "libdatrie\t0\t0.2.14\t3.fc45\tx86_64\tlibdatrie-0.2.14-3.fc45.src.rpm",
           "libdatrie-devel\t0\t0.2.14\t3.fc45\tx86_64\tlibdatrie-0.2.14-3.fc45.src.rpm",
-          "libdav1d\t0\t1.5.4\t1.fc45\tx86_64\tdav1d-1.5.4-1.fc45.src.rpm",
+          "libdav1d\t0\t1.5.5\t1.fc45\tx86_64\tdav1d-1.5.5-1.fc45.src.rpm",
           "libdisplay-info\t0\t0.3.0\t2.fc45\tx86_64\tlibdisplay-info-0.3.0-2.fc45.src.rpm",
           "libebur128\t0\t1.2.6\t16.fc45\tx86_64\tlibebur128-1.2.6-16.fc45.src.rpm",
           "libepoxy\t0\t1.5.10\t13.fc45\tx86_64\tlibepoxy-1.5.10-13.fc45.src.rpm",
@@ -2968,8 +2968,8 @@
           "libglvnd-glx\t1\t1.7.0\t10.fc45\tx86_64\tlibglvnd-1.7.0-10.fc45.src.rpm",
           "libglvnd-opengl\t1\t1.7.0\t10.fc45\tx86_64\tlibglvnd-1.7.0-10.fc45.src.rpm",
           "libgsf\t0\t1.14.60\t1.fc45\tx86_64\tlibgsf-1.14.60-1.fc45.src.rpm",
-          "libgtop2\t0\t2.41.3\t13.fc45\tx86_64\tlibgtop2-2.41.3-13.fc45.src.rpm",
-          "libgtop2-devel\t0\t2.41.3\t13.fc45\tx86_64\tlibgtop2-2.41.3-13.fc45.src.rpm",
+          "libgtop2\t0\t2.41.4\t1.fc45\tx86_64\tlibgtop2-2.41.4-1.fc45.src.rpm",
+          "libgtop2-devel\t0\t2.41.4\t1.fc45\tx86_64\tlibgtop2-2.41.4-1.fc45.src.rpm",
           "libgudev-devel\t0\t238\t10.fc45\tx86_64\tlibgudev-238-10.fc45.src.rpm",
           "libgusb\t0\t0.4.9\t6.fc45\tx86_64\tlibgusb-0.4.9-6.fc45.src.rpm",
           "libgusb-devel\t0\t0.4.9\t6.fc45\tx86_64\tlibgusb-0.4.9-6.fc45.src.rpm",
@@ -2983,7 +2983,7 @@
           "libimobiledevice\t0\t1.4.0\t7.fc45\tx86_64\tlibimobiledevice-1.4.0-7.fc45.src.rpm",
           "libimobiledevice-glue\t0\t1.3.2\t2.fc45\tx86_64\tlibimobiledevice-glue-1.3.2-2.fc45.src.rpm",
           "libjpeg-turbo\t0\t3.1.4.1\t2.fc45\tx86_64\tlibjpeg-turbo-3.1.4.1-2.fc45.src.rpm",
-          "libjxl\t1\t0.11.2\t2.fc45\tx86_64\tjpegxl-0.11.2-2.fc45.src.rpm",
+          "libjxl\t1\t0.11.2\t3.fc45\tx86_64\tjpegxl-0.11.2-3.fc45.src.rpm",
           "libkadm5\t0\t1.22.2\t11.fc45\tx86_64\tkrb5-1.22.2-11.fc45.src.rpm",
           "liblc3\t0\t1.1.3\t9.fc45\tx86_64\tliblc3-1.1.3-9.fc45.src.rpm",
           "libldac\t0\t2.0.2.6\t1.fc45\tx86_64\tlibldac-2.0.2.6-1.fc45.src.rpm",
@@ -3058,9 +3058,9 @@
           "libyuv\t0\t0\t0.63.20260213git6067afd.fc45\tx86_64\tlibyuv-0-0.63.20260213git6067afd.fc45.src.rpm",
           "libzen\t0\t0.4.41\t11.fc45\tx86_64\tlibzen-0.4.41-11.fc45.src.rpm",
           "libzip\t0\t1.12.1\t1.fc45\tx86_64\tlibzip-1.12.1-1.fc45.src.rpm",
-          "libzstd-devel\t0\t1.5.7\t6.fc45\tx86_64\tzstd-1.5.7-6.fc45.src.rpm",
-          "llvm-filesystem\t0\t23.1.5\t2.fc45\tx86_64\tllvm-23.1.5-2.fc45.src.rpm",
-          "llvm-libs\t0\t23.1.5\t2.fc45\tx86_64\tllvm-23.1.5-2.fc45.src.rpm",
+          "libzstd-devel\t0\t1.6.0\t1.fc45\tx86_64\tzstd-1.6.0-1.fc45.src.rpm",
+          "llvm-filesystem\t0\t23.1.6\t1.fc45\tx86_64\tllvm-23.1.6-1.fc45.src.rpm",
+          "llvm-libs\t0\t23.1.6\t1.fc45\tx86_64\tllvm-23.1.6-1.fc45.src.rpm",
           "lm_sensors-libs\t0\t3.6.0\t25.fc45\tx86_64\tlm_sensors-3.6.0-25.fc45.src.rpm",
           "localsearch\t0\t3.12.0\t2.fc45\tx86_64\tlocalsearch-3.12.0-2.fc45.src.rpm",
           "lpcnetfreedv\t0\t0.5\t11.fc45\tx86_64\tlpcnetfreedv-0.5-11.fc45.src.rpm",
@@ -3151,7 +3151,7 @@
           "perl-constant\t0\t1.33\t528.fc45\tnoarch\tperl-constant-1.33-528.fc45.src.rpm",
           "perl-if\t0\t0.61.000\t527.fc45\tnoarch\tperl-5.44.0-527.fc45.src.rpm",
           "perl-interpreter\t4\t5.44.0\t527.fc45\tx86_64\tperl-5.44.0-527.fc45.src.rpm",
-          "perl-libnet\t0\t3.16\t1.fc45\tnoarch\tperl-libnet-3.16-1.fc45.src.rpm",
+          "perl-libnet\t0\t3.17\t1.fc45\tnoarch\tperl-libnet-3.17-1.fc45.src.rpm",
           "perl-libs\t4\t5.44.0\t527.fc45\tx86_64\tperl-5.44.0-527.fc45.src.rpm",
           "perl-locale\t0\t1.13\t527.fc45\tnoarch\tperl-5.44.0-527.fc45.src.rpm",
           "perl-mro\t0\t1.30\t527.fc45\tx86_64\tperl-5.44.0-527.fc45.src.rpm",
@@ -3162,13 +3162,13 @@
           "perl-threads\t1\t2.45\t527.fc45\tx86_64\tperl-threads-2.45-527.fc45.src.rpm",
           "perl-threads-shared\t0\t1.73\t527.fc45\tx86_64\tperl-threads-shared-1.73-527.fc45.src.rpm",
           "perl-vars\t0\t1.05\t527.fc45\tnoarch\tperl-5.44.0-527.fc45.src.rpm",
-          "pipewire\t0\t1.6.11\t1.fc45\tx86_64\tpipewire-1.6.11-1.fc45.src.rpm",
-          "pipewire-alsa\t0\t1.6.11\t1.fc45\tx86_64\tpipewire-1.6.11-1.fc45.src.rpm",
-          "pipewire-jack-audio-connection-kit\t0\t1.6.11\t1.fc45\tx86_64\tpipewire-1.6.11-1.fc45.src.rpm",
-          "pipewire-jack-audio-connection-kit-libs\t0\t1.6.11\t1.fc45\tx86_64\tpipewire-1.6.11-1.fc45.src.rpm",
-          "pipewire-libs\t0\t1.6.11\t1.fc45\tx86_64\tpipewire-1.6.11-1.fc45.src.rpm",
-          "pipewire-plugin-libcamera\t0\t1.6.11\t1.fc45\tx86_64\tpipewire-1.6.11-1.fc45.src.rpm",
-          "pipewire-pulseaudio\t0\t1.6.11\t1.fc45\tx86_64\tpipewire-1.6.11-1.fc45.src.rpm",
+          "pipewire\t0\t1.6.12\t1.fc45\tx86_64\tpipewire-1.6.12-1.fc45.src.rpm",
+          "pipewire-alsa\t0\t1.6.12\t1.fc45\tx86_64\tpipewire-1.6.12-1.fc45.src.rpm",
+          "pipewire-jack-audio-connection-kit\t0\t1.6.12\t1.fc45\tx86_64\tpipewire-1.6.12-1.fc45.src.rpm",
+          "pipewire-jack-audio-connection-kit-libs\t0\t1.6.12\t1.fc45\tx86_64\tpipewire-1.6.12-1.fc45.src.rpm",
+          "pipewire-libs\t0\t1.6.12\t1.fc45\tx86_64\tpipewire-1.6.12-1.fc45.src.rpm",
+          "pipewire-plugin-libcamera\t0\t1.6.12\t1.fc45\tx86_64\tpipewire-1.6.12-1.fc45.src.rpm",
+          "pipewire-pulseaudio\t0\t1.6.12\t1.fc45\tx86_64\tpipewire-1.6.12-1.fc45.src.rpm",
           "pixman\t0\t0.46.2\t4.fc45\tx86_64\tpixman-0.46.2-4.fc45.src.rpm",
           "pixman-devel\t0\t0.46.2\t4.fc45\tx86_64\tpixman-0.46.2-4.fc45.src.rpm",
           "polkit-devel\t0\t127\t5.fc45\tx86_64\tpolkit-127-5.fc45.src.rpm",
@@ -3338,34 +3338,34 @@
             "sha256": "9c1ba5d7d4b7d066d8318b4f42bc7303a1c2e6e6a02c7c5cbf5716d0be74f3b9"
           },
           {
-            "file": "at-spi2-atk-2.62.1-1.fc45.x86_64.rpm",
-            "rpm": "at-spi2-atk\t0\t2.62.1\t1.fc45\tx86_64\tat-spi2-core-2.62.1-1.fc45.src.rpm",
-            "sha256": "aa4e59a6e26bd0ed648b5f57e94fbbd9dea82173584cad79cf74ca6b0d989ad7"
+            "file": "at-spi2-atk-2.62.2-1.fc45.x86_64.rpm",
+            "rpm": "at-spi2-atk\t0\t2.62.2\t1.fc45\tx86_64\tat-spi2-core-2.62.2-1.fc45.src.rpm",
+            "sha256": "450a455228f5ca340ee3e2eff9fa5b13e9ffc17aa3a3fa7a2ece9093f0da87ec"
           },
           {
-            "file": "at-spi2-atk-devel-2.62.1-1.fc45.x86_64.rpm",
-            "rpm": "at-spi2-atk-devel\t0\t2.62.1\t1.fc45\tx86_64\tat-spi2-core-2.62.1-1.fc45.src.rpm",
-            "sha256": "9b2ede5961cdfddd8b2d25cebfd4a4cd8d112d620bde9ecbb9414c6efcf1495b"
+            "file": "at-spi2-atk-devel-2.62.2-1.fc45.x86_64.rpm",
+            "rpm": "at-spi2-atk-devel\t0\t2.62.2\t1.fc45\tx86_64\tat-spi2-core-2.62.2-1.fc45.src.rpm",
+            "sha256": "e3f5eb5da41013710d5c4a57a764f5a5e2c8b01b9336e6313baa22633c197f23"
           },
           {
-            "file": "at-spi2-core-2.62.1-1.fc45.x86_64.rpm",
-            "rpm": "at-spi2-core\t0\t2.62.1\t1.fc45\tx86_64\tat-spi2-core-2.62.1-1.fc45.src.rpm",
-            "sha256": "3c55cf4902dc43c7e122a0875fae806f8409d74006e48337bdd20289be3439d9"
+            "file": "at-spi2-core-2.62.2-1.fc45.x86_64.rpm",
+            "rpm": "at-spi2-core\t0\t2.62.2\t1.fc45\tx86_64\tat-spi2-core-2.62.2-1.fc45.src.rpm",
+            "sha256": "5660978528875c2300befc61613ebb0ba78f7db8bc312c363d0e2354d5cb2f5c"
           },
           {
-            "file": "at-spi2-core-devel-2.62.1-1.fc45.x86_64.rpm",
-            "rpm": "at-spi2-core-devel\t0\t2.62.1\t1.fc45\tx86_64\tat-spi2-core-2.62.1-1.fc45.src.rpm",
-            "sha256": "a0184200ff543329464adffc0df6b665f03911512896196677beae032f50e5ed"
+            "file": "at-spi2-core-devel-2.62.2-1.fc45.x86_64.rpm",
+            "rpm": "at-spi2-core-devel\t0\t2.62.2\t1.fc45\tx86_64\tat-spi2-core-2.62.2-1.fc45.src.rpm",
+            "sha256": "e49fd0fe317d570c6a4a95675d78b855359dd99de056685208ced2369b326db9"
           },
           {
-            "file": "atk-2.62.1-1.fc45.x86_64.rpm",
-            "rpm": "atk\t0\t2.62.1\t1.fc45\tx86_64\tat-spi2-core-2.62.1-1.fc45.src.rpm",
-            "sha256": "b242900b57d565c1b68bbd666f62453ca4086e90e6120d5fe2193cc5e527dfd9"
+            "file": "atk-2.62.2-1.fc45.x86_64.rpm",
+            "rpm": "atk\t0\t2.62.2\t1.fc45\tx86_64\tat-spi2-core-2.62.2-1.fc45.src.rpm",
+            "sha256": "9bf24239c80d74dc9bc1f7ef0247adad71b5af06a4f7a59e7713a8f11f0ac121"
           },
           {
-            "file": "atk-devel-2.62.1-1.fc45.x86_64.rpm",
-            "rpm": "atk-devel\t0\t2.62.1\t1.fc45\tx86_64\tat-spi2-core-2.62.1-1.fc45.src.rpm",
-            "sha256": "d2bc651621f2460bbae4bc4602a835411bb46780f414c35b0a6f6821e28726cd"
+            "file": "atk-devel-2.62.2-1.fc45.x86_64.rpm",
+            "rpm": "atk-devel\t0\t2.62.2\t1.fc45\tx86_64\tat-spi2-core-2.62.2-1.fc45.src.rpm",
+            "sha256": "b27f2fe05d6ad490d57e71909bcd71fe32a9d588ac91759256d1a38f6eef0590"
           },
           {
             "file": "autoconf-2.73-4.fc45.noarch.rpm",
@@ -3903,14 +3903,14 @@
             "sha256": "e77ab295d7f1a80235576d4f97040996081f1ae9e86288866ba9bbc1bba7e977"
           },
           {
-            "file": "gtk4-4.24.1-1.fc45.x86_64.rpm",
-            "rpm": "gtk4\t0\t4.24.1\t1.fc45\tx86_64\tgtk4-4.24.1-1.fc45.src.rpm",
-            "sha256": "fb02ba7ae2efbb014d18d56207ced6f7f2c6be5ef2af7e797d4da0bdc738e943"
+            "file": "gtk4-4.24.2-1.fc45.x86_64.rpm",
+            "rpm": "gtk4\t0\t4.24.2\t1.fc45\tx86_64\tgtk4-4.24.2-1.fc45.src.rpm",
+            "sha256": "cd819ec96d39cf4ef9b30b083b4a4150217abefc2a63b859d3bce1fb1a6ed4a8"
           },
           {
-            "file": "gtk4-devel-4.24.1-1.fc45.x86_64.rpm",
-            "rpm": "gtk4-devel\t0\t4.24.1\t1.fc45\tx86_64\tgtk4-4.24.1-1.fc45.src.rpm",
-            "sha256": "b767f80cdb73fcf87c5ced629d914d57fa5c83eff527b1d02bde9108af9391a7"
+            "file": "gtk4-devel-4.24.2-1.fc45.x86_64.rpm",
+            "rpm": "gtk4-devel\t0\t4.24.2\t1.fc45\tx86_64\tgtk4-4.24.2-1.fc45.src.rpm",
+            "sha256": "c551fbe6f369d1a05b5caabfdeb28501182f643112f709171b0011787a04fd86"
           },
           {
             "file": "gupnp-1.6.10-4.fc45.x86_64.rpm",
@@ -4343,9 +4343,9 @@
             "sha256": "c6e057fda6dbbe7e314a042c808be643c906eef26a69878558be67c6ee80d92b"
           },
           {
-            "file": "libdav1d-1.5.4-1.fc45.x86_64.rpm",
-            "rpm": "libdav1d\t0\t1.5.4\t1.fc45\tx86_64\tdav1d-1.5.4-1.fc45.src.rpm",
-            "sha256": "23af72944a38e2ca18ecd5356f7c2083f9c695f224fd45d3a868b0349e7cd3f8"
+            "file": "libdav1d-1.5.5-1.fc45.x86_64.rpm",
+            "rpm": "libdav1d\t0\t1.5.5\t1.fc45\tx86_64\tdav1d-1.5.5-1.fc45.src.rpm",
+            "sha256": "7824664fae26585069f48c7d9b79154649c0341354d74f88adbe391861642921"
           },
           {
             "file": "libdisplay-info-0.3.0-2.fc45.x86_64.rpm",
@@ -4433,14 +4433,14 @@
             "sha256": "5c8ed3b215b9fdf6d210c69c705e0658f8098e00d784d2fcd428af08a2cdaaa4"
           },
           {
-            "file": "libgtop2-2.41.3-13.fc45.x86_64.rpm",
-            "rpm": "libgtop2\t0\t2.41.3\t13.fc45\tx86_64\tlibgtop2-2.41.3-13.fc45.src.rpm",
-            "sha256": "207853e8831e6cba3458b405bffecaa33f96c9ed536b74c6c3dbbf610ea3d747"
+            "file": "libgtop2-2.41.4-1.fc45.x86_64.rpm",
+            "rpm": "libgtop2\t0\t2.41.4\t1.fc45\tx86_64\tlibgtop2-2.41.4-1.fc45.src.rpm",
+            "sha256": "82dc63fc3509a555190994b539067c356b669c22c40d013d4c1f995e1cf06c81"
           },
           {
-            "file": "libgtop2-devel-2.41.3-13.fc45.x86_64.rpm",
-            "rpm": "libgtop2-devel\t0\t2.41.3\t13.fc45\tx86_64\tlibgtop2-2.41.3-13.fc45.src.rpm",
-            "sha256": "06eb6dda56463ac384b52b94c496e13fb4f140f59554bbd3b64881528b11abec"
+            "file": "libgtop2-devel-2.41.4-1.fc45.x86_64.rpm",
+            "rpm": "libgtop2-devel\t0\t2.41.4\t1.fc45\tx86_64\tlibgtop2-2.41.4-1.fc45.src.rpm",
+            "sha256": "a68a1c69a83ee850c6453f412be939c9505dd9950a72c07978f5da2d2de05af6"
           },
           {
             "file": "libgudev-devel-238-10.fc45.x86_64.rpm",
@@ -4508,9 +4508,9 @@
             "sha256": "2450cb5857f0304265c30a908669c93199cc9457b34fc3d8381563d813932e7c"
           },
           {
-            "file": "libjxl-0.11.2-2.fc45.x86_64.rpm",
-            "rpm": "libjxl\t1\t0.11.2\t2.fc45\tx86_64\tjpegxl-0.11.2-2.fc45.src.rpm",
-            "sha256": "c4e0ded9add1c93c9efd39482179e827455a88d0a3f7bbeff063973e949c372b"
+            "file": "libjxl-0.11.2-3.fc45.x86_64.rpm",
+            "rpm": "libjxl\t1\t0.11.2\t3.fc45\tx86_64\tjpegxl-0.11.2-3.fc45.src.rpm",
+            "sha256": "a30438ec4845f677cffc3691da77ae7481fabeab83c49abaedfbbbdb75233f8e"
           },
           {
             "file": "libkadm5-1.22.2-11.fc45.x86_64.rpm",
@@ -4883,19 +4883,19 @@
             "sha256": "402d47cfea209d8d5b2c40ec265f9b3f81ef5440a8a5cd582e4dc652e518810d"
           },
           {
-            "file": "libzstd-devel-1.5.7-6.fc45.x86_64.rpm",
-            "rpm": "libzstd-devel\t0\t1.5.7\t6.fc45\tx86_64\tzstd-1.5.7-6.fc45.src.rpm",
-            "sha256": "4854cbbe6e60f126418c5d722cde8c0b9cd2ade9d0fd8a5052fa330121050db4"
+            "file": "libzstd-devel-1.6.0-1.fc45.x86_64.rpm",
+            "rpm": "libzstd-devel\t0\t1.6.0\t1.fc45\tx86_64\tzstd-1.6.0-1.fc45.src.rpm",
+            "sha256": "773e6b6f5dc77934e904de96c098567e1902a175c38b0cef9b38f6074ea8f772"
           },
           {
-            "file": "llvm-filesystem-23.1.5-2.fc45.x86_64.rpm",
-            "rpm": "llvm-filesystem\t0\t23.1.5\t2.fc45\tx86_64\tllvm-23.1.5-2.fc45.src.rpm",
-            "sha256": "5f343286f59b829994ce273f0e009fc38a6a332ae3c7ed4d5194e3752716186f"
+            "file": "llvm-filesystem-23.1.6-1.fc45.x86_64.rpm",
+            "rpm": "llvm-filesystem\t0\t23.1.6\t1.fc45\tx86_64\tllvm-23.1.6-1.fc45.src.rpm",
+            "sha256": "dcc69f945687162ba86e35b6cc604be01a3810b6a1b93d2d8cdac146e971ab33"
           },
           {
-            "file": "llvm-libs-23.1.5-2.fc45.x86_64.rpm",
-            "rpm": "llvm-libs\t0\t23.1.5\t2.fc45\tx86_64\tllvm-23.1.5-2.fc45.src.rpm",
-            "sha256": "352aacac2343474811146df7f7090c4334ec08ca72186987b46decd4aa7ccc81"
+            "file": "llvm-libs-23.1.6-1.fc45.x86_64.rpm",
+            "rpm": "llvm-libs\t0\t23.1.6\t1.fc45\tx86_64\tllvm-23.1.6-1.fc45.src.rpm",
+            "sha256": "5c708ade32ae40269fa4f02e5d42fa580afeb75c9e00d2e343a8c1181472922e"
           },
           {
             "file": "lm_sensors-libs-3.6.0-25.fc45.x86_64.rpm",
@@ -5348,9 +5348,9 @@
             "sha256": "883224813baab83fafb20f93971b391578e098ff041cc53dff9891cb71338b95"
           },
           {
-            "file": "perl-libnet-3.16-1.fc45.noarch.rpm",
-            "rpm": "perl-libnet\t0\t3.16\t1.fc45\tnoarch\tperl-libnet-3.16-1.fc45.src.rpm",
-            "sha256": "54f3898654afa4b78f52b276bb0ac22528b6485e2eabf8d8c2b1fa28a0a546f9"
+            "file": "perl-libnet-3.17-1.fc45.noarch.rpm",
+            "rpm": "perl-libnet\t0\t3.17\t1.fc45\tnoarch\tperl-libnet-3.17-1.fc45.src.rpm",
+            "sha256": "ffeeede0bb8b5c95ca167fa1da84b7958ec37e7edd8dc703c1a14306346ed164"
           },
           {
             "file": "perl-libs-5.44.0-527.fc45.x86_64.rpm",
@@ -5403,39 +5403,39 @@
             "sha256": "38e53d44fb269bf28d1335bb30e68a75f7d7cdbe76f50df542b00cdbafbc4a54"
           },
           {
-            "file": "pipewire-1.6.11-1.fc45.x86_64.rpm",
-            "rpm": "pipewire\t0\t1.6.11\t1.fc45\tx86_64\tpipewire-1.6.11-1.fc45.src.rpm",
-            "sha256": "8d730d83a255acf8eb75a01eb4ab055be1a5d008c04aaf02bcff8c2acb57ddfc"
+            "file": "pipewire-1.6.12-1.fc45.x86_64.rpm",
+            "rpm": "pipewire\t0\t1.6.12\t1.fc45\tx86_64\tpipewire-1.6.12-1.fc45.src.rpm",
+            "sha256": "c4fc2802ec64c033ee49d82276ef64d116c59b0f1bcf664aa89e7336289849a4"
           },
           {
-            "file": "pipewire-alsa-1.6.11-1.fc45.x86_64.rpm",
-            "rpm": "pipewire-alsa\t0\t1.6.11\t1.fc45\tx86_64\tpipewire-1.6.11-1.fc45.src.rpm",
-            "sha256": "31f2af216f90c04a7e7a2f87d5e8346597005c3aad6e7dc13c2b65bf36cf70b9"
+            "file": "pipewire-alsa-1.6.12-1.fc45.x86_64.rpm",
+            "rpm": "pipewire-alsa\t0\t1.6.12\t1.fc45\tx86_64\tpipewire-1.6.12-1.fc45.src.rpm",
+            "sha256": "e248be4f27306e4d5b76aeb6df64137e6cb7c6526cc4719b4a7e01a60f831145"
           },
           {
-            "file": "pipewire-jack-audio-connection-kit-1.6.11-1.fc45.x86_64.rpm",
-            "rpm": "pipewire-jack-audio-connection-kit\t0\t1.6.11\t1.fc45\tx86_64\tpipewire-1.6.11-1.fc45.src.rpm",
-            "sha256": "eb7f5c2f367e75ff9afbf5c25e270d6a07bd9e704c5ef060f46dba43bdb9e956"
+            "file": "pipewire-jack-audio-connection-kit-1.6.12-1.fc45.x86_64.rpm",
+            "rpm": "pipewire-jack-audio-connection-kit\t0\t1.6.12\t1.fc45\tx86_64\tpipewire-1.6.12-1.fc45.src.rpm",
+            "sha256": "8040deee63684b5371f80524ed2238cf08d51c697ac002997615f3fd9b721a03"
           },
           {
-            "file": "pipewire-jack-audio-connection-kit-libs-1.6.11-1.fc45.x86_64.rpm",
-            "rpm": "pipewire-jack-audio-connection-kit-libs\t0\t1.6.11\t1.fc45\tx86_64\tpipewire-1.6.11-1.fc45.src.rpm",
-            "sha256": "19d764a30f6b9fbdf74092d572f113d0d552d6f45821868cfc4be71ed424d608"
+            "file": "pipewire-jack-audio-connection-kit-libs-1.6.12-1.fc45.x86_64.rpm",
+            "rpm": "pipewire-jack-audio-connection-kit-libs\t0\t1.6.12\t1.fc45\tx86_64\tpipewire-1.6.12-1.fc45.src.rpm",
+            "sha256": "63e05fabd2ca5050d68fa7e3fe3eb43c61c97d86b010a334ad25e8f8bcdc3e69"
           },
           {
-            "file": "pipewire-libs-1.6.11-1.fc45.x86_64.rpm",
-            "rpm": "pipewire-libs\t0\t1.6.11\t1.fc45\tx86_64\tpipewire-1.6.11-1.fc45.src.rpm",
-            "sha256": "6ffa957112ed0be6507d6cbf004b61c920284392d28f7d5a2d44478abc3791fa"
+            "file": "pipewire-libs-1.6.12-1.fc45.x86_64.rpm",
+            "rpm": "pipewire-libs\t0\t1.6.12\t1.fc45\tx86_64\tpipewire-1.6.12-1.fc45.src.rpm",
+            "sha256": "d038823725af732beb0343713dca2268fbbfead10499bc6fd9a9f56ef263ecbd"
           },
           {
-            "file": "pipewire-plugin-libcamera-1.6.11-1.fc45.x86_64.rpm",
-            "rpm": "pipewire-plugin-libcamera\t0\t1.6.11\t1.fc45\tx86_64\tpipewire-1.6.11-1.fc45.src.rpm",
-            "sha256": "7a7be473c0f7e0ea8ec1da3924f49e7d1949e4a1ae046f6fe00b73276af132cd"
+            "file": "pipewire-plugin-libcamera-1.6.12-1.fc45.x86_64.rpm",
+            "rpm": "pipewire-plugin-libcamera\t0\t1.6.12\t1.fc45\tx86_64\tpipewire-1.6.12-1.fc45.src.rpm",
+            "sha256": "9d9b411c90bf911f532ce4ac2dced50429dfdc94c2c73ae72b4d0a1912a9209c"
           },
           {
-            "file": "pipewire-pulseaudio-1.6.11-1.fc45.x86_64.rpm",
-            "rpm": "pipewire-pulseaudio\t0\t1.6.11\t1.fc45\tx86_64\tpipewire-1.6.11-1.fc45.src.rpm",
-            "sha256": "970e0cdbc8d58a21a7c73ffde02b410b04d4cd20b09f10314046ed112297e2ca"
+            "file": "pipewire-pulseaudio-1.6.12-1.fc45.x86_64.rpm",
+            "rpm": "pipewire-pulseaudio\t0\t1.6.12\t1.fc45\tx86_64\tpipewire-1.6.12-1.fc45.src.rpm",
+            "sha256": "6865cf67efa6b5eb1a7a1bc1eb4289636ce467b7ed41752fc89a759352581d92"
           },
           {
             "file": "pixman-0.46.2-4.fc45.x86_64.rpm",
@@ -6806,7 +6806,7 @@
           "gpgmepp\t1\t2.0.0\t2.fc45\tx86_64\tgpgmepp-2.0.0-2.fc45.src.rpm",
           "graphene\t0\t1.10.8\t6.fc45\tx86_64\tgraphene-1.10.8-6.fc45.src.rpm",
           "graphite2\t0\t1.3.14\t22.fc45\tx86_64\tgraphite2-1.3.14-22.fc45.src.rpm",
-          "greenboot\t0\t0.16.4\t0.fc45\tx86_64\tgreenboot-rs-0.16.4-0.fc45.src.rpm",
+          "greenboot\t0\t0.16.6\t0.fc45\tx86_64\tgreenboot-rs-0.16.6-0.fc45.src.rpm",
           "gsm\t0\t1.0.24\t3.fc45\tx86_64\tgsm-1.0.24-3.fc45.src.rpm",
           "gssdp\t0\t1.6.6\t3.fc45\tx86_64\tgssdp-1.6.6-3.fc45.src.rpm",
           "gstreamer1\t0\t1.28.9\t1.fc45\tx86_64\tgstreamer1-1.28.9-1.fc45.src.rpm",
@@ -6882,7 +6882,7 @@
           "libimobiledevice\t0\t1.4.0\t7.fc45\tx86_64\tlibimobiledevice-1.4.0-7.fc45.src.rpm",
           "libimobiledevice-glue\t0\t1.3.2\t2.fc45\tx86_64\tlibimobiledevice-glue-1.3.2-2.fc45.src.rpm",
           "libjpeg-turbo\t0\t3.1.4.1\t2.fc45\tx86_64\tlibjpeg-turbo-3.1.4.1-2.fc45.src.rpm",
-          "libjxl\t1\t0.11.2\t2.fc45\tx86_64\tjpegxl-0.11.2-2.fc45.src.rpm",
+          "libjxl\t1\t0.11.2\t3.fc45\tx86_64\tjpegxl-0.11.2-3.fc45.src.rpm",
           "liblc3\t0\t1.1.3\t9.fc45\tx86_64\tliblc3-1.1.3-9.fc45.src.rpm",
           "libldac\t0\t2.0.2.6\t1.fc45\tx86_64\tlibldac-2.0.2.6-1.fc45.src.rpm",
           "liblerc\t0\t4.3.0\t1.fc45\tx86_64\tliblerc-4.3.0-1.fc45.src.rpm",
@@ -6921,8 +6921,8 @@
           "libyuv\t0\t0\t0.63.20260213git6067afd.fc45\tx86_64\tlibyuv-0-0.63.20260213git6067afd.fc45.src.rpm",
           "libzen\t0\t0.4.41\t11.fc45\tx86_64\tlibzen-0.4.41-11.fc45.src.rpm",
           "libzip\t0\t1.12.1\t1.fc45\tx86_64\tlibzip-1.12.1-1.fc45.src.rpm",
-          "llvm-filesystem\t0\t23.1.5\t2.fc45\tx86_64\tllvm-23.1.5-2.fc45.src.rpm",
-          "llvm-libs\t0\t23.1.5\t2.fc45\tx86_64\tllvm-23.1.5-2.fc45.src.rpm",
+          "llvm-filesystem\t0\t23.1.6\t1.fc45\tx86_64\tllvm-23.1.6-1.fc45.src.rpm",
+          "llvm-libs\t0\t23.1.6\t1.fc45\tx86_64\tllvm-23.1.6-1.fc45.src.rpm",
           "lm_sensors-libs\t0\t3.6.0\t25.fc45\tx86_64\tlm_sensors-3.6.0-25.fc45.src.rpm",
           "localsearch\t0\t3.12.0\t2.fc45\tx86_64\tlocalsearch-3.12.0-2.fc45.src.rpm",
           "lpcnetfreedv\t0\t0.5\t11.fc45\tx86_64\tlpcnetfreedv-0.5-11.fc45.src.rpm",
@@ -6946,13 +6946,13 @@
           "osinfo-db-tools\t0\t1.12.0\t10.fc45\tx86_64\tosinfo-db-tools-1.12.0-10.fc45.src.rpm",
           "pam_oo7\t0\t0.7.3\t2.fc45\tx86_64\too7-0.7.3-2.fc45.src.rpm",
           "pango\t0\t1.58.2\t1.fc45\tx86_64\tpango-1.58.2-1.fc45.src.rpm",
-          "pipewire\t0\t1.6.11\t1.fc45\tx86_64\tpipewire-1.6.11-1.fc45.src.rpm",
-          "pipewire-alsa\t0\t1.6.11\t1.fc45\tx86_64\tpipewire-1.6.11-1.fc45.src.rpm",
-          "pipewire-jack-audio-connection-kit\t0\t1.6.11\t1.fc45\tx86_64\tpipewire-1.6.11-1.fc45.src.rpm",
-          "pipewire-jack-audio-connection-kit-libs\t0\t1.6.11\t1.fc45\tx86_64\tpipewire-1.6.11-1.fc45.src.rpm",
-          "pipewire-libs\t0\t1.6.11\t1.fc45\tx86_64\tpipewire-1.6.11-1.fc45.src.rpm",
-          "pipewire-plugin-libcamera\t0\t1.6.11\t1.fc45\tx86_64\tpipewire-1.6.11-1.fc45.src.rpm",
-          "pipewire-pulseaudio\t0\t1.6.11\t1.fc45\tx86_64\tpipewire-1.6.11-1.fc45.src.rpm",
+          "pipewire\t0\t1.6.12\t1.fc45\tx86_64\tpipewire-1.6.12-1.fc45.src.rpm",
+          "pipewire-alsa\t0\t1.6.12\t1.fc45\tx86_64\tpipewire-1.6.12-1.fc45.src.rpm",
+          "pipewire-jack-audio-connection-kit\t0\t1.6.12\t1.fc45\tx86_64\tpipewire-1.6.12-1.fc45.src.rpm",
+          "pipewire-jack-audio-connection-kit-libs\t0\t1.6.12\t1.fc45\tx86_64\tpipewire-1.6.12-1.fc45.src.rpm",
+          "pipewire-libs\t0\t1.6.12\t1.fc45\tx86_64\tpipewire-1.6.12-1.fc45.src.rpm",
+          "pipewire-plugin-libcamera\t0\t1.6.12\t1.fc45\tx86_64\tpipewire-1.6.12-1.fc45.src.rpm",
+          "pipewire-pulseaudio\t0\t1.6.12\t1.fc45\tx86_64\tpipewire-1.6.12-1.fc45.src.rpm",
           "pixman\t0\t0.46.2\t4.fc45\tx86_64\tpixman-0.46.2-4.fc45.src.rpm",
           "plymouth\t0\t26.134.222\t6.fc45\tx86_64\tplymouth-26.134.222-6.fc45.src.rpm",
           "plymouth-core-libs\t0\t26.134.222\t6.fc45\tx86_64\tplymouth-26.134.222-6.fc45.src.rpm",
@@ -8791,9 +8791,9 @@
             "sha256": "08cd675bdea4dab2021ee29f8d5a25407b5a94cec78cfa98d889c1b43a32ae6f"
           },
           {
-            "file": "greenboot-0.16.4-0.fc45.x86_64.rpm",
-            "rpm": "greenboot\t0\t0.16.4\t0.fc45\tx86_64\tgreenboot-rs-0.16.4-0.fc45.src.rpm",
-            "sha256": "b04eb016e1a7dfca84e8064148c2af9d940f05e308eca4c86e363af018c6071e"
+            "file": "greenboot-0.16.6-0.fc45.x86_64.rpm",
+            "rpm": "greenboot\t0\t0.16.6\t0.fc45\tx86_64\tgreenboot-rs-0.16.6-0.fc45.src.rpm",
+            "sha256": "3e69a9a38b1c60bccd3e6b2293959a1931208b63cc750479750187c5eef6009c"
           },
           {
             "file": "gsm-1.0.24-3.fc45.x86_64.rpm",
@@ -9171,9 +9171,9 @@
             "sha256": "2450cb5857f0304265c30a908669c93199cc9457b34fc3d8381563d813932e7c"
           },
           {
-            "file": "libjxl-0.11.2-2.fc45.x86_64.rpm",
-            "rpm": "libjxl\t1\t0.11.2\t2.fc45\tx86_64\tjpegxl-0.11.2-2.fc45.src.rpm",
-            "sha256": "c4e0ded9add1c93c9efd39482179e827455a88d0a3f7bbeff063973e949c372b"
+            "file": "libjxl-0.11.2-3.fc45.x86_64.rpm",
+            "rpm": "libjxl\t1\t0.11.2\t3.fc45\tx86_64\tjpegxl-0.11.2-3.fc45.src.rpm",
+            "sha256": "a30438ec4845f677cffc3691da77ae7481fabeab83c49abaedfbbbdb75233f8e"
           },
           {
             "file": "liblc3-1.1.3-9.fc45.x86_64.rpm",
@@ -9366,14 +9366,14 @@
             "sha256": "402d47cfea209d8d5b2c40ec265f9b3f81ef5440a8a5cd582e4dc652e518810d"
           },
           {
-            "file": "llvm-filesystem-23.1.5-2.fc45.x86_64.rpm",
-            "rpm": "llvm-filesystem\t0\t23.1.5\t2.fc45\tx86_64\tllvm-23.1.5-2.fc45.src.rpm",
-            "sha256": "5f343286f59b829994ce273f0e009fc38a6a332ae3c7ed4d5194e3752716186f"
+            "file": "llvm-filesystem-23.1.6-1.fc45.x86_64.rpm",
+            "rpm": "llvm-filesystem\t0\t23.1.6\t1.fc45\tx86_64\tllvm-23.1.6-1.fc45.src.rpm",
+            "sha256": "dcc69f945687162ba86e35b6cc604be01a3810b6a1b93d2d8cdac146e971ab33"
           },
           {
-            "file": "llvm-libs-23.1.5-2.fc45.x86_64.rpm",
-            "rpm": "llvm-libs\t0\t23.1.5\t2.fc45\tx86_64\tllvm-23.1.5-2.fc45.src.rpm",
-            "sha256": "352aacac2343474811146df7f7090c4334ec08ca72186987b46decd4aa7ccc81"
+            "file": "llvm-libs-23.1.6-1.fc45.x86_64.rpm",
+            "rpm": "llvm-libs\t0\t23.1.6\t1.fc45\tx86_64\tllvm-23.1.6-1.fc45.src.rpm",
+            "sha256": "5c708ade32ae40269fa4f02e5d42fa580afeb75c9e00d2e343a8c1181472922e"
           },
           {
             "file": "lm_sensors-libs-3.6.0-25.fc45.x86_64.rpm",
@@ -9491,39 +9491,39 @@
             "sha256": "98dffb38486d324625ac221cc6eac1343c37829645d58d3a204dc58934806b16"
           },
           {
-            "file": "pipewire-1.6.11-1.fc45.x86_64.rpm",
-            "rpm": "pipewire\t0\t1.6.11\t1.fc45\tx86_64\tpipewire-1.6.11-1.fc45.src.rpm",
-            "sha256": "8d730d83a255acf8eb75a01eb4ab055be1a5d008c04aaf02bcff8c2acb57ddfc"
+            "file": "pipewire-1.6.12-1.fc45.x86_64.rpm",
+            "rpm": "pipewire\t0\t1.6.12\t1.fc45\tx86_64\tpipewire-1.6.12-1.fc45.src.rpm",
+            "sha256": "c4fc2802ec64c033ee49d82276ef64d116c59b0f1bcf664aa89e7336289849a4"
           },
           {
-            "file": "pipewire-alsa-1.6.11-1.fc45.x86_64.rpm",
-            "rpm": "pipewire-alsa\t0\t1.6.11\t1.fc45\tx86_64\tpipewire-1.6.11-1.fc45.src.rpm",
-            "sha256": "31f2af216f90c04a7e7a2f87d5e8346597005c3aad6e7dc13c2b65bf36cf70b9"
+            "file": "pipewire-alsa-1.6.12-1.fc45.x86_64.rpm",
+            "rpm": "pipewire-alsa\t0\t1.6.12\t1.fc45\tx86_64\tpipewire-1.6.12-1.fc45.src.rpm",
+            "sha256": "e248be4f27306e4d5b76aeb6df64137e6cb7c6526cc4719b4a7e01a60f831145"
           },
           {
-            "file": "pipewire-jack-audio-connection-kit-1.6.11-1.fc45.x86_64.rpm",
-            "rpm": "pipewire-jack-audio-connection-kit\t0\t1.6.11\t1.fc45\tx86_64\tpipewire-1.6.11-1.fc45.src.rpm",
-            "sha256": "eb7f5c2f367e75ff9afbf5c25e270d6a07bd9e704c5ef060f46dba43bdb9e956"
+            "file": "pipewire-jack-audio-connection-kit-1.6.12-1.fc45.x86_64.rpm",
+            "rpm": "pipewire-jack-audio-connection-kit\t0\t1.6.12\t1.fc45\tx86_64\tpipewire-1.6.12-1.fc45.src.rpm",
+            "sha256": "8040deee63684b5371f80524ed2238cf08d51c697ac002997615f3fd9b721a03"
           },
           {
-            "file": "pipewire-jack-audio-connection-kit-libs-1.6.11-1.fc45.x86_64.rpm",
-            "rpm": "pipewire-jack-audio-connection-kit-libs\t0\t1.6.11\t1.fc45\tx86_64\tpipewire-1.6.11-1.fc45.src.rpm",
-            "sha256": "19d764a30f6b9fbdf74092d572f113d0d552d6f45821868cfc4be71ed424d608"
+            "file": "pipewire-jack-audio-connection-kit-libs-1.6.12-1.fc45.x86_64.rpm",
+            "rpm": "pipewire-jack-audio-connection-kit-libs\t0\t1.6.12\t1.fc45\tx86_64\tpipewire-1.6.12-1.fc45.src.rpm",
+            "sha256": "63e05fabd2ca5050d68fa7e3fe3eb43c61c97d86b010a334ad25e8f8bcdc3e69"
           },
           {
-            "file": "pipewire-libs-1.6.11-1.fc45.x86_64.rpm",
-            "rpm": "pipewire-libs\t0\t1.6.11\t1.fc45\tx86_64\tpipewire-1.6.11-1.fc45.src.rpm",
-            "sha256": "6ffa957112ed0be6507d6cbf004b61c920284392d28f7d5a2d44478abc3791fa"
+            "file": "pipewire-libs-1.6.12-1.fc45.x86_64.rpm",
+            "rpm": "pipewire-libs\t0\t1.6.12\t1.fc45\tx86_64\tpipewire-1.6.12-1.fc45.src.rpm",
+            "sha256": "d038823725af732beb0343713dca2268fbbfead10499bc6fd9a9f56ef263ecbd"
           },
           {
-            "file": "pipewire-plugin-libcamera-1.6.11-1.fc45.x86_64.rpm",
-            "rpm": "pipewire-plugin-libcamera\t0\t1.6.11\t1.fc45\tx86_64\tpipewire-1.6.11-1.fc45.src.rpm",
-            "sha256": "7a7be473c0f7e0ea8ec1da3924f49e7d1949e4a1ae046f6fe00b73276af132cd"
+            "file": "pipewire-plugin-libcamera-1.6.12-1.fc45.x86_64.rpm",
+            "rpm": "pipewire-plugin-libcamera\t0\t1.6.12\t1.fc45\tx86_64\tpipewire-1.6.12-1.fc45.src.rpm",
+            "sha256": "9d9b411c90bf911f532ce4ac2dced50429dfdc94c2c73ae72b4d0a1912a9209c"
           },
           {
-            "file": "pipewire-pulseaudio-1.6.11-1.fc45.x86_64.rpm",
-            "rpm": "pipewire-pulseaudio\t0\t1.6.11\t1.fc45\tx86_64\tpipewire-1.6.11-1.fc45.src.rpm",
-            "sha256": "970e0cdbc8d58a21a7c73ffde02b410b04d4cd20b09f10314046ed112297e2ca"
+            "file": "pipewire-pulseaudio-1.6.12-1.fc45.x86_64.rpm",
+            "rpm": "pipewire-pulseaudio\t0\t1.6.12\t1.fc45\tx86_64\tpipewire-1.6.12-1.fc45.src.rpm",
+            "sha256": "6865cf67efa6b5eb1a7a1bc1eb4289636ce467b7ed41752fc89a759352581d92"
           },
           {
             "file": "pixman-0.46.2-4.fc45.x86_64.rpm",
@@ -9865,8 +9865,8 @@
           "iw\t0\t6.17\t3.fc45\tx86_64\tiw-6.17-3.fc45.src.rpm",
           "javascriptcoregtk4.1\t0\t2.54.3\t2.fc45\tx86_64\twebkitgtk-2.54.3-2.fc45.src.rpm",
           "javascriptcoregtk6.0\t0\t2.54.3\t2.fc45\tx86_64\twebkitgtk-2.54.3-2.fc45.src.rpm",
-          "kernel-tools\t0\t7.3.4\t300.fc45\tx86_64\tkernel-7.3.4-300.fc45.src.rpm",
-          "kernel-tools-libs\t0\t7.3.4\t300.fc45\tx86_64\tkernel-7.3.4-300.fc45.src.rpm",
+          "kernel-tools\t0\t7.3.6\t300.fc45\tx86_64\tkernel-7.3.6-300.fc45.src.rpm",
+          "kernel-tools-libs\t0\t7.3.6\t300.fc45\tx86_64\tkernel-7.3.6-300.fc45.src.rpm",
           "libICE\t0\t1.1.2\t5.fc45\tx86_64\tlibICE-1.1.2-5.fc45.src.rpm",
           "libSM\t0\t1.2.5\t5.fc45\tx86_64\tlibSM-1.2.5-5.fc45.src.rpm",
           "libXdmcp\t0\t1.1.5\t6.fc45\tx86_64\tlibXdmcp-1.1.5-6.fc45.src.rpm",
@@ -9930,14 +9930,14 @@
           "openal-soft\t0\t1.24.2\t10.fc45\tx86_64\topenal-soft-1.24.2-10.fc45.src.rpm",
           "pciutils-libs\t0\t3.15.0\t2.fc45\tx86_64\tpciutils-3.15.0-2.fc45.src.rpm",
           "pinentry-gnome3\t0\t1.3.3\t2.fc45\tx86_64\tpinentry-1.3.3-2.fc45.src.rpm",
-          "pipewire-gstreamer\t0\t1.6.11\t1.fc45\tx86_64\tpipewire-1.6.11-1.fc45.src.rpm",
+          "pipewire-gstreamer\t0\t1.6.12\t1.fc45\tx86_64\tpipewire-1.6.12-1.fc45.src.rpm",
           "protobuf-cpp\t0\t6.33.5\t7.fc45\tx86_64\tprotobuf-33.5-7.fc45.src.rpm",
           "pulseaudio-libs-glib2\t0\t17.0\t11.fc45\tx86_64\tpulseaudio-17.0-11.fc45.src.rpm",
           "python3-argcomplete\t0\t3.6.3\t7.fc45\tnoarch\tpython-argcomplete-3.6.3-7.fc45.src.rpm",
           "python3-ibus\t0\t1.5.35\t2.fc45\tx86_64\tibus-1.5.35-2.fc45.src.rpm",
           "python3-linux-procfs\t0\t0.7.4\t5.fc45\tnoarch\tpython-linux-procfs-0.7.4-5.fc45.src.rpm",
           "python3-pam\t0\t2.0.2\t20.fc45\tnoarch\tpython-pam-2.0.2-20.fc45.src.rpm",
-          "python3-perf\t0\t7.3.4\t300.fc45\tx86_64\tkernel-7.3.4-300.fc45.src.rpm",
+          "python3-perf\t0\t7.3.6\t300.fc45\tx86_64\tkernel-7.3.6-300.fc45.src.rpm",
           "python3-pyinotify\t0\t0.9.6\t6.fc45\tnoarch\tpython-pyinotify-0.9.6-6.fc45.src.rpm",
           "python3-pyudev\t0\t0.24.4\t5.fc45\tnoarch\tpython-pyudev-0.24.4-5.fc45.src.rpm",
           "rest\t0\t0.10.2\t13.fc45\tx86_64\trest-0.10.2-13.fc45.src.rpm",
@@ -10380,14 +10380,14 @@
             "sha256": "fb39ee8a9dac5c269618fa07379faca59e91319938eba1de5990856e6c4ce9f3"
           },
           {
-            "file": "kernel-tools-7.3.4-300.fc45.x86_64.rpm",
-            "rpm": "kernel-tools\t0\t7.3.4\t300.fc45\tx86_64\tkernel-7.3.4-300.fc45.src.rpm",
-            "sha256": "940a44638702ca7ea6ef2318807b8f5071afa4d249dff152bf4b59b8fd5f031c"
+            "file": "kernel-tools-7.3.6-300.fc45.x86_64.rpm",
+            "rpm": "kernel-tools\t0\t7.3.6\t300.fc45\tx86_64\tkernel-7.3.6-300.fc45.src.rpm",
+            "sha256": "fe55a8bae44d843c73c8d60a16bd3c9599c1ce09a9d3a49b523ecda47a0b3ce3"
           },
           {
-            "file": "kernel-tools-libs-7.3.4-300.fc45.x86_64.rpm",
-            "rpm": "kernel-tools-libs\t0\t7.3.4\t300.fc45\tx86_64\tkernel-7.3.4-300.fc45.src.rpm",
-            "sha256": "518a062aa4d1b8676009038ce2abe17e9aee42d0c1084017dbfc5663254aeba0"
+            "file": "kernel-tools-libs-7.3.6-300.fc45.x86_64.rpm",
+            "rpm": "kernel-tools-libs\t0\t7.3.6\t300.fc45\tx86_64\tkernel-7.3.6-300.fc45.src.rpm",
+            "sha256": "b8df0ebae3340b1ac7676bde433488432306c55296b8987cd028740950bf93a1"
           },
           {
             "file": "libICE-1.1.2-5.fc45.x86_64.rpm",
@@ -10705,9 +10705,9 @@
             "sha256": "cc2716d129802b1f2eff0ec0520cdcd46a2759707a26e013739f930583eba769"
           },
           {
-            "file": "pipewire-gstreamer-1.6.11-1.fc45.x86_64.rpm",
-            "rpm": "pipewire-gstreamer\t0\t1.6.11\t1.fc45\tx86_64\tpipewire-1.6.11-1.fc45.src.rpm",
-            "sha256": "bfd77fcea0b8bfb734fc5c903751cf6f06e7056ca94a542be4bd59c468d89e75"
+            "file": "pipewire-gstreamer-1.6.12-1.fc45.x86_64.rpm",
+            "rpm": "pipewire-gstreamer\t0\t1.6.12\t1.fc45\tx86_64\tpipewire-1.6.12-1.fc45.src.rpm",
+            "sha256": "11f42eb16eeb0f8cf0cce584f5feb7be13188994a79105c6073bbaabc8ec75ed"
           },
           {
             "file": "protobuf-cpp-6.33.5-7.fc45.x86_64.rpm",
@@ -10740,9 +10740,9 @@
             "sha256": "1115135cbef719e41e08aff95f418de530df8b82fdb97b7850e89304e9415d37"
           },
           {
-            "file": "python3-perf-7.3.4-300.fc45.x86_64.rpm",
-            "rpm": "python3-perf\t0\t7.3.4\t300.fc45\tx86_64\tkernel-7.3.4-300.fc45.src.rpm",
-            "sha256": "69367b78f55861cab8e1bb94d81931b678a7d917dbc93f307d6612b507a2b37c"
+            "file": "python3-perf-7.3.6-300.fc45.x86_64.rpm",
+            "rpm": "python3-perf\t0\t7.3.6\t300.fc45\tx86_64\tkernel-7.3.6-300.fc45.src.rpm",
+            "sha256": "2c10f3248bbf874a10f371912c286392c894777d96f06415e0f9448bd5b53f71"
           },
           {
             "file": "python3-pyinotify-0.9.6-6.fc45.noarch.rpm",
